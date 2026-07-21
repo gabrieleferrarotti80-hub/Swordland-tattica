@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@layer components {
+  /* Effetto vetro per i pannelli */
+  .app-panel {
+    @apply bg-slate-800/80 border border-slate-600 backdrop-blur-md rounded-xl shadow-xl;
+  }
+  
+  /* Stile bottoni menu laterale */
+  .nav-btn {
+    @apply p-3 text-slate-400 hover:text-cyan-400 hover:bg-slate-800/50 rounded-xl transition-all duration-300;
+  }
+  
+  /* Bottone menu attivo */
+  .nav-btn-active {
+    @apply p-3 text-cyan-300 bg-slate-700/50 border border-slate-600 rounded-xl shadow-inner;
+  }
+}
+
+body {
+  /* Sfondo con un gradiente radiale che dà un tocco di luce in alto a sinistra */
+  background: radial-gradient(circle at top left, #1e293b, #0f172a);
+  @apply text-slate-200 font-sans min-h-screen;
+}
