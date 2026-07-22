@@ -182,3 +182,42 @@
     border-right-color: var(--border);
   }
 }
+
+/* --- SWORDLAND: LAYOUT TATTICA & RESPONSIVE MOBILE --- */
+.main-container {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.map-container {
+  flex: 1; 
+  position: relative;
+}
+
+.hud-panel {
+  width: 400px; 
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .main-container {
+    flex-direction: column; 
+    height: 100dvh; 
+  }
+
+  .map-container {
+    width: 100%;
+    height: 50vh; 
+    flex: none; 
+  }
+
+  .hud-panel {
+    width: 100%; 
+    height: 50vh; 
+    border-left: none; 
+    border-top: 2px solid var(--border); 
+  }
+}

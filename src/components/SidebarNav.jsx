@@ -16,11 +16,10 @@ export const SidebarNav = ({
   return (
     <nav className="w-16 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 gap-4 z-50 shrink-0">
       
-      {/* Bottoni dei Pannelli (Edifici, Roster, Schieramenti, ecc.) */}
+      {/* Bottoni dei Pannelli (Edifici, Roster, Schieramenti) */}
       <button onClick={() => setActivePanel('buildings')} className={`p-3 rounded-xl transition-all ${activePanel === 'buildings' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`} title="Edifici">🏰</button>
       <button onClick={() => setActivePanel('roster')} className={`p-3 rounded-xl transition-all ${activePanel === 'roster' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`} title="Giocatori">👥</button>
       <button onClick={() => setActivePanel('deployment')} className={`p-3 rounded-xl transition-all ${activePanel === 'deployment' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`} title="Schieramento Singoli">⚔️</button>
-      <button onClick={() => setActivePanel('marches')} className={`p-3 rounded-xl transition-all ${activePanel === 'marches' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`} title="Marce">🚩</button>
 
       {/* Spaziatore per mandare il resto dei bottoni in fondo */}
       <div className="flex-1"></div>

@@ -1,15 +1,18 @@
+// src/utils/scoreEngine.js
+
 export const calculateDynamicScores = (currentTime, marchEvents, buildings) => {
   let globalScores = { blue: 0, red: 0 };
   let buildingStats = {};
 
-  // 1. Inizializzazione: Tutti gli edifici partono NEUTRALI
+  // 1. Inizializzazione: Tutti gli edifici partono NEUTRALI con tracciamento presenze
   buildings.forEach(b => {
     buildingStats[String(b.id)] = {
       currentOwner: 'neutral',
       captureTime: b.unlockTime || 0,
       firstCaptureAwarded: false,
-      currentGracePeriod: 3.0, // Di default 3 minuti
-      totalPoints: { blue: 0, red: 0 }
+      currentGracePeriod: 3.0, 
+      totalPoints: { blue: 0, red: 0 },
+      presence: { blue: 0, red: 0 } //[cite: 1]
     };
   });
 
@@ -20,14 +23,12 @@ export const calculateDynamicScores = (currentTime, marchEvents, buildings) => {
     const unlock = b.unlockTime || 0;
     allEvents.push({
       targetBuildingId: String(b.id),
-      arrivalTime: unlock + 3, // Regola: Diventa rosso 3 minuti dopo lo sblocco
-      team: 'red',             // La "squadra avversaria" di default
+      arrivalTime: unlock + 3, 
+      team: 'red',             
       isAutoCapture: true
     });
   });
 
-  // Ordine cronologico. In caso di parità, le marce reali (isAutoCapture: false) 
-  // hanno la precedenza sull'auto-cattura.
   allEvents.sort((a, b) => {
     if (a.arrivalTime === b.arrivalTime) {
       return (a.isAutoCapture ? 1 : 0) - (b.isAutoCapture ? 1 : 0);
@@ -45,45 +46,61 @@ export const calculateDynamicScores = (currentTime, marchEvents, buildings) => {
 
     const state = buildingStats[bId];
 
-    // --- REGOLA DEL NEUTRALE (AUTO-CATTURA) ---
-    if (event.isAutoCapture) {
-      // Se al minuto 3 l'edificio NON è più neutrale (è stato preso da qualcuno), annulla l'auto-cattura
-      if (state.currentOwner !== 'neutral') return;
-    } 
     // Se è una marcia reale ma arriva PRIMA dello sblocco, ignorala
-    else if (event.arrivalTime < (bData.unlockTime || 0)) {
+    if (!event.isAutoCapture && event.arrivalTime < (bData.unlockTime || 0)) {
       return;
     }
 
-    // Se l'edificio cambia proprietario (Cattura reale o Auto-Cattura)
-    if (state.currentOwner !== event.team) {
+    // Aggiorna il numero di giocatori presenti nell'edificio[cite: 1]
+    if (!event.isAutoCapture) {
+       state.presence[event.team] += 1;
+    } else {
+       // L'auto-cattura agisce solo se l'edificio è neutrale e completamente vuoto[cite: 1]
+       if (state.currentOwner !== 'neutral' || state.presence.blue > 0 || state.presence.red > 0) return;
+    }
+
+    // Determina il nuovo proprietario logico in base alla presenza simultanea
+    let newOwner = state.currentOwner;
+    if (state.presence.blue > 0 && state.presence.red === 0) newOwner = 'blue';
+    else if (state.presence.red > 0 && state.presence.blue === 0) newOwner = 'red';
+    else if (state.presence.blue > 0 && state.presence.red > 0) newOwner = 'contested';
+    else if (event.isAutoCapture) newOwner = event.team; 
+
+    // Se l'edificio cambia proprietario (Cattura reale, Auto-Cattura, o diventa Conteso)
+    if (state.currentOwner !== newOwner) {
       
-      // Calcolo punti se si sta rubando a un nemico (escluso il neutrale)
-      if (state.currentOwner !== 'neutral') {
+      if (state.currentOwner === 'blue' || state.currentOwner === 'red') {
         const timeHeld = event.arrivalTime - state.captureTime;
         const productiveTime = Math.max(0, timeHeld - state.currentGracePeriod);
         const sessionPoints = productiveTime * (bData.pointsPerMin || 0);
 
-        const stolenPoints = sessionPoints * 0.5;
-        const keptPoints = sessionPoints - stolenPoints;
-
-        state.totalPoints[state.currentOwner] += keptPoints;
-        state.totalPoints[event.team] += stolenPoints;
+        if (newOwner === 'contested') {
+           // Se l'edificio diventa conteso, i punti generati finora si consolidano al proprietario
+           state.totalPoints[state.currentOwner] += sessionPoints;
+        } else {
+           // Furto punti
+           const stolenPoints = sessionPoints * 0.5;
+           const keptPoints = sessionPoints - stolenPoints;
+           state.totalPoints[state.currentOwner] += keptPoints;
+           state.totalPoints[event.team] += stolenPoints;
+        }
       }
 
-      // Assegnazione Bonus Prima Occupazione (solo la prima volta in assoluto)
-      if (!state.firstCaptureAwarded) {
-        state.totalPoints[event.team] += (bData.firstControl || 0);
+      // Assegnazione Bonus Prima Occupazione (ignorando lo stato di contesa temporaneo)
+      if (!state.firstCaptureAwarded && (newOwner === 'blue' || newOwner === 'red')) {
+        state.totalPoints[newOwner] += (bData.firstControl || 0);
         state.firstCaptureAwarded = true;
       }
 
       // Aggiorna la proprietà
-      state.currentOwner = event.team;
+      state.currentOwner = newOwner;
       state.captureTime = event.arrivalTime;
       
-      // Salva il Grace Period calcolando il proprietario della Bell Tower IN QUESTO ESATTO MOMENTO
-      const btOwner = buildingStats['bell-tower'] ? buildingStats['bell-tower'].currentOwner : 'neutral';
-      state.currentGracePeriod = (btOwner === event.team) ? 1.5 : 3.0;
+      // Calcolo del Grace Period solo in caso di controllo totale (non conteso)[cite: 1]
+      if (newOwner === 'blue' || newOwner === 'red') {
+        const btOwner = buildingStats['bell-tower'] ? buildingStats['bell-tower'].currentOwner : 'neutral';
+        state.currentGracePeriod = (btOwner === newOwner) ? 1.5 : 3.0;
+      }
     }
   });
 
@@ -91,7 +108,8 @@ export const calculateDynamicScores = (currentTime, marchEvents, buildings) => {
   buildings.forEach(b => {
     const state = buildingStats[String(b.id)];
     
-    if (currentTime > state.captureTime && state.currentOwner !== 'neutral') {
+    // I punti si generano solo se c'è un proprietario netto (no neutral, no contested)
+    if (currentTime > state.captureTime && (state.currentOwner === 'blue' || state.currentOwner === 'red')) {
       const timeHeld = currentTime - state.captureTime;
       const productiveTime = Math.max(0, timeHeld - state.currentGracePeriod);
       const currentSessionPoints = productiveTime * (b.pointsPerMin || 0);
