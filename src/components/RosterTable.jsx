@@ -16,8 +16,8 @@ const getDefaultMarches = (power) => {
   return 6;
 };
 
-export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer }) {
-  // Stato per il form di aggiunta aggiornato con ruolo e default marce
+export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
+  // Stato per il form di aggiunta aggiornato con ruolo, default marce e partecipazione a false (no)
   const [newPlayer, setNewPlayer] = useState({
     tag: '',
     name: '',
@@ -25,7 +25,7 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
     level: '1', 
     power: 0,
     marches: 4,
-    isParticipating: true
+    isParticipating: false // Impostato su "No" di default
   });
 
   // Genera automaticamente la sigla progressiva 
@@ -63,21 +63,14 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
       level: '1',
       power: 0,
       marches: 4,
-      isParticipating: true
+      isParticipating: false // Impostato su "No" di default anche al reset
     });
   };
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-2">
         <h3 className="text-lg font-semibold text-slate-200">Gestione Roster</h3>
-        <button 
-          onClick={onDeploy}
-          disabled={roster.filter(p => p.isParticipating).length === 0}
-          className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-4 py-2 rounded font-bold shadow-lg transition-colors flex items-center gap-2"
-        >
-          <span>Preparazione Schieramento</span>
-        </button>
       </div>
 
       {/* FORM AGGIUNTA NUOVO GIOCATORE */}
@@ -246,15 +239,16 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
                       className="bg-transparent text-slate-300 w-full outline-none focus:border-b focus:border-cyan-500 text-center px-1 py-1"
                     />
                   </td>
-                  <td className="px-2 py-2">
-                    <select 
-                     value={player.isParticipating ? "true" : "false"}
-                     onChange={(e) => onEdit(player.id, 'isParticipating', e.target.value === 'true')}
-                     className={`bg-slate-900 border rounded px-1 py-1 outline-none w-full cursor-pointer ${player.isParticipating ? 'text-emerald-400 border-emerald-500/50' : 'text-slate-500 border-slate-700'}`}
+                  <td className="px-2 py-2 flex justify-center">
+                    {/* MENU TENDINA SOSTITUITO CON IL PULSANTE */}
+                    <button
+                      onClick={() => onEdit(player.id, 'isParticipating', !player.isParticipating)}
+                      className={`px-3 py-1 rounded font-bold w-12 text-center text-white transition-colors ${
+                        player.isParticipating ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'
+                      }`}
                     >
-                      <option value="true">Sì</option>
-                      <option value="false">No</option>
-                    </select>
+                      {player.isParticipating ? 'Sì' : 'No'}
+                    </button>
                   </td>
                   <td className="px-1 py-2 text-center">
                     <button 

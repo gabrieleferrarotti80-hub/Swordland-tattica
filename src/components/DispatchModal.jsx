@@ -21,8 +21,8 @@ export const DispatchModal = ({
   handlePointerDownModal,
   draftPositions = {},
   teamBase = 'blue',
-  handleHeal,         // <-- Aggiunto
-  handleCancelHeal    // <-- Aggiunto
+  handleHeal,
+  handleCancelHeal
 }) => {
   
   if (!activePlayer) return null;
@@ -39,8 +39,9 @@ export const DispatchModal = ({
     });
   };
 
+  // Normalizziamo l'ID in stringa per evitare mismatch
   const availablePlayers = activeDeployment.filter(p => 
-    p.id !== activePlayer.id && 
+    String(p.id) !== String(activePlayer.id) && 
     getAvailableMarches(p.id) > 0 &&
     !(healingEvents[p.id] !== undefined && currentTime >= healingEvents[p.id] && currentTime < healingEvents[p.id] + 12)
   );
@@ -144,7 +145,8 @@ export const DispatchModal = ({
                             const memSpeedups = isObj ? (memObj.speedups || 0) : 0;
                             const memBaseTime = isObj ? (memObj.baseTime || 0) : 0;
                             
-                            const mem = activeDeployment.find(p => p.id === memId);
+                            // Normalizziamo l'ID
+                            const mem = activeDeployment.find(p => String(p.id) === String(memId));
                             const currentTimeCalc = memBaseTime * Math.pow(0.75, memSpeedups);
                             const isTooSlow = currentAssign.type === 'rally' && currentTimeCalc > 4.0;
 
@@ -152,13 +154,14 @@ export const DispatchModal = ({
                               <div key={memId} className={`text-[9px] bg-slate-800 border ${isTooSlow ? 'border-red-500/50' : 'border-slate-600'} text-slate-300 px-1.5 py-1 rounded flex flex-col gap-1`}>
                                 <div className="flex items-center justify-between">
                                   <span className="font-bold flex items-center gap-1">
-                                    {mem?.tag}
+                                    {mem?.tag || `Player ${memId}`}
                                     {memSpeedups > 0 && <span className="text-amber-400 text-[8px]">⚡x{memSpeedups}</span>}
                                   </span>
                                   <button 
                                     onClick={(e) => { 
                                       e.stopPropagation(); 
-                                      updateMarchAssignment(marchIdx, 'members', assignedMembers.filter(m => (typeof m === 'object' ? m.id : m) !== memId)); 
+                                      // Rimozione sicura tramite String()
+                                      updateMarchAssignment(marchIdx, 'members', assignedMembers.filter(m => String(typeof m === 'object' ? m.id : m) !== String(memId))); 
                                     }} 
                                     className="text-red-400 hover:text-red-300 font-bold leading-none"
                                   >
@@ -177,7 +180,7 @@ export const DispatchModal = ({
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           const updatedMembers = assignedMembers.map(m => {
-                                            if ((typeof m === 'object' ? m.id : m) === memId) {
+                                            if (String(typeof m === 'object' ? m.id : m) === String(memId)) {
                                               return { 
                                                 id: memId, 
                                                 baseTime: memBaseTime,
@@ -211,7 +214,11 @@ export const DispatchModal = ({
                           const targetId = e.target.value;
                           
                           const leaderEntity = { ...activePlayer, type: 'player' };
-                          const memRaw = activeDeployment.find(ent => ent.id === targetId);
+                          // Troviamo il membro usando String() per evitare l'undefined crash
+                          const memRaw = activeDeployment.find(ent => String(ent.id) === String(targetId));
+                          
+                          if (!memRaw) return; // Evita eventuali crash di React se per caso non lo trova
+
                           const memEntity = { ...memRaw, type: 'player' };
 
                           const leaderState = getEntityDisplayState(leaderEntity, currentTime, draftPositions, healingEvents, teamBase, buildings);
@@ -244,7 +251,8 @@ export const DispatchModal = ({
                         }}
                       >
                         <option value="" disabled>+ Unisci giocatore...</option>
-                        {availablePlayers.filter(p => !assignedMembers.some(m => (typeof m === 'object' ? m.id : m) === p.id)).map(p => (
+                        {/* Filtriamo in modo Type-Safe i membri già presenti */}
+                        {availablePlayers.filter(p => !assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id))).map(p => (
                             <option key={p.id} value={p.id}>{p.name} ({p.tag})</option>
                         ))}
                       </select>

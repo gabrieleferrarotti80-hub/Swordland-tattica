@@ -8,35 +8,85 @@ export const ExportModal = ({ isOpen, onClose, marches, activeDeployment, roster
 
     const strategies = {};
     const movementsList = [];
+    
+    // La memoria globale deve stare FUORI dal ciclo per bloccare i duplicati ovunque
+    const processedActions = new Set();
 
     marches.forEach(march => {
-      // 1. Cerchiamo prima in activeDeployment
-      let player = activeDeployment.find(p => String(p.id) === String(march.leader));
-      
-      // 2. Se non c'è, cerchiamo nel roster generale
-      if (!player) {
-        player = roster.find(r => String(r.id) === String(march.leader));
+      // 1. Troviamo il LEADER
+      let leaderPlayer = activeDeployment.find(p => String(p.id) === String(march.leader));
+      if (!leaderPlayer) {
+        leaderPlayer = roster.find(r => String(r.id) === String(march.leader));
+      }
+      const leaderName = leaderPlayer ? (leaderPlayer.name || leaderPlayer.tag || `Giocatore_${march.leader}`) : `Comandante_${march.leader}`;
+
+      // 2. Troviamo i MEMBRI del Rally (se ci sono)
+      const memberNames = [];
+      const memberObjects = [];
+      if (march.members && march.members.length > 0) {
+        march.members.forEach(memberId => {
+          let mPlayer = activeDeployment.find(p => String(p.id) === String(memberId));
+          if (!mPlayer) mPlayer = roster.find(r => String(r.id) === String(memberId));
+          
+          const mName = mPlayer ? (mPlayer.name || mPlayer.tag || `Giocatore_${memberId}`) : `Giocatore_${memberId}`;
+          memberNames.push(mName);
+          memberObjects.push({ id: memberId, name: mName });
+        });
       }
 
-      // 3. Estraiamo il nome o il tag in modo sicuro
-      const playerName = player ? (player.name || player.tag || `Giocatore_${march.leader}`) : `Comandante_${march.leader}`;
+      // Capiamo se è un rally (dal tipo o se ha membri)
+      const isRally = march.marchType === 'rally' || memberNames.length > 0;
 
       if (march.positions) {
         Object.entries(march.positions).forEach(([minStr, pos]) => {
           if (pos.isMarching && pos.startTime !== undefined && pos.targetName) {
-            movementsList.push({
-              playerName: playerName,
-              startMinute: Math.round(Number(pos.startTime)),
-              arrivalMinute: Math.round(Number(pos.arrivalTime)),
-              targetName: pos.targetName,
-              marchType: pos.marchType || 'attacco'
-            });
+            
+            // CORREZIONE TEMPISTICHE RALLY:
+            // Il rally impiega 4 minuti per partire. Se la truppa parte al min 4, 
+            // l'ordine umano deve essere dato al min 0.
+            const actualStartTime = Math.round(Number(pos.startTime));
+            let displayMinute = isRally ? actualStartTime - 4 : actualStartTime;
+            
+            // Per sicurezza, evitiamo che l'orario vada in negativo
+            displayMinute = Math.max(0, displayMinute);
+
+            // Creiamo una chiave univoca (Es: "TopoGigio_Abbey_rally_0")
+            const actionKey = `${leaderName}_${pos.targetName}_${isRally ? 'rally' : pos.marchType}_${displayMinute}`;
+
+            // Se non abbiamo ancora registrato questa specifica azione...
+            if (!processedActions.has(actionKey)) {
+              processedActions.add(actionKey); // ...la salviamo in memoria per bloccare i cloni
+
+              // A. Creiamo l'ordine per il LEADER
+              movementsList.push({
+                playerName: leaderName,
+                startMinute: displayMinute,
+                arrivalMinute: Math.round(Number(pos.arrivalTime)),
+                targetName: pos.targetName,
+                marchType: isRally ? 'rally_leader' : (pos.marchType || 'attacco'),
+                members: memberNames
+              });
+
+              // B. Se è un rally, creiamo un ordine per OGNI MEMBRO allo stesso istante
+              if (isRally) {
+                memberObjects.forEach(mObj => {
+                  movementsList.push({
+                    playerName: mObj.name,
+                    startMinute: displayMinute,
+                    arrivalMinute: Math.round(Number(pos.arrivalTime)),
+                    targetName: pos.targetName,
+                    marchType: 'rally_join',
+                    leaderName: leaderName
+                  });
+                });
+              }
+            }
           }
         });
       }
     });
 
-    // Ordiniamo cronologicamente per minuto di partenza
+    // Ordiniamo cronologicamente per minuto di azione
     movementsList.sort((a, b) => a.startMinute - b.startMinute);
 
     // Raggruppiamo usando il Nome del Giocatore
@@ -48,11 +98,19 @@ export const ExportModal = ({ isOpen, onClose, marches, activeDeployment, roster
         };
       }
 
-      const iconType = m.marchType === 'difesa' ? '🛡️ Difesa' : m.marchType === 'supporto' ? '🤝 Supporto' : '⚔️ Attacco';
+      // Costruiamo il testo in base al tipo di marcia
+      let actionText = "";
+      if (m.marchType === 'rally_leader') {
+        actionText = `👑 **LANCIA RALLY**\n👥 In attesa di: ${m.members.join(', ')}\n🎯 Bersaglio: **${m.targetName}**`;
+      } else if (m.marchType === 'rally_join') {
+        actionText = `🏃 **UNISCITI AL RALLY**\n👑 Leader: **${m.leaderName}**\n🎯 Bersaglio: **${m.targetName}**`;
+      } else {
+        const iconType = m.marchType === 'difesa' ? '🛡️ Difesa' : m.marchType === 'supporto' ? '🤝 Supporto' : '⚔️ Attacco';
+        actionText = `👉 Tipo: ${iconType}\n🎯 Bersaglio: **${m.targetName}**`;
+      }
 
       strategies[m.playerName].text += `⏱️ **Minuto ${m.startMinute.toString().padStart(2, '0')}'**\n`;
-      strategies[m.playerName].text += `👉 Tipo: ${iconType}\n`;
-      strategies[m.playerName].text += `🎯 Bersaglio: **${m.targetName}**\n`;
+      strategies[m.playerName].text += `${actionText}\n`;
       strategies[m.playerName].text += `🏁 Arrivo previsto: min ${m.arrivalMinute.toString().padStart(2, '0')}'\n\n`;
     });
 

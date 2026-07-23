@@ -1,123 +1,123 @@
 // src/utils/scoreEngine.js
 
-export const calculateDynamicScores = (currentTime, marchEvents, buildings) => {
+export const calculateDynamicScores = (currentTime, activeDeployment, marches, manualCaptures, buildings, teamBase) => {
   let globalScores = { blue: 0, red: 0 };
   let buildingStats = {};
 
-  // 1. Inizializzazione: Tutti gli edifici partono NEUTRALI con tracciamento presenze
+  // 1. Inizializzazione
   buildings.forEach(b => {
     buildingStats[String(b.id)] = {
       currentOwner: 'neutral',
       captureTime: b.unlockTime || 0,
-      firstCaptureAwarded: false,
-      currentGracePeriod: 3.0, 
+      currentGracePeriod: 3.0,
       totalPoints: { blue: 0, red: 0 },
-      presence: { blue: 0, red: 0 } //[cite: 1]
+      firstCaptureAwarded: false
     };
   });
 
-  // 2. Creazione "Eventi Sintetici" per l'Auto-Conquista
-  let allEvents = [...marchEvents.map(e => ({ ...e, isAutoCapture: false }))];
-  
-  buildings.forEach(b => {
-    const unlock = b.unlockTime || 0;
-    allEvents.push({
-      targetBuildingId: String(b.id),
-      arrivalTime: unlock + 3, 
-      team: 'red',             
-      isAutoCapture: true
-    });
-  });
+  // 2. Simulazione scorrere del tempo (Minuto per Minuto)
+  for (let min = 0; min <= currentTime; min++) {
+    
+    // Mappiamo le presenze fisiche in questo minuto
+    let presence = {};
+    buildings.forEach(b => presence[String(b.id)] = { blue: 0, red: 0 });
 
-  allEvents.sort((a, b) => {
-    if (a.arrivalTime === b.arrivalTime) {
-      return (a.isAutoCapture ? 1 : 0) - (b.isAutoCapture ? 1 : 0);
-    }
-    return a.arrivalTime - b.arrivalTime;
-  });
-
-  // 3. Processamento storico
-  allEvents.forEach(event => {
-    if (event.arrivalTime > currentTime) return;
-
-    const bId = String(event.targetBuildingId);
-    const bData = buildings.find(b => String(b.id) === bId);
-    if (!bData) return; 
-
-    const state = buildingStats[bId];
-
-    // Se è una marcia reale ma arriva PRIMA dello sblocco, ignorala
-    if (!event.isAutoCapture && event.arrivalTime < (bData.unlockTime || 0)) {
-      return;
-    }
-
-    // Aggiorna il numero di giocatori presenti nell'edificio[cite: 1]
-    if (!event.isAutoCapture) {
-       state.presence[event.team] += 1;
-    } else {
-       // L'auto-cattura agisce solo se l'edificio è neutrale e completamente vuoto[cite: 1]
-       if (state.currentOwner !== 'neutral' || state.presence.blue > 0 || state.presence.red > 0) return;
-    }
-
-    // Determina il nuovo proprietario logico in base alla presenza simultanea
-    let newOwner = state.currentOwner;
-    if (state.presence.blue > 0 && state.presence.red === 0) newOwner = 'blue';
-    else if (state.presence.red > 0 && state.presence.blue === 0) newOwner = 'red';
-    else if (state.presence.blue > 0 && state.presence.red > 0) newOwner = 'contested';
-    else if (event.isAutoCapture) newOwner = event.team; 
-
-    // Se l'edificio cambia proprietario (Cattura reale, Auto-Cattura, o diventa Conteso)
-    if (state.currentOwner !== newOwner) {
+    const checkEntityPresence = (entity) => {
+      if (!entity.positions) return;
+      const mins = Object.keys(entity.positions).map(Number).sort((a, b) => a - b);
+      let lastPos = null;
+      for (const m of mins) {
+        if (m <= min) lastPos = entity.positions[m];
+      }
       
-      if (state.currentOwner === 'blue' || state.currentOwner === 'red') {
-        const timeHeld = event.arrivalTime - state.captureTime;
-        const productiveTime = Math.max(0, timeHeld - state.currentGracePeriod);
-        const sessionPoints = productiveTime * (bData.pointsPerMin || 0);
+      if (lastPos && !lastPos.removed && lastPos.targetBuildingId && (!lastPos.isMarching || lastPos.arrivalTime <= min)) {
+        if (presence[String(lastPos.targetBuildingId)]) {
+          presence[String(lastPos.targetBuildingId)][teamBase] += 1;
+        }
+      }
+    };
 
-        if (newOwner === 'contested') {
-           // Se l'edificio diventa conteso, i punti generati finora si consolidano al proprietario
-           state.totalPoints[state.currentOwner] += sessionPoints;
-        } else {
-           // Furto punti
-           const stolenPoints = sessionPoints * 0.5;
-           const keptPoints = sessionPoints - stolenPoints;
-           state.totalPoints[state.currentOwner] += keptPoints;
-           state.totalPoints[event.team] += stolenPoints;
+    activeDeployment.forEach(checkEntityPresence);
+    marches.forEach(checkEntityPresence);
+
+    // Verifichiamo i cambi di fazione per ogni edificio
+    buildings.forEach(b => {
+      const bId = String(b.id);
+      const state = buildingStats[bId];
+      const pres = presence[bId];
+
+      let newOwner = state.currentOwner;
+
+      // Priorità 1: Catture/Ritirate manuali registrate al minuto attuale
+      const mCap = manualCaptures.find(c => c.time === min && String(c.buildingId) === bId);
+      
+      if (mCap) {
+        newOwner = mCap.team;
+      } else {
+        // Priorità 2: Valutazione Presenze Fisiche
+        if (pres.blue > 0 && pres.red === 0) newOwner = 'blue';
+        else if (pres.red > 0 && pres.blue === 0) newOwner = 'red';
+        else if (pres.blue > 0 && pres.red > 0) newOwner = 'contested';
+        // Priorità 3: Auto-Conquista del sistema (dopo 3 min dallo sblocco se vuoto)
+        else if (min === (b.unlockTime || 0) + 3 && state.currentOwner === 'neutral') {
+          newOwner = 'red';
         }
       }
 
-      // Assegnazione Bonus Prima Occupazione (ignorando lo stato di contesa temporaneo)
-      if (!state.firstCaptureAwarded && (newOwner === 'blue' || newOwner === 'red')) {
-        state.totalPoints[newOwner] += (bData.firstControl || 0);
-        state.firstCaptureAwarded = true;
-      }
+      // Se cambia il proprietario logico
+      if (state.currentOwner !== newOwner) {
+        
+        // Calcolo punti per il vecchio proprietario
+        if (state.currentOwner === 'blue' || state.currentOwner === 'red') {
+          const timeHeld = min - state.captureTime;
+          const productiveTime = Math.max(0, timeHeld - state.currentGracePeriod);
+          const sessionPoints = productiveTime * (b.pointsPerMin || 0);
 
-      // Aggiorna la proprietà
-      state.currentOwner = newOwner;
-      state.captureTime = event.arrivalTime;
-      
-      // Calcolo del Grace Period solo in caso di controllo totale (non conteso)[cite: 1]
-      if (newOwner === 'blue' || newOwner === 'red') {
-        const btOwner = buildingStats['bell-tower'] ? buildingStats['bell-tower'].currentOwner : 'neutral';
-        state.currentGracePeriod = (btOwner === newOwner) ? 1.5 : 3.0;
-      }
-    }
-  });
+          if (newOwner === 'contested' || newOwner === 'neutral') {
+             // Diventa conteso o viene abbandonato: i punti vengono consolidati
+             state.totalPoints[state.currentOwner] += sessionPoints;
+          } else if (newOwner === 'blue' || newOwner === 'red') {
+             // Cattura nemica: Furto del 50% dei punti maturati nella sessione
+             const stolenPoints = sessionPoints * 0.5;
+             const keptPoints = sessionPoints - stolenPoints;
+             state.totalPoints[state.currentOwner] += keptPoints;
+             state.totalPoints[newOwner] += stolenPoints;
+          }
+        }
 
-  // 4. Calcolo Punti in Corso (Fino alla posizione attuale della barra del tempo)
+        // Assegnazione Bonus Prima Occupazione (solo la prima volta in assoluto)
+        if (!state.firstCaptureAwarded && (newOwner === 'blue' || newOwner === 'red')) {
+          state.totalPoints[newOwner] += (b.firstControl || 0);
+          state.firstCaptureAwarded = true;
+        }
+
+        // Aggiorna lo stato per il nuovo ciclo
+        state.currentOwner = newOwner;
+        state.captureTime = min;
+
+        // Calcolo Dinamico del Grace Period
+        if (newOwner === 'blue' || newOwner === 'red') {
+          const stablesId = buildings.find(build => build.name.toLowerCase().includes('stables'))?.id;
+          const btOwner = (stablesId && buildingStats[String(stablesId)]) ? buildingStats[String(stablesId)].currentOwner : 'neutral';
+          // Se la squadra possiede le Scuderie, il grace period è dimezzato (1.5)
+          state.currentGracePeriod = (btOwner === newOwner) ? 1.5 : 3.0;
+        }
+      }
+    });
+  } // Fine ciclo temporale minuto per minuto
+
+  // 3. Consolidamento Finale per la GUI (Punti generati dal captureTime fino al currentTime attuale)
   buildings.forEach(b => {
     const state = buildingStats[String(b.id)];
-    
-    // I punti si generano solo se c'è un proprietario netto (no neutral, no contested)
-    if (currentTime > state.captureTime && (state.currentOwner === 'blue' || state.currentOwner === 'red')) {
+    if (state.currentOwner === 'blue' || state.currentOwner === 'red') {
       const timeHeld = currentTime - state.captureTime;
       const productiveTime = Math.max(0, timeHeld - state.currentGracePeriod);
       const currentSessionPoints = productiveTime * (b.pointsPerMin || 0);
-
+      
       state.totalPoints[state.currentOwner] += currentSessionPoints;
     }
-
-    // Somma finale
+    
+    // Somma al tabellone globale
     globalScores.blue += state.totalPoints.blue;
     globalScores.red += state.totalPoints.red;
   });

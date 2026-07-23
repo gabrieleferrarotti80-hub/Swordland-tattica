@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { getBasePosition, checkIsAtBuilding, isMarchGathering, getEntityDisplayState } from './mapUtils';
 import { DispatchModal } from './DispatchModal';
+import { GarrisonPopup } from './GarrisonPopup'; // <-- IMPORTATO IL NUOVO COMPONENTE
 
 const CastleIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 20v-6h-2v6h-4v-4H8v4H4v-6H2v6h20z"/><path d="M22 14V6l-3-2-3 2v8M2 14V6l3-2 3 2v8"/><path d="M10 14V6l2-2 2 2v8"/></svg>
@@ -17,9 +18,9 @@ export const InteractiveMap = ({
   healingEvents, 
   onDispatchMarch, 
   getAvailableMarches,
-  // AGGIUNGI QUESTE DUE:
   handleHeal,
-  handleCancelHeal 
+  handleCancelHeal,
+  handleGarrisonAction // <-- AGGIUNTA PROP
 }) => {
   
   const mapRef = useRef(null);
@@ -70,13 +71,8 @@ export const InteractiveMap = ({
     const assignments = Object.entries(marchAssignments).filter(([_, data]) => data.buildingId !== '');
     if (assignments.length > 0) {
       assignments.forEach(([marchIdx, data]) => {
-        // 1. Estraiamo solo le stringhe (ID) per non far crashare useMarches.js
         const memberIds = (data.members || []).map(m => typeof m === 'object' ? m.id : m);
-        
-        // 2. Conserviamo i dati degli speedup per poterli passare come parametro aggiuntivo
         const membersDataWithSpeedups = data.members || [];
-
-        // 3. Chiamata corretta: passiamo memberIds come 5° parametro
         onDispatchMarch(playerId, data.buildingId, parseInt(marchIdx), data.type, memberIds, membersDataWithSpeedups);
       });
       setPopupPlayerId(null); 
@@ -154,13 +150,39 @@ export const InteractiveMap = ({
           garrisons[bId].push({
             id: entity.id,
             leaderName: leaderName,
-            marchType: state.marchType
+            marchType: state.marchType,
+            entity: entity // <-- SALVIAMO L'ENTITA' COMPLETA PER ESTRARRE I MEMBRI
           });
         }
       }
     });
     return { capturedBuildingIds: captured, buildingGarrisons: garrisons };
   }, [activeDeployment, marches, draftPositions, buildings, currentTime, healingEvents, teamBase]);
+
+  // ---- NUOVA FUNZIONE: Estrae tutti i giocatori (leader + membri) in un edificio ----
+  const getPlayersInBuilding = (bId) => {
+    const players = [];
+    const garrisonEntities = buildingGarrisons[bId] || [];
+    
+    garrisonEntities.forEach(g => {
+      const entity = g.entity;
+      if (entity.type === 'player') {
+        players.push({ id: entity.id, name: entity.name || entity.tag || 'Singolo', isLeader: true });
+      } else if (entity.type === 'march') {
+        const leader = activeDeployment.find(p => String(p.id) === String(entity.leaderId));
+        if (leader) players.push({ id: leader.id, name: leader.name || leader.tag, isLeader: true });
+        
+        if (entity.members) {
+          entity.members.forEach(mObj => {
+            const mId = typeof mObj === 'object' ? mObj.id : mObj;
+            const m = activeDeployment.find(p => String(p.id) === String(mId));
+            if (m) players.push({ id: m.id, name: m.name || m.tag, isLeader: false });
+          });
+        }
+      }
+    });
+    return players;
+  };
 
   return (
     <div 
@@ -248,6 +270,16 @@ export const InteractiveMap = ({
               </div>
             );
           })}
+
+          {/* RENDER DEL POPUP DEGLI EDIFICI AL CLICK */}
+          {popupBuildingId && (
+            <GarrisonPopup 
+              building={buildings.find(b => b.id === popupBuildingId)}
+              garrisonedPlayers={getPlayersInBuilding(popupBuildingId)}
+              onClose={() => setPopupBuildingId(null)}
+              handleGarrisonAction={handleGarrisonAction}
+            />
+          )}
 
           {allMapEntities.map((entity, index) => {
             const state = getEntityDisplayState(entity, currentTime, draftPositions, healingEvents, teamBase, buildings);
@@ -374,7 +406,7 @@ export const InteractiveMap = ({
           currentTime={currentTime}
           handlePointerDownModal={handlePointerDownModal}
           handleHeal={handleHeal}
-        handleCancelHeal={handleCancelHeal}
+          handleCancelHeal={handleCancelHeal}
         />
       )}
     </div>
