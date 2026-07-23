@@ -6,14 +6,25 @@ const levelOptions = [
   ...Array.from({ length: 11 }, (_, i) => `TG${i + 1}`)
 ];
 
+const roleOptions = ['R1', 'R2', 'R3', 'R4', 'R5'];
+
+// Logica di calcolo automatico marce in base al potere
+const getDefaultMarches = (power) => {
+  const p = Number(power);
+  if (p < 90) return 4;
+  if (p <= 180) return 5;
+  return 6;
+};
+
 export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer }) {
-  // Stato per il form di aggiunta
+  // Stato per il form di aggiunta aggiornato con ruolo e default marce
   const [newPlayer, setNewPlayer] = useState({
     tag: '',
     name: '',
+    role: 'R1',
     level: '1', 
     power: 0,
-    marches: 1,
+    marches: 4,
     isParticipating: true
   });
 
@@ -28,7 +39,6 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
   const handleSubmit = (e) => {
     e.preventDefault(); 
     
-    // Controllo manuale: mostra un avviso se manca il nome
     if (!newPlayer.name || newPlayer.name.trim() === '') {
       alert("Devi inserire il Nome del Giocatore!");
       return; 
@@ -38,9 +48,10 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
     onAddPlayer({
       tag: newPlayer.tag || `G${roster.length + 1}`, 
       name: newPlayer.name,
+      role: newPlayer.role,
       level: newPlayer.level,
       power: Number(newPlayer.power) || 0,
-      marches: Number(newPlayer.marches) || 1,
+      marches: Number(newPlayer.marches) || getDefaultMarches(newPlayer.power),
       isParticipating: newPlayer.isParticipating
     });
 
@@ -48,9 +59,10 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
     setNewPlayer({
       tag: `G${roster.length + 2}`, 
       name: '',
+      role: 'R1',
       level: '1',
       power: 0,
-      marches: 1,
+      marches: 4,
       isParticipating: true
     });
   };
@@ -80,7 +92,7 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
             className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 font-bold text-center text-sm"
           />
         </div>
-        <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+        <div className="flex flex-col gap-1 flex-1 min-w-[120px]">
           <label className="text-[10px] text-slate-400 uppercase font-bold">Nome Giocatore *</label>
           <input 
             type="text" 
@@ -89,6 +101,18 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
             className="bg-slate-900 border border-slate-600 text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm"
             placeholder="es. Re_Artù"
           />
+        </div>
+        <div className="flex flex-col gap-1 w-16">
+          <label className="text-[10px] text-slate-400 uppercase font-bold">Ruolo</label>
+          <select 
+            value={newPlayer.role}
+            onChange={e => setNewPlayer({...newPlayer, role: e.target.value})}
+            className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 cursor-pointer text-sm"
+          >
+            {roleOptions.map(opt => (
+              <option key={`new-role-${opt}`} value={opt}>{opt}</option>
+            ))}
+          </select>
         </div>
         <div className="flex flex-col gap-1 w-20">
           <label className="text-[10px] text-slate-400 uppercase font-bold">Livello</label>
@@ -102,13 +126,20 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1 w-20">
+        <div className="flex flex-col gap-1 w-24">
           <label className="text-[10px] text-slate-400 uppercase font-bold">Potere (M)</label>
           <input 
             type="number" 
             min="0"
             value={newPlayer.power}
-            onChange={e => setNewPlayer({...newPlayer, power: e.target.value})}
+            onChange={e => {
+              const newPower = e.target.value;
+              setNewPlayer({
+                ...newPlayer, 
+                power: newPower,
+                marches: getDefaultMarches(newPower) // Calcolo automatico
+              });
+            }}
             className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm"
           />
         </div>
@@ -132,12 +163,12 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
 
       {/* TABELLA ROSTER ESISTENTE */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-        {/* table-fixed costringe la tabella a rispettare le larghezze esatte */}
         <table className="w-full text-left border-collapse table-fixed">
           <thead>
             <tr className="bg-slate-900/50 border-b border-slate-700">
               <th className="px-2 py-3 text-slate-400 font-semibold text-xs w-14 text-center">Sigla</th>
               <th className="px-2 py-3 text-slate-400 font-semibold text-xs w-auto">Nome</th>
+              <th className="px-2 py-3 text-slate-400 font-semibold text-xs w-16 text-center">Ruolo</th>
               <th className="px-2 py-3 text-slate-400 font-semibold text-xs w-20">Livello</th>
               <th className="px-2 py-3 text-slate-400 font-semibold text-xs w-20">Potere</th>
               <th className="px-2 py-3 text-slate-400 font-semibold text-xs w-16 text-center">Marce</th>
@@ -148,7 +179,7 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
           <tbody className="divide-y divide-slate-700/50 text-sm">
             {roster.length === 0 ? (
               <tr>
-                <td colSpan="7" className="p-6 text-center text-slate-500 italic">
+                <td colSpan="8" className="p-6 text-center text-slate-500 italic">
                   Nessun giocatore nel database. Aggiungine uno usando il modulo qui sopra.
                 </td>
               </tr>
@@ -174,6 +205,17 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
                   </td>
                   <td className="px-2 py-2">
                     <select 
+                      value={player.role || 'R1'}
+                      onChange={(e) => onEdit(player.id, 'role', e.target.value)}
+                      className="bg-slate-900 border border-transparent hover:border-slate-600 rounded text-slate-200 w-full outline-none focus:border-cyan-500 px-1 py-1 cursor-pointer text-center"
+                    >
+                      {roleOptions.map(opt => (
+                        <option key={`edit-role-${player.id}-${opt}`} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-2">
+                    <select 
                       value={player.level}
                       onChange={(e) => onEdit(player.id, 'level', e.target.value)}
                       className="bg-slate-900 border border-transparent hover:border-slate-600 rounded text-slate-200 w-full outline-none focus:border-cyan-500 px-1 py-1 cursor-pointer"
@@ -187,7 +229,12 @@ export function RosterTable({ roster, onEdit, onDelete, onDeploy, onAddPlayer })
                     <input 
                       type="number" 
                       value={player.power}
-                      onChange={(e) => onEdit(player.id, 'power', e.target.value)}
+                      onChange={(e) => {
+                        const newPower = e.target.value;
+                        onEdit(player.id, 'power', newPower);
+                        // Ricalcola marce in automatico anche nell'edit
+                        onEdit(player.id, 'marches', getDefaultMarches(newPower));
+                      }}
                       className="bg-transparent text-slate-300 w-full outline-none focus:border-b focus:border-cyan-500 px-1 py-1"
                     />
                   </td>
