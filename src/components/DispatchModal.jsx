@@ -107,7 +107,7 @@ export const DispatchModal = ({
       >
         <div className={`font-bold text-[9px] uppercase flex items-center gap-1.5 pointer-events-none ${isHealing ? 'text-emerald-300' : 'text-cyan-400'}`}>
           <span>{isHealing ? '🏥' : '📋'}</span> 
-          {isHealing ? `In Cura (${healRemaining}m)` : `Ordini: ${activePlayer.tag}`}
+          {isHealing ? `In Cura (${healRemaining}m)` : `Ordini: ${activePlayer.name || activePlayer.tag || activePlayer.id}`}
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); setPopupPlayerId(null); setMarchAssignments({}); }}
@@ -211,7 +211,7 @@ export const DispatchModal = ({
                               <div key={memId} className={`text-[9px] bg-slate-800 border ${isTooSlow ? 'border-red-500/50' : 'border-slate-600'} text-slate-300 px-1.5 py-1 rounded flex flex-col gap-1`}>
                                 <div className="flex items-center justify-between">
                                   <span className="font-bold flex items-center gap-1">
-                                    {mem?.tag || `Player ${memId}`}
+                                    {mem?.name || mem?.tag || `Player ${memId}`}
                                     {memSpeedups > 0 && <span className="text-amber-400 text-[8px]">⚡x{memSpeedups}</span>}
                                   </span>
                                   <button 

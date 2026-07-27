@@ -13,12 +13,14 @@ export const ExportModal = ({ isOpen, onClose, marches, activeDeployment, roster
     const processedActions = new Set();
 
     marches.forEach(march => {
-      // 1. Troviamo il LEADER
-      let leaderPlayer = activeDeployment.find(p => String(p.id) === String(march.leader));
+      // 1. Troviamo il LEADER (controlliamo i vari possibili campi dell'ID per sicurezza)
+      const marchLeaderId = march.playerId || march.leader || march.leaderId;
+      
+      let leaderPlayer = activeDeployment.find(p => String(p.id) === String(marchLeaderId));
       if (!leaderPlayer) {
-        leaderPlayer = roster.find(r => String(r.id) === String(march.leader));
+        leaderPlayer = roster.find(r => String(r.id) === String(marchLeaderId));
       }
-      const leaderName = leaderPlayer ? (leaderPlayer.name || leaderPlayer.tag || `Giocatore_${march.leader}`) : `Comandante_${march.leader}`;
+      const leaderName = leaderPlayer ? (leaderPlayer.name || leaderPlayer.tag || `Giocatore_${marchLeaderId}`) : `Comandante_${marchLeaderId}`;
 
       // 2. Troviamo i MEMBRI del Rally (se ci sono)
       const memberNames = [];

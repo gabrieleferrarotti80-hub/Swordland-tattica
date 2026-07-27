@@ -394,6 +394,11 @@ export const InteractiveMap = ({
             const typeIcon = state.marchType === 'difesa' ? '🛡️' : state.marchType === 'supporto' ? '🤝' : '⚔️';
             const tag = isPlayer ? (entity.tag || '?') : (leader ? `${leader.tag} ${typeIcon}` : 'M');
             
+            // CREIAMO IL TESTO PER IL TOOLTIP HOVER (NOME COMPLETO)
+            const hoverTitle = isPlayer 
+              ? (entity.name || entity.tag || `Giocatore ${entity.id}`) 
+              : (leader ? (leader.name || leader.tag || `Marcia di ${leader.id}`) : 'Marcia');
+
             let offsetX = 0, offsetY = 0;
             if (!isPlayer && !state.isMarching) {
               const visibleLeaderMarches = allMapEntities.filter(e => e.leaderId === entity.leaderId && e.type === 'march' && !(e.marchType === 'rally' && isMarchGathering(e, currentTime)));
@@ -412,7 +417,12 @@ export const InteractiveMap = ({
             const hasSpeedup = speedupsUsed > 0;
 
             return (
-              <div key={`map-entity-${entity.type}-${entity.id}-${index}`} className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-[1000ms] ease-linear group ${popupPlayerId === entity.id ? 'z-[60]' : (isPlayer ? 'z-40 hover:z-50' : 'z-20 hover:z-30')}`} style={{ top: `calc(${getVisualTop(state.x, state.y)}% + ${offsetY}px)`, left: `calc(${getVisualLeft(state.x, state.y)}% + ${offsetX}px)` }}>
+              <div 
+                key={`map-entity-${entity.type}-${entity.id}-${index}`} 
+                title={hoverTitle} 
+                className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-[1000ms] ease-linear group ${popupPlayerId === entity.id ? 'z-[60]' : (isPlayer ? 'z-40 hover:z-50' : 'z-20 hover:z-30')}`} 
+                style={{ top: `calc(${getVisualTop(state.x, state.y)}% + ${offsetY}px)`, left: `calc(${getVisualLeft(state.x, state.y)}% + ${offsetX}px)` }}
+              >
                 <div onClick={(e) => { if(isPlayer && !isHealing) handleOpenPopup(e, entity.id); }} draggable={isPlayer && !isHealing} onDragStart={(e) => { if (isPlayer && !isHealing) e.dataTransfer.setData('text/plain', `player:${entity.id}`); }} className="relative w-12 h-12 flex items-center justify-center cursor-pointer hover:scale-125 transition-transform duration-200">
                   {hasSpeedup && state.isMarching && <div className="absolute inset-0 bg-amber-400/40 rounded-full blur-md animate-ping pointer-events-none scale-75"></div>}
                   <div className={`w-5 h-5 rounded-full border-[2px] flex items-center justify-center shadow-lg relative z-10 pointer-events-none ${tokenColors}`}>
