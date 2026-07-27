@@ -1,6 +1,5 @@
 import React from 'react';
 
-// Assicurati di aggiungere handleNewProject tra le prop ricevute
 export const SidebarNav = ({
   activePanel, 
   setActivePanel, 
@@ -11,7 +10,7 @@ export const SidebarNav = ({
   handleSaveToFirebase, 
   handleLoadFromFirebase, 
   fileInputRef,
-  handleNewProject // <-- NUOVA PROP QUI
+  handleNewProject
 }) => {
   return (
     <nav className="w-16 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 gap-4 z-50 shrink-0">
@@ -20,6 +19,15 @@ export const SidebarNav = ({
       <button onClick={() => setActivePanel('buildings')} className={`p-3 rounded-xl transition-all ${activePanel === 'buildings' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`} title="Edifici">🏰</button>
       <button onClick={() => setActivePanel('roster')} className={`p-3 rounded-xl transition-all ${activePanel === 'roster' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`} title="Giocatori">👥</button>
       <button onClick={() => setActivePanel('deployment')} className={`p-3 rounded-xl transition-all ${activePanel === 'deployment' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`} title="Schieramento Singoli">⚔️</button>
+
+      {/* TASTO IMPOSTAZIONI / EDITOR HITBOX */}
+      <button 
+        onClick={() => setActivePanel('settings')} 
+        className={`p-3 rounded-xl transition-all ${activePanel === 'settings' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-amber-400 hover:bg-slate-800'}`} 
+        title="Impostazioni & Editor Mappa"
+      >
+        ⚙️
+      </button>
 
       {/* Spaziatore per mandare il resto dei bottoni in fondo */}
       <div className="flex-1"></div>
@@ -40,7 +48,7 @@ export const SidebarNav = ({
         {teamBase === 'blue' ? 'B' : 'R'}
       </button>
 
-      {/* Pulsanti Save/Load/Import... (lascia intatti i tuoi originali) */}
+      {/* Pulsanti Save/Load/Import... */}
       <button onClick={handleSaveToFirebase} className="p-3 rounded-xl transition-all text-slate-400 hover:text-amber-400 hover:bg-slate-800" title="Salva su Firebase">☁️</button>
       <button onClick={handleLoadFromFirebase} className="p-3 rounded-xl transition-all text-slate-400 hover:text-amber-400 hover:bg-slate-800" title="Carica da Firebase">⬇️</button>
       <button onClick={handleExportProject} className="p-3 rounded-xl transition-all text-slate-400 hover:text-cyan-400 hover:bg-slate-800" title="Esporta JSON">💾</button>

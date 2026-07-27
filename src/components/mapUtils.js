@@ -3,11 +3,27 @@
 export const getBasePosition = (idStr, teamBase) => {
   let hash = 0;
   for (let i = 0; i < idStr.length; i++) { hash = idStr.charCodeAt(i) + ((hash << 5) - hash); }
-  const prng1 = Math.abs((Math.sin(hash) * 10000) % 1);
-  const prng2 = Math.abs((Math.cos(hash) * 10000) % 1);
-  const y = 30 + (prng1 * 40);
-  let x = teamBase === 'blue' ? 3 + (prng2 * 13) : 84 + (prng2 * 13);
-  return { x, y };
+  
+  let r1 = Math.abs((Math.sin(hash) * 10000) % 1);
+  let r2 = Math.abs((Math.cos(hash) * 10000) % 1);
+  
+  // Confina i punti all'interno del triangolo (Coordinate Baricentriche)
+  if (r1 + r2 > 1) {
+    r1 = 1 - r1;
+    r2 = 1 - r2;
+  }
+
+  if (teamBase === 'blue') {
+    // Vertici Blu: (0, 200), (38, 200), (39, 239)
+    const x = 0 + r1 * (38 - 0) + r2 * (39 - 0);
+    const y = 200 + r1 * (200 - 200) + r2 * (239 - 200);
+    return { x, y };
+  } else {
+    // Vertici Rosso: (200, 0), (200, 38), (239, 39)
+    const x = 200 + r1 * (200 - 200) + r2 * (239 - 200);
+    const y = 0 + r1 * (38 - 0) + r2 * (39 - 0);
+    return { x, y };
+  }
 };
 
 export const checkIsAtBuilding = (x, y, buildingsArray) => {

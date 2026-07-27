@@ -6,12 +6,12 @@ export const initialBuildings = [
     pointsPerMin: 1800, 
     pointsPerMinPlayer: 360, 
     firstControl: 9000, 
-    x: 50, 
-    y: 50,
+    x: 117, 
+    y: 117,
     icon: '/Swordshrine.png',
     scale: 1.6,
-    travelTimeBlue: 210, // 03:30
-    travelTimeRed: 210   // 03:30
+    travelTimeBlue: 235, // 03:55 (Al centro, uguale per entrambi)
+    travelTimeRed: 235
   },
   { 
     id: 'mercenary', 
@@ -20,12 +20,12 @@ export const initialBuildings = [
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
     firstControl: 1200, 
-    x: 50, 
-    y: 28,
+    x: 169, 
+    y: 169,
     icon: '/Mercenary.png',
     scale: 1,
-    travelTimeBlue: 240, // 04:00
-    travelTimeRed: 240   // 04:00
+    travelTimeBlue: 271, // Speculare di Reformation
+    travelTimeRed: 272   // 04:32
   },
   { 
     id: 'reformation', 
@@ -34,12 +34,12 @@ export const initialBuildings = [
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
     firstControl: 1200, 
-    x: 50, 
-    y: 72,
+    x: 69, 
+    y: 69,
     icon: '/Reformation.png',
     scale: 1.1,
-    travelTimeBlue: 240, // 04:00
-    travelTimeRed: 240   // 04:00
+    travelTimeBlue: 272, // Speculare di Mercenary
+    travelTimeRed: 271   // 04:31
   },
   { 
     id: 'sanctum-1', 
@@ -48,12 +48,12 @@ export const initialBuildings = [
     pointsPerMin: 1200, 
     pointsPerMinPlayer: 240, 
     firstControl: 6000, 
-    x: 23, 
-    y: 40,
+    x: 86, 
+    y: 197,
     icon: '/Sanctum.png',
     scale: 1,
-    travelTimeBlue: 90,  // 01:30
-    travelTimeRed: 330   // 05:30
+    travelTimeBlue: 103, // Speculare di Sanctum Destra
+    travelTimeRed: 377   // 06:17
   },
   { 
     id: 'sanctum-2', 
@@ -62,12 +62,12 @@ export const initialBuildings = [
     pointsPerMin: 1200, 
     pointsPerMinPlayer: 240, 
     firstControl: 6000, 
-    x: 77, 
-    y: 60,
+    x: 153, 
+    y: 42,
     icon: '/Sanctum.png',
     scale: 1,
-    travelTimeBlue: 330, // 05:30
-    travelTimeRed: 90    // 01:30
+    travelTimeBlue: 377, // Speculare di Sanctum Sinistra
+    travelTimeRed: 103   // 01:43
   },
   { 
     id: 'bell-tower', 
@@ -76,12 +76,12 @@ export const initialBuildings = [
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
     firstControl: 1200, 
-    x: 33, 
-    y: 18,
+    x: 175, 
+    y: 230,
     icon: '/Bell Tower.png',
     scale: 1.1,
-    travelTimeBlue: 210, // 03:30 (Calcolato per simmetria con Stables)
-    travelTimeRed: 330   // 05:30
+    travelTimeBlue: 279, // Speculare di Stables
+    travelTimeRed: 374   // 06:14
   },
   { 
     id: 'stables', 
@@ -90,12 +90,12 @@ export const initialBuildings = [
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
     firstControl: 1200, 
-    x: 67, 
-    y: 82,
+    x: 64, 
+    y: 9,
     icon: '/Stables.png',
     scale: 1.1,
-    travelTimeBlue: 330, // 05:30
-    travelTimeRed: 210   // 03:30 (Calcolato per simmetria con Bell Tower)
+    travelTimeBlue: 374, // Speculare di Bell Tower
+    travelTimeRed: 279   // 04:39
   },
   { 
     id: 'abbey-1', 
@@ -104,12 +104,12 @@ export const initialBuildings = [
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
     firstControl: 300, 
-    x: 67, 
-    y: 18,
+    x: 230, 
+    y: 175,
     icon: '/Abbey.png',
-    scale: 0.9,
-    travelTimeBlue: 330, // Simmetrica a Stables
-    travelTimeRed: 210
+    scale: 0.7,
+    travelTimeBlue: 371, // Speculare di Abbey Basso Sx
+    travelTimeRed: 283   // 04:43
   },
   { 
     id: 'abbey-2', 
@@ -118,12 +118,12 @@ export const initialBuildings = [
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
     firstControl: 300, 
-    x: 33, 
-    y: 82,
+    x: 9, 
+    y: 64,
     icon: '/Abbey.png',
-    scale: 0.9,
-    travelTimeBlue: 210, // Simmetrica a Bell Tower
-    travelTimeRed: 330
+    scale: 0.7,
+    travelTimeBlue: 283, // Speculare di Abbey Alto Dx
+    travelTimeRed: 371   // 06:11
   },
   { 
     id: 'abbey-3', 
@@ -132,12 +132,12 @@ export const initialBuildings = [
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
     firstControl: 300, 
-    x: 23, 
-    y: 60,
+    x: 40, 
+    y: 179,
     icon: '/Abbey.png',
-    scale: 0.9,
-    travelTimeBlue: 90,  // Simmetrica a Sanctum 1
-    travelTimeRed: 330
+    scale: 0.7,
+    travelTimeBlue: 54,  // Speculare di Abbey Centro Dx
+    travelTimeRed: 405   // 06:45
   },
   { 
     id: 'abbey-4', 
@@ -146,11 +146,11 @@ export const initialBuildings = [
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
     firstControl: 300, 
-    x: 77, 
-    y: 40,
+    x: 199, 
+    y: 60,
     icon: '/Abbey.png',
-    scale: 0.9,
-    travelTimeBlue: 330, // Simmetrica a Sanctum 2
-    travelTimeRed: 90
+    scale: 0.7,
+    travelTimeBlue: 405, // Speculare di Abbey Centro Sx
+    travelTimeRed: 54    // 00:54
   }
 ];

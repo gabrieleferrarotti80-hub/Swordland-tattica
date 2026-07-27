@@ -3,11 +3,27 @@ import { useState, useEffect } from 'react';
 const getBasePositionApp = (idStr, teamBase) => {
   let hash = 0;
   for (let i = 0; i < idStr.length; i++) { hash = idStr.charCodeAt(i) + ((hash << 5) - hash); }
-  const prng1 = Math.abs((Math.sin(hash) * 10000) % 1);
-  const prng2 = Math.abs((Math.cos(hash) * 10000) % 1);
-  const y = 30 + (prng1 * 40);
-  let x = teamBase === 'blue' ? 3 + (prng2 * 13) : 84 + (prng2 * 13);
-  return { x, y };
+  
+  let r1 = Math.abs((Math.sin(hash) * 10000) % 1);
+  let r2 = Math.abs((Math.cos(hash) * 10000) % 1);
+  
+  // Confina i punti all'interno del triangolo (Coordinate Baricentriche)
+  if (r1 + r2 > 1) {
+    r1 = 1 - r1;
+    r2 = 1 - r2;
+  }
+
+  if (teamBase === 'blue') {
+    // Vertici Blu: (0, 200), (38, 200), (39, 239)
+    const x = 0 + r1 * (38 - 0) + r2 * (39 - 0);
+    const y = 200 + r1 * (200 - 200) + r2 * (239 - 200);
+    return { x, y };
+  } else {
+    // Vertici Rosso: (200, 0), (200, 38), (239, 39)
+    const x = 200 + r1 * (200 - 200) + r2 * (239 - 200);
+    const y = 0 + r1 * (38 - 0) + r2 * (39 - 0);
+    return { x, y };
+  }
 };
 
 export const useMarches = ({
@@ -43,11 +59,11 @@ export const useMarches = ({
     return lastKnownPos;
   };
 
-  // NUOVA FUNZIONE: Recupera unicamente la posizione della "Città" (Segnalino Statico o Base)
-  // Ignora completamente dove si trovano le marce attive, fondamentale per l'origine dei dispatch
+ // NUOVA FUNZIONE AGGIORNATA: Recupera la posizione della Città
   const getCityPosition = (playerId) => {
     const p = activeDeployment.find(x => String(x.id) === String(playerId));
     let lastStatic = null;
+    
     if (p && p.positions) {
       const mins = Object.keys(p.positions).map(Number).sort((a,b) => a-b);
       for(const m of mins) { if (m <= currentTime) lastStatic = p.positions[m]; }
@@ -56,7 +72,10 @@ export const useMarches = ({
     if (lastStatic && !lastStatic.removed && lastStatic.x !== undefined) {
        return { x: lastStatic.x, y: lastStatic.y };
     }
-    return getBasePositionApp(String(playerId), teamBase);
+    
+    // INVECE DI RITORNARE IL PUNTO RANDOMICO, RITORNIAMO IL VERTICE ESATTO DELLA BASE
+    const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
+    return REFERENCE_POINTS[teamBase];
   };
 
   const getExactPlayerPosition = (playerId) => {
@@ -175,7 +194,8 @@ export const useMarches = ({
 
     console.log(`[TRACE POSIZIONE] Leader ${playerId} verificato alla Città a x:${startX.toFixed(2)}, y:${startY.toFixed(2)}`);
 
-    const REFERENCE_POINTS = { blue: { x: 16, y: 50 }, red: { x: 84, y: 50 } };
+   // Calibrazione esatta sui vertici delle basi forniti
+    const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
     const dxPlayer = targetBuilding.x - startX;
     const dyPlayer = targetBuilding.y - startY;
     const playerToTargetDist = Math.sqrt(dxPlayer * dxPlayer + dyPlayer * dyPlayer);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { getEntityDisplayState } from './mapUtils';
+import { getEntityDisplayState, getBasePosition } from './mapUtils';
 
 export const DispatchModal = ({
   activePlayer,
@@ -32,6 +32,18 @@ export const DispatchModal = ({
   const isHealing = healStart !== undefined && currentTime >= healStart && currentTime < healStart + 12;
   const healRemaining = isHealing ? (healStart + 12) - currentTime : 0;
 
+  // Calcoliamo la posizione corrente (X, Y) del giocatore sulla mappa
+  const currentState = getEntityDisplayState(
+    { ...activePlayer, type: 'player' }, 
+    currentTime, 
+    draftPositions, 
+    healingEvents, 
+    teamBase, 
+    buildings
+  );
+  const currentX = currentState.x !== undefined ? currentState.x.toFixed(1) : '0.0';
+  const currentY = currentState.y !== undefined ? currentState.y.toFixed(1) : '0.0';
+
   const updateMarchAssignment = (marchIdx, field, value) => {
     setMarchAssignments(prev => {
       const current = prev[marchIdx] || { buildingId: '', type: 'attacco', members: [] };
@@ -39,7 +51,44 @@ export const DispatchModal = ({
     });
   };
 
-  // Normalizziamo l'ID in stringa per evitare mismatch
+  // Calcolo tempo di marcia verso l'edificio
+  const calculateTravelTime = (buildingId) => {
+    if (!buildingId || !activePlayer || !teamBase) return null;
+    
+    const targetBuilding = buildings.find(b => String(b.id) === String(buildingId));
+    if (!targetBuilding) return null;
+
+    const randomBase = getBasePosition(String(activePlayer.id), teamBase);
+    
+    const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
+    
+    let startX = currentState.x;
+    let startY = currentState.y;
+
+    if (Math.abs(startX - randomBase.x) < 0.1 && Math.abs(startY - randomBase.y) < 0.1) {
+      startX = REFERENCE_POINTS[teamBase].x;
+      startY = REFERENCE_POINTS[teamBase].y;
+    }
+    
+    const dxPlayer = targetBuilding.x - startX;
+    const dyPlayer = targetBuilding.y - startY;
+    const playerToTargetDist = Math.sqrt(dxPlayer * dxPlayer + dyPlayer * dyPlayer);
+
+    const refPoint = REFERENCE_POINTS[teamBase];
+    const dxRef = targetBuilding.x - refPoint.x;
+    const dyRef = targetBuilding.y - refPoint.y;
+    const refToTargetDist = Math.sqrt(dxRef * dxRef + dyRef * dyRef);
+
+    const tableTimeSec = teamBase === 'blue' ? (targetBuilding.travelTimeBlue || 60) : (targetBuilding.travelTimeRed || 60);
+    const speed = refToTargetDist / Math.max(1, tableTimeSec);
+    
+    const travelTimeMins = (playerToTargetDist / speed) / 60;
+    
+    const m = Math.floor(travelTimeMins);
+    const s = Math.round((travelTimeMins - m) * 60);
+    return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+  };
+
   const availablePlayers = activeDeployment.filter(p => 
     String(p.id) !== String(activePlayer.id) && 
     getAvailableMarches(p.id) > 0 &&
@@ -70,7 +119,12 @@ export const DispatchModal = ({
         </button>
       </div>
 
-      {/* --- SEZIONE CURE --- */}
+      {/* --- POSIZIONE X, Y (Subito sotto l'intestazione) --- */}
+      <div className="px-2 py-1 bg-slate-900/80 border-b border-slate-700 flex justify-between items-center text-[9px]">
+        <span className="text-slate-400">Posizione:</span>
+        <span className="text-cyan-400 font-mono font-bold">X: {currentX} | Y: {currentY}</span>
+      </div>
+
       {isHealing ? (
         <div className="p-3 text-center flex flex-col gap-2">
           <span className="text-emerald-400 text-[10px] font-bold animate-pulse">
@@ -85,7 +139,6 @@ export const DispatchModal = ({
         </div>
       ) : (
         <>
-          {/* Pulsante Invia in Cura se il giocatore è attivo */}
           <div className="p-1.5 border-b border-slate-700/50 bg-slate-800/50">
             <button 
               onClick={(e) => { 
@@ -98,7 +151,6 @@ export const DispatchModal = ({
             </button>
           </div>
           
-          {/* --- LISTA MARCE --- */}
           <div className="max-h-[55vh] overflow-y-auto p-1.5 flex flex-col gap-1.5 scrollbar-thin">
             {Array.from({ length: getAvailableMarches(activePlayer.id) }).map((_, i) => {
               const marchIdx = i + 1;
@@ -121,6 +173,12 @@ export const DispatchModal = ({
                       <option value="">Nessun bersaglio...</option>
                       {buildings.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}
                     </select>
+
+                    {currentAssign.buildingId && (
+                      <div className="text-cyan-300 text-[9px] font-semibold flex items-center gap-1 bg-slate-900/50 p-1 rounded border border-slate-700">
+                        ⏱️ Arrivo in: {calculateTravelTime(currentAssign.buildingId)}
+                      </div>
+                    )}
                     
                     <select 
                       className="w-full bg-slate-900 border border-slate-700 rounded-sm p-0.5 text-[9px] text-slate-200 outline-none focus:border-cyan-500 cursor-pointer"
@@ -145,7 +203,6 @@ export const DispatchModal = ({
                             const memSpeedups = isObj ? (memObj.speedups || 0) : 0;
                             const memBaseTime = isObj ? (memObj.baseTime || 0) : 0;
                             
-                            // Normalizziamo l'ID
                             const mem = activeDeployment.find(p => String(p.id) === String(memId));
                             const currentTimeCalc = memBaseTime * Math.pow(0.75, memSpeedups);
                             const isTooSlow = currentAssign.type === 'rally' && currentTimeCalc > 4.0;
@@ -160,7 +217,6 @@ export const DispatchModal = ({
                                   <button 
                                     onClick={(e) => { 
                                       e.stopPropagation(); 
-                                      // Rimozione sicura tramite String()
                                       updateMarchAssignment(marchIdx, 'members', assignedMembers.filter(m => String(typeof m === 'object' ? m.id : m) !== String(memId))); 
                                     }} 
                                     className="text-red-400 hover:text-red-300 font-bold leading-none"
@@ -214,10 +270,9 @@ export const DispatchModal = ({
                           const targetId = e.target.value;
                           
                           const leaderEntity = { ...activePlayer, type: 'player' };
-                          // Troviamo il membro usando String() per evitare l'undefined crash
                           const memRaw = activeDeployment.find(ent => String(ent.id) === String(targetId));
                           
-                          if (!memRaw) return; // Evita eventuali crash di React se per caso non lo trova
+                          if (!memRaw) return; 
 
                           const memEntity = { ...memRaw, type: 'player' };
 
@@ -230,7 +285,7 @@ export const DispatchModal = ({
                           let calculatedBaseTime = 0;
                           
                           if (targetBuilding) {
-                            const REFERENCE_POINTS = { blue: { x: 16, y: 50 }, red: { x: 84, y: 50 } };
+                            const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
                             const refPoint = REFERENCE_POINTS[teamBase];
                             const dxRef = targetBuilding.x - refPoint.x;
                             const dyRef = targetBuilding.y - refPoint.y;
@@ -251,7 +306,6 @@ export const DispatchModal = ({
                         }}
                       >
                         <option value="" disabled>+ Unisci giocatore...</option>
-                        {/* Filtriamo in modo Type-Safe i membri già presenti */}
                         {availablePlayers.filter(p => !assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id))).map(p => (
                             <option key={p.id} value={p.id}>{p.name} ({p.tag})</option>
                         ))}
@@ -271,7 +325,6 @@ export const DispatchModal = ({
             )}
           </div>
 
-          {/* --- FOOTER --- */}
           <div className="p-1.5 border-t border-slate-700 bg-slate-900/50 flex gap-1.5 shrink-0 mt-2">
             <button 
               className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[9px] font-semibold py-1 rounded-sm transition-colors cursor-pointer" 

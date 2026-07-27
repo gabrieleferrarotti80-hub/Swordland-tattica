@@ -14,7 +14,9 @@
     "@tailwindcss/postcss": "^4.3.3",
     "firebase": "^12.16.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "recharts": "^3.10.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
