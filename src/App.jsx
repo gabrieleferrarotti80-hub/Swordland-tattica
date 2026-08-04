@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import Home from './pages/Home';
 import Swordland from './pages/Swordland';
 import Viking from './pages/Viking';
+import MapPage from './pages/MapPage';
+
 
 function App() {
   // Lo stato del roster vive qui ed è l'unica cosa condivisa globalmente
@@ -22,6 +24,7 @@ function App() {
         <Route path="/" element={<Home roster={roster} setRoster={setRoster} />} />
         <Route path="/swordland" element={<Swordland roster={roster} setRoster={setRoster} />} />
         <Route path="/viking" element={<Viking roster={roster} />} />
+        <Route path="/map" element={<MapPage roster={roster} />} />
       </Routes>
     </Router>
   );

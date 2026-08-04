@@ -13,10 +13,13 @@
     "@supabase/supabase-js": "^2.110.7",
     "@tailwindcss/postcss": "^4.3.3",
     "firebase": "^12.16.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
-    "recharts": "^3.10.0"
+    "recharts": "^3.10.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

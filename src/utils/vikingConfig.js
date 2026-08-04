@@ -12,7 +12,7 @@ export const VIKING_WAVES = {
   14: { livello: 14, vFant: 524976, vCav: 610599, vArc: 610599 },
   15: { livello: 15, vFant: 905825, vCav: 1056770, vArc: 1056770 },
   16: { livello: 16, vFant: 1442424, vCav: 1682867, vArc: 1682867 },
-  17: { livello: 17, vFant: 2091536, vCav: 2440074, vArc: 2440074 }, // Nota: qui la colonna 2 degli Arcieri aveva un valore, l'ho sommato
+  17: { livello: 17, vFant: 2091536, vCav: 2440074, vArc: 2440074 },
   18: { livello: 18, vFant: 2903602, vCav: 3387587, vArc: 3387587 },
   19: { livello: 19, vFant: 4035614, vCav: 4708125, vArc: 4708125 }
 };
