@@ -37,11 +37,17 @@ export default function TacticalView(props) {
     }
   }, [selectedBuilding]);
 
-  // Usa le dimensioni matematiche (senza scale, si appoggiano alla griglia)
-  const shapeCastle = getTacticalShapePts(GRID_SIZES.CASTLE, TILE_SF);
-  const shapeMajor  = getTacticalShapePts(GRID_SIZES.MAJOR, TILE_SF);
-  const shapeMinor  = getTacticalShapePts(GRID_SIZES.MINOR, TILE_SF);
-  const shapePlayer = getTacticalShapePts(GRID_SIZES.PLAYER, TILE_SF);
+ // --- INGRANDIMENTO DINAMICO ---
+  // Se 'selectedBuilding' è null (nessun bersaglio scelto), moltiplichiamo le dimensioni per 3.5.
+  // Non appena viene cliccato qualcosa, il moltiplicatore torna a 1 (dimensione reale 1:1).
+  const sizeMultiplier = selectedBuilding ? 1 : 3.5;
+  const playerMultiplier = selectedBuilding ? 1 : 2.5;
+
+  // Usa le dimensioni matematiche applicando il moltiplicatore dinamico
+  const shapeCastle = getTacticalShapePts(GRID_SIZES.CASTLE, TILE_SF * sizeMultiplier);
+  const shapeMajor  = getTacticalShapePts(GRID_SIZES.MAJOR, TILE_SF * sizeMultiplier);
+  const shapeMinor  = getTacticalShapePts(GRID_SIZES.MINOR, TILE_SF * sizeMultiplier);
+  const shapePlayer = getTacticalShapePts(GRID_SIZES.PLAYER, TILE_SF * playerMultiplier);
 
   return (
     <g>

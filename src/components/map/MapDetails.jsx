@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function MapDetails({ 
   selectedBuilding, 
@@ -11,15 +11,24 @@ export default function MapDetails({
   activeView,
   isOpen,         
   setIsOpen,
-  currentTime, // <-- IMPORTIAMO IL TEMPO
+  currentTime, 
   marchAssignments,
   setMarchAssignments,
   handleConfirmDispatch,
   buildings,
   getAvailableMarches,
-  activeDeployment
+  activeDeployment,
+  roster, 
+  allianceStructures = [] 
 }) {
   const [newHQ, setNewHQ] = useState({ name: '', x: '', y: '' });
+  const [currentTargetId, setCurrentTargetId] = useState('');
+
+  useEffect(() => {
+    if (selectedBuilding && !selectedBuilding.isPlayer) {
+      setCurrentTargetId(selectedBuilding.id);
+    }
+  }, [selectedBuilding]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -33,49 +42,60 @@ export default function MapDetails({
   const updateMarchAssignment = (marchIdx, field, value) => {
     if (!setMarchAssignments) return;
     setMarchAssignments(prev => {
-      const current = prev[marchIdx] || { buildingId: '', type: 'attacco', members: [] };
+      const current = prev[marchIdx] || { buildingId: currentTargetId, type: 'attacco', members: [] };
       return { ...prev, [marchIdx]: { ...current, [field]: value } };
     });
   };
 
-  // Restituisce la durata del viaggio e il minuto di arrivo previsto
+  // --- FORMATTATORE TEMPO (DA DECIMALE A MINUTI E SECONDI) ---
+  const formatTimeMinSec = (decimalMinutes) => {
+    if (isNaN(decimalMinutes) || decimalMinutes < 0) return "0m 00s";
+    const m = Math.floor(decimalMinutes);
+    let s = Math.round((decimalMinutes - m) * 60);
+    let finalM = m;
+    if (s === 60) { finalM += 1; s = 0; }
+    return `${finalM}m ${s < 10 ? '0' : ''}${s}s`;
+  };
+
+  // --- CALCOLO MATEMATICO DISTANZA TRA COORDINATE ---
+  const calculateDistanceMinutes = (targetX, targetY, originX, originY, speedups = 0) => {
+    if (targetX === undefined || targetY === undefined || originX === undefined || originY === undefined) return 0;
+    const tX = Number(targetX);
+    const tY = Number(targetY);
+    const oX = Number(originX);
+    const oY = Number(originY);
+    if (isNaN(tX) || isNaN(tY) || isNaN(oX) || isNaN(oY)) return 0;
+
+    const dx = tX - oX;
+    const dy = tY - oY;
+    const distanceInTiles = Math.sqrt(dx * dx + dy * dy);
+    
+    // 4 secondi per casella
+    const travelTimeMins = (distanceInTiles * 4) / 60; 
+    
+    // Ogni acceleratore applica un +25% di velocità (riduce il tempo al 75%)
+    return travelTimeMins * Math.pow(0.75, speedups);
+  };
+
   const calculateTravelTime = (buildingId, originX, originY, isRally = false) => {
     if (!buildingId || originX === undefined || !buildings) return null;
     const targetBuilding = buildings.find(b => String(b.id) === String(buildingId));
     if (!targetBuilding) return null;
 
-    const dx = targetBuilding.x - originX;
-    const dy = targetBuilding.y - originY;
-    const distanceInTiles = Math.sqrt(dx * dx + dy * dy);
-    
-    const SECONDS_PER_TILE = 4; 
-    const travelTimeSecs = distanceInTiles * SECONDS_PER_TILE;
-    const travelTimeMins = travelTimeSecs / 60;
-    
-    const m = Math.floor(travelTimeMins);
-    const s = Math.round((travelTimeMins - m) * 60);
-
+    const travelTimeMins = calculateDistanceMinutes(targetBuilding.x, targetBuilding.y, originX, originY, 0);
     const delay = isRally ? 5 : 0;
     const arrivalMin = currentTime + delay + travelTimeMins;
 
     return {
-      duration: `${m}m ${s < 10 ? '0' : ''}${s}s`,
-      arrival: arrivalMin.toFixed(1)
+      duration: formatTimeMinSec(travelTimeMins),
+      arrival: formatTimeMinSec(arrivalMin)
     };
   };
 
-  const getTravelTimeMinutes = (buildingId, originX, originY, speedups = 0) => {
-    if (!buildingId || originX === undefined || !buildings) return 0;
-    const targetBuilding = buildings.find(b => String(b.id) === String(buildingId));
-    if (!targetBuilding) return 0;
-    
-    const dx = targetBuilding.x - originX;
-    const dy = targetBuilding.y - originY;
-    const distanceInTiles = Math.sqrt(dx * dx + dy * dy);
-    const travelTimeMins = (distanceInTiles * 4) / 60;
-    
-    return travelTimeMins * Math.pow(0.75, speedups);
-  };
+  // Coordinate dell'Alveare (Primo QG dell'alleanza)
+  const hiveHQ = allianceStructures?.find(s => s.type === 'headquarters');
+  const HIVE_X = hiveHQ ? Number(hiveHQ.x) : 0;
+  const HIVE_Y = hiveHQ ? Number(hiveHQ.y) : 0;
 
   return (
     <>
@@ -149,9 +169,15 @@ export default function MapDetails({
               <div className="p-4 flex flex-col gap-3 flex-1 overflow-y-auto">
                 {Array.from({ length: getAvailableMarches ? getAvailableMarches(selectedBuilding.id) : 0 }).map((_, i) => {
                   const marchIdx = i + 1;
-                  const currentAssign = marchAssignments[marchIdx] || { buildingId: '', type: 'attacco', members: [] };
+                  const currentAssign = marchAssignments[marchIdx] || { buildingId: currentTargetId, type: 'attacco', members: [] };
                   const assignedMembers = currentAssign.members || [];
-                  const availablePlayers = activeDeployment?.filter(p => String(p.id) !== String(selectedBuilding.id) && getAvailableMarches(p.id) > 0) || [];
+                  
+                  const sourceList = (roster && roster.length > 0) ? roster : activeDeployment;
+                  const availablePlayers = sourceList?.filter(p => 
+                    String(p.id) !== String(selectedBuilding.id) && 
+                    p.isParticipating !== false && 
+                    getAvailableMarches(p.id) > 0
+                  ) || [];
 
                   return (
                     <div key={`march-${marchIdx}`} className="bg-slate-900 border border-slate-700/50 rounded-xl p-3 flex flex-col gap-2 shadow-inner">
@@ -174,8 +200,8 @@ export default function MapDetails({
                         const timing = calculateTravelTime(currentAssign.buildingId, selectedBuilding.x, selectedBuilding.y, isRally);
                         return timing && (
                           <div className="text-[10px] font-black flex flex-col gap-0.5 bg-slate-950 p-2 rounded border border-slate-800">
-                            <span className="text-slate-400">Durata: <span className="text-white">{timing.duration}</span></span>
-                            <span className="text-amber-400">Arrivo previsto: <span className="text-white">Min. {timing.arrival}</span></span>
+                            <span className="text-slate-400">Durata Viaggio: <span className="text-white">{timing.duration}</span></span>
+                            <span className="text-amber-400">Impatto a Minuto: <span className="text-white">{timing.arrival}</span></span>
                           </div>
                         );
                       })()}
@@ -198,28 +224,60 @@ export default function MapDetails({
                               const isObj = typeof memObj === 'object';
                               const memId = isObj ? memObj.id : memObj;
                               const memSpeedups = isObj ? (memObj.speedups || 0) : 0;
-                              const mem = activeDeployment.find(p => String(p.id) === String(memId));
-                              const memX = mem?.numX !== undefined ? mem.numX : 0;
-                              const memY = mem?.numY !== undefined ? mem.numY : 0;
                               
-                              const timeCalc = currentAssign.type === 'rally' 
-                                ? getTravelTimeMinutes({id: 'temp', x: selectedBuilding.x, y: selectedBuilding.y}, memX, memY, memSpeedups)
-                                : getTravelTimeMinutes(currentAssign.buildingId, memX, memY, memSpeedups);
+                              const mem = roster?.find(p => String(p.id) === String(memId));
+                              const isDeployed = mem?.numX !== undefined && mem?.numX !== '' && mem?.numX !== null;
+                              
+                              // Origine del membro (Sua posizione o Alveare)
+                              const memX = isDeployed ? Number(mem.numX) : HIVE_X;
+                              const memY = isDeployed ? Number(mem.numY) : HIVE_Y;
+                              
+                              // Bersaglio del membro:
+                              // Se è un Rally, il bersaglio è il Capo Rally (selectedBuilding.x, selectedBuilding.y)
+                              // Se è un attacco diretto, è la Struttura Nemica (currentAssign.buildingId)
+                              let targetX, targetY;
+                              if (currentAssign.type === 'rally') {
+                                targetX = selectedBuilding.x;
+                                targetY = selectedBuilding.y;
+                              } else {
+                                const targetB = buildings?.find(b => String(b.id) === String(currentAssign.buildingId));
+                                targetX = targetB?.x;
+                                targetY = targetB?.y;
+                              }
 
+                              const timeCalc = calculateDistanceMinutes(targetX, targetY, memX, memY, memSpeedups);
                               const isTooSlow = currentAssign.type === 'rally' && timeCalc > 5.0;
 
                               return (
                                 <div key={memId} className={`text-[10px] bg-slate-900 border ${isTooSlow ? 'border-red-500/50' : 'border-slate-700'} text-slate-300 px-2 py-1.5 rounded flex flex-col gap-1`}>
                                   <div className="flex justify-between items-center">
-                                    <span className="font-bold">{mem?.name || mem?.tag} {memSpeedups > 0 && <span className="text-amber-400 ml-1">⚡x{memSpeedups}</span>}</span>
+                                    <span className="font-bold">
+                                      {mem?.name || mem?.tag} 
+                                      {!isDeployed && <span className="text-indigo-400 ml-1 font-normal opacity-80">(Alveare)</span>}
+                                      {memSpeedups > 0 && <span className="text-amber-400 ml-1">⚡x{memSpeedups}</span>}
+                                    </span>
                                     <button onClick={() => updateMarchAssignment(marchIdx, 'members', assignedMembers.filter(m => String(typeof m === 'object' ? m.id : m) !== String(memId)))} className="text-red-400 hover:text-red-300">✕</button>
                                   </div>
+                                  
                                   {currentAssign.type === 'rally' && (
-                                    <div className="flex justify-between border-t border-slate-800 pt-1 mt-1 text-[9px]">
-                                      <span className={isTooSlow ? 'text-red-400' : 'text-slate-400'}>T: {timeCalc.toFixed(1)}m</span>
-                                      {isTooSlow ? (
-                                        <button onClick={() => updateMarchAssignment(marchIdx, 'members', assignedMembers.map(m => String(typeof m === 'object' ? m.id : m) === String(memId) ? { id: memId, speedups: memSpeedups + 1 } : m))} className="bg-amber-600/20 text-amber-400 px-1 rounded hover:bg-amber-600/40 transition-colors">+ Speedup</button>
-                                      ) : <span className="text-emerald-400">✓ Ok</span>}
+                                    <div className="flex justify-between border-t border-slate-800 pt-1 mt-1 text-[9px] items-center">
+                                      <span className={isTooSlow ? 'text-red-400 font-bold' : 'text-slate-400'}>
+                                        Viaggio: {formatTimeMinSec(timeCalc)}
+                                      </span>
+                                      
+                                      <div className="flex gap-2 items-center">
+                                        {isTooSlow ? (
+                                          <span className="text-red-400 flex items-center gap-1 font-bold">⚠️ In ritardo</span>
+                                        ) : (
+                                          <span className="text-emerald-400 font-bold">✓ In tempo</span>
+                                        )}
+                                        <button 
+                                          onClick={() => updateMarchAssignment(marchIdx, 'members', assignedMembers.map(m => String(typeof m === 'object' ? m.id : m) === String(memId) ? { id: memId, speedups: memSpeedups + 1 } : m))} 
+                                          className={`px-1.5 py-0.5 rounded transition-colors ${isTooSlow ? 'bg-amber-600/40 text-amber-300 hover:bg-amber-600/60 border border-amber-500/50 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}`}
+                                        >
+                                          + Speedup
+                                        </button>
+                                      </div>
                                     </div>
                                   )}
                                 </div>

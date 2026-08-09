@@ -583,6 +583,8 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         buildings={fixedBuildings}
         getAvailableMarches={getAvailableMarches}
         activeDeployment={validPlayers}
+        roster={roster} 
+        allianceStructures={allianceStructures}
       />
 
       <TacticalExportModal 
