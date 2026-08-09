@@ -132,7 +132,12 @@
     "tactical_plan_saved": "✅ Piano Tattico salvato per l'alleanza [{{code}}]!",
     "save_error": "❌ Errore durante il salvataggio.",
     "secret_code_prompt": "Inserisci il codice segreto per accedere alle Impostazioni:",
-    "wrong_code": "❌ Codice errato!"
+    "wrong_code": "❌ Codice errato!",
+    "hive_grid": "Griglia Olografica",
+    "center_x": "Centro X",
+    "center_y": "Centro Y",
+    "radius": "Raggio",
+    "territory": "Confini Territorio"
   },
   "swordland": {
     "cloud_master_loaded": "✅ Dati Edifici Master caricati dal Cloud!",
@@ -180,50 +185,67 @@
     "export_orders": "Esporta Ordini",
     "team_blue": "Team Blu",
     "team_red": "Team Rosso",
-    "export_filename": "tattica_swordland_"
+    "export_filename": "tattica_swordland_",
+    "demo_title": "Benvenuto nel Simulatore Swordland! ⚔️",
+    "demo_desc": "Sei in modalità Sandbox. Abbiamo già schierato 3 giocatori nella tua base (Base Blu) per farti testare subito il motore di gioco.",
+    "demo_f1_title": "1. Punteggi Dinamici",
+    "demo_f1_desc": "Occupando gli edifici, il motore calcolerà matematicamente i punti al minuto generati per la tua alleanza.",
+    "demo_f2_title": "2. Sistema di Marce",
+    "demo_f2_desc": "Trascina un giocatore dalla base a un edificio. Il tempo di marcia verrà calcolato con precisione geometrica.",
+    "demo_f3_title": "3. La Timeline",
+    "demo_f3_desc": "Usa la barra in basso a destra per viaggiare nel tempo. Osserva le truppe muoversi e coordina i Rally!",
+    "demo_start_btn": "Inizia la Simulazione",
+    "help_deploy_title": "Guida Schieramento:",
+    "help_deploy_desc": "Trascina la card di un giocatore da questo pannello verso un edificio sulla mappa per ordinare la marcia! Premi la X sulle marce per annullarle.",
+    "help_build_title": "Guida Edifici:",
+    "help_build_desc": "Visualizza i punti generati da ogni struttura e i tempi esatti che le truppe impiegano a raggiungerli partendo dalle rispettive basi.",
+    "help_roster_title": "Guida Roster:",
+    "help_roster_desc": "Seleziona i giocatori della tua Alleanza che parteciperanno all'evento spuntando le caselle, poi clicca sul pulsante 'Schieramento' in alto a destra.",
+    "help_admin_title": "Guida Editor:",
+    "help_admin_desc": "Modalità riservata ai Master. Permette di calibrare l'area di clic (Hitbox) e il centro matematico per il calcolo geometrico delle distanze."
   },
-"sidebar": {
-      "buildings": "Edifici",
-      "players": "Giocatori",
-      "deployment": "Schieramento Singoli",
-      "settings": "Impostazioni & Editor Mappa",
-      "new_project": "Nuovo Progetto",
-      "change_faction": "Cambia Fazione",
-      "save_firebase": "Salva su Firebase",
-      "load_firebase": "Carica da Firebase",
-      "export_json": "Esporta JSON",
-      "import_json": "Importa JSON"
-    },
-    "timeline": {
-      "minute": "Minuto",
-      "save": "✓ Salva",
-      "cancel": "✕ Annulla",
-      "speed_1x": "1x Vel.",
-      "speed_5x": "5x Vel.",
-      "speed_15x": "15x Vel."
-    },
-    "deployment": {
-      "healing_status": "🏥 In Cura ({{time}}m)",
-      "arriving_min": "🚶 Arrivo min {{time}}",
-      "withdraw": "Ritira",
-      "withdraw_tooltip": "Ritira in Base",
-      "heal": "🏥 Cura",
-      "heal_tooltip": "Manda in cura (12 min)",
-      "level": "Lv:",
-      "power": "Potere:",
-      "marches": "Marce:",
-      "available": "disp."
-    },
-    "building_table": {
-      "building": "Edificio",
-      "unlock": "Sblocco",
-      "points_min": "Punti/Min",
-      "points_player": "Punti/Player",
-      "first_control": "1° Controllo",
-      "blue_march_sec": "Marcia Blu (sec)",
-      "red_march_sec": "Marcia Rossa (sec)"
-    },
-    "roster_table": {
+  "sidebar": {
+    "buildings": "Edifici",
+    "players": "Giocatori",
+    "deployment": "Schieramento Singoli",
+    "settings": "Impostazioni & Editor Mappa",
+    "new_project": "Nuovo Progetto",
+    "change_faction": "Cambia Fazione",
+    "save_firebase": "Salva su Firebase",
+    "load_firebase": "Carica da Firebase",
+    "export_json": "Esporta JSON",
+    "import_json": "Importa JSON"
+  },
+  "timeline": {
+    "minute": "Minuto",
+    "save": "✓ Salva",
+    "cancel": "✕ Annulla",
+    "speed_1x": "1x Vel.",
+    "speed_5x": "5x Vel.",
+    "speed_15x": "15x Vel."
+  },
+  "deployment": {
+    "healing_status": "🏥 In Cura ({{time}}m)",
+    "arriving_min": "🚶 Arrivo min {{time}}",
+    "withdraw": "Ritira",
+    "withdraw_tooltip": "Ritira in Base",
+    "heal": "🏥 Cura",
+    "heal_tooltip": "Manda in cura (12 min)",
+    "level": "Lv:",
+    "power": "Potere:",
+    "marches": "Marce:",
+    "available": "disp."
+  },
+  "building_table": {
+    "building": "Edificio",
+    "unlock": "Sblocco",
+    "points_min": "Punti/Min",
+    "points_player": "Punti/Player",
+    "first_control": "1° Controllo",
+    "blue_march_sec": "Marcia Blu (sec)",
+    "red_march_sec": "Marcia Rossa (sec)"
+  },
+  "roster_table": {
     "title": "Database Giocatori",
     "search_placeholder": "🔍 Cerca per nome o sigla...",
     "sort_default": "↕ Ordine: Predefinito",
@@ -711,5 +733,21 @@
   "scoreboard": {
     "blue_alliance": "Alleanza Blu",
     "red_alliance": "Alleanza Rossa"
+  },
+  "alliance_view": {
+    "occupied": "Occupato: ",
+    "member_type": "Membro Alleanza"
+  },
+  "alliance_sidebar": {
+    "title": "Gestione Alveare (Hive)",
+    "subtitle": "Trascina i membri sulla mappa o inserisci le coordinate.",
+    "search_placeholder": "Cerca membro...",
+    "positioned": "Sulla mappa",
+    "unpositioned": "Senza coordinate",
+    "coord_x": "X",
+    "coord_y": "Y",
+    "not_set": "Non posizionato",
+    "structures": "Strutture Alleanza",
+    "members": "Membri Alleanza"
   }
 }

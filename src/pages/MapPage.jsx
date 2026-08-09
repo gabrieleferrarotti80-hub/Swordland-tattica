@@ -5,7 +5,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import React from 'react';
 import { mapBuildings } from '../data/mapBuildings';
 import { calculateMarchTime, svgToGameCoordinates } from '../utils/marchUtils';
-import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
+import { useTranslation } from 'react-i18next'; 
 
 import MapSidebar from '../components/map/MapSidebar';
 import MapDetails from '../components/map/MapDetails';
@@ -23,10 +23,37 @@ const INITIAL_BUILDINGS = mapBuildings.map(b => ({
   x: b.x, y: b.y, minX: b.x - 30, maxX: b.x + 30, minY: b.y - 30, maxY: b.y + 30, occupiedBy: b.occupant || ''
 }));
 
+const DEFAULT_STRUCTURES = [
+  { id: 'alliance-hq', code: 'HQ', name: 'Quartier Generale', type: 'headquarters', x: 500, y: 500 },
+  { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 520, y: 500 },
+  { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 480, y: 500 }
+];
+
+const DEMO_STRUCTURES = [
+  { id: 'alliance-hq', code: 'HQ', name: 'QG Sandbox (Demo)', type: 'headquarters', x: 800, y: 800 },
+  { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 820, y: 800 },
+  { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 780, y: 800 }
+];
+
+// 💡 ROSTER DEMO: Dati fittizi per far sembrare l'app "viva"
+const DEMO_ROSTER = [
+  { id: 'd1', name: 'Ragnar', tag: 'DEMO', role: 'R5', power: 120 },
+  { id: 'd2', name: 'Lagertha', tag: 'DEMO', role: 'R4', power: 105 },
+  { id: 'd3', name: 'Bjorn', tag: 'DEMO', role: 'R3', power: 90 },
+  { id: 'd4', name: 'Floki', tag: 'DEMO', role: 'R3', power: 85 },
+  { id: 'd5', name: 'Ivar', tag: 'DEMO', role: 'R2', power: 70 }
+];
+
+const DEMO_OVERRIDES = {
+  'd1': { x: 798, y: 798 }, 'd2': { x: 802, y: 798 }, 
+  'd3': { x: 798, y: 802 }, 'd4': { x: 802, y: 802 }, 
+  'd5': { x: 804, y: 800 }
+};
+
 export default function MapPage({ roster, userRole, allianceCode }) {
   const mainRef = useRef(null);
   const location = useLocation();
-  const { t } = useTranslation(); // 🌍 Hook di traduzione
+  const { t } = useTranslation(); 
   
   const initialView = location.state?.initialView || 'global';
 
@@ -38,11 +65,16 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   const [marchDestination, setMarchDestination] = useState(null);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
 
+  // 💡 MODAL DI BENVENUTO (Visibile solo in DEMO)
+  const [showDemoWelcome, setShowDemoWelcome] = useState(allianceCode === 'DEMO');
+
   const [playerOverrides, setPlayerOverrides] = useState({});
   const [draggedPlayerId, setDraggedPlayerId] = useState(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isSavingSim, setIsSavingSim] = useState(false);
   const [tacticalMeta, setTacticalMeta] = useState({ eventName: '', date: '', time: '', targetBuilding: '', notes: '' });
+
+  const [hiveGridMeta, setHiveGridMeta] = useState({ centerX: 500, centerY: 500, radius: 30, showGrid: true, territory: [] });
 
   const [popupPlayerId, setPopupPlayerId] = useState(null);
   const [marchAssignments, setMarchAssignments] = useState({});
@@ -69,30 +101,68 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   };
 
   const [fixedBuildings, setFixedBuildings] = useState(INITIAL_BUILDINGS);
-  const [allianceStructures, setAllianceStructures] = useState([]); 
+  const [allianceStructures, setAllianceStructures] = useState(DEFAULT_STRUCTURES); 
   const [allianceMeta, setAllianceMeta] = useState({ kingdom: '', tag: '' });
   const [enemyHQs, setEnemyHQs] = useState([]);
 
   const TILE_SF = 550 / 1200; 
 
+  // 💡 USA IL ROSTER DEMO SE SIAMO NELLA SANDBOX
+  const effectiveRoster = allianceCode === 'DEMO' && (!roster || roster.length === 0) ? DEMO_ROSTER : roster;
+
   useEffect(() => {
     if (allianceCode === 'DEMO') {
-      setAllianceStructures([
-        { id: 'alliance-hq', code: 'HQ', name: 'QG Sandbox (Demo)', type: 'headquarters', x: 800, y: 800 },
-        { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 820, y: 800 },
-        { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 780, y: 800 }
-      ]);
+      setAllianceStructures(DEMO_STRUCTURES);
+      setPlayerOverrides(DEMO_OVERRIDES);
+      setHiveGridMeta(prev => ({ ...prev, centerX: 800, centerY: 800, radius: 25 }));
+      setTacticalMeta(prev => ({ ...prev, participants: ['d1', 'd2', 'd3'] }));
     } else {
-      setAllianceStructures([
-        { id: 'alliance-hq', code: 'HQ', name: 'Quartier Generale', type: 'headquarters', x: 500, y: 500 },
-        { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 520, y: 500 },
-        { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 480, y: 500 }
-      ]);
+      setAllianceStructures(DEFAULT_STRUCTURES);
     }
   }, [allianceCode]);
 
+  const handleBuildingChange = (id, field, value) => {
+    const parsedValue = (field === 'x' || field === 'y') ? (value === '' ? '' : Number(value)) : value;
+    setFixedBuildings(prev => prev.map(b => b.id === id ? { ...b, [field]: parsedValue } : b));
+  };
+
+  const handleAddBuilding = () => {
+    const newB = { id: `custom-${Date.now()}`, code: 'NEW', name: 'Nuovo Edificio', type: 'others', x: 500, y: 500, occupiedBy: '' };
+    setFixedBuildings(prev => [newB, ...prev]);
+  };
+
+  const handleDeleteBuilding = (id) => {
+    setFixedBuildings(prev => prev.filter(b => b.id !== id));
+  };
+
+  const handleAllianceStructureChange = (id, field, value) => {
+    const numVal = value === '' ? '' : Number(value);
+    setAllianceStructures(prev => prev.map(s => s.id === id ? { ...s, [field]: numVal } : s));
+  };
+
+  const handleManualCoord = (type, axis, value) => {
+    const numVal = value === '' ? '' : Number(value);
+    if (type === 'origin') {
+      setMarchOrigin(prev => prev ? { ...prev, [axis]: numVal, isCustomPoint: true, name: 'Punto Manuale' } : { id: 'manual-o', code: 'MAN', name: 'Punto Manuale', [axis]: numVal, isCustomPoint: true });
+    } else {
+      setMarchDestination(prev => prev ? { ...prev, [axis]: numVal, isCustomPoint: true, name: 'Punto Manuale' } : { id: 'manual-d', code: 'MAN', name: 'Punto Manuale', [axis]: numVal, isCustomPoint: true });
+    }
+  };
+
+  const marchResult = useMemo(() => {
+    if (!marchOrigin || !marchDestination) return null;
+    if (marchOrigin.x === '' || marchOrigin.y === '' || marchDestination.x === '' || marchDestination.y === '') return null;
+    const dx = marchOrigin.x - marchDestination.x;
+    const dy = marchOrigin.y - marchDestination.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const timeMins = (distance * 4) / 60;
+    const m = Math.floor(timeMins);
+    const s = Math.round((timeMins - m) * 60);
+    return { distance: distance.toFixed(1), formattedTime: `${m}m ${s < 10 ? '0' : ''}${s}s` };
+  }, [marchOrigin, marchDestination]);
+
   const validPlayers = useMemo(() => {
-    const arr = Array.isArray(roster) ? roster : (roster?.players || []);
+    const arr = Array.isArray(effectiveRoster) ? effectiveRoster : (effectiveRoster?.players || []);
     const participants = tacticalMeta?.participants || [];
     const filteredArr = activeView === 'tactical' ? arr.filter(p => participants.includes(p.id)) : arr;
 
@@ -107,7 +177,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         svgX: 600 + (Number(p.x) - Number(p.y)) * TILE_SF,
         svgY: 1150 - (Number(p.x) + Number(p.y)) * TILE_SF
       }));
-  }, [roster, playerOverrides, TILE_SF, tacticalMeta?.participants, activeView]);
+  }, [effectiveRoster, playerOverrides, TILE_SF, tacticalMeta?.participants, activeView]);
 
   const [currentTime, setCurrentTime] = useState(0); 
   const [manualCaptures, setManualCaptures] = useState([]);
@@ -117,15 +187,9 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     marches, setMarches, draftPositions, setDraftPositions, 
     handleDispatchMarch, handleConfirmMinute, getAvailableMarches
   } = useMarches({
-    roster, 
-    activeDeployment: validPlayers, 
-    setActiveDeployment: () => {},  
-    buildings: fixedBuildings, 
-    setBuildings: setFixedBuildings, 
-    teamBase: 'blue', 
-    currentTime, 
-    setManualCaptures, 
-    setHealingEvents
+    roster: effectiveRoster, activeDeployment: validPlayers, setActiveDeployment: () => {},  
+    buildings: fixedBuildings, setBuildings: setFixedBuildings, 
+    teamBase: 'blue', currentTime, setManualCaptures, setHealingEvents
   });
 
   useEffect(() => {
@@ -175,14 +239,27 @@ export default function MapPage({ roster, userRole, allianceCode }) {
           baseBuildings = [...baseBuildings, ...customB];
         }
 
-        if (userRole === 'alliance' && allianceCode && allianceCode !== 'DEMO') {
-          const allianceSnap = await getDoc(doc(db, "allianceMapData", allianceCode));
-          if (allianceSnap.exists() && allianceSnap.data().buildings) {
-            const allianceData = allianceSnap.data().buildings;
-            baseBuildings = baseBuildings.map(baseB => {
-              const ab = allianceData.find(a => a.id === baseB.id);
-              return ab ? { ...baseB, ...ab } : baseB;
-            });
+        if (userRole === 'alliance' || userRole === 'admin' || userRole === 'consulente') {
+          if (allianceCode && allianceCode !== 'DEMO') {
+            const allianceSnap = await getDoc(doc(db, "allianceMapData", allianceCode));
+            if (allianceSnap.exists()) {
+              const allianceData = allianceSnap.data();
+              if (allianceData.buildings) {
+                baseBuildings = baseBuildings.map(baseB => {
+                  const ab = allianceData.buildings.find(a => a.id === baseB.id);
+                  return ab ? { ...baseB, ...ab } : baseB;
+                });
+              }
+              if (allianceData.allianceStructures && allianceData.allianceStructures.length > 0) {
+                setAllianceStructures(allianceData.allianceStructures);
+              }
+              if (allianceData.hivePositions) {
+                setPlayerOverrides(prev => ({...prev, ...allianceData.hivePositions}));
+              }
+              if (allianceData.hiveGridMeta) {
+                setHiveGridMeta(allianceData.hiveGridMeta);
+              }
+            }
           }
         }
 
@@ -197,21 +274,27 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   }, [userRole, allianceCode]);
 
   const handleSaveMapToCloud = async () => {
-    if (userRole === 'guest' || allianceCode === 'DEMO') {
+    if (userRole === 'guest' || (allianceCode === 'DEMO' && userRole !== 'admin' && userRole !== 'consulente')) {
       return alert(t('map.sandbox_action_denied'));
     }
     
     setIsLoadingCloud(true);
     try {
-      if (userRole === 'admin') {
-        await setDoc(doc(db, "mapSettings", "fixedBuildings"), { buildings: fixedBuildings });
-        alert(t('map.global_map_updated'));
-      } else if (userRole === 'alliance' && allianceCode) {
-        await setDoc(doc(db, "allianceMapData", allianceCode), { buildings: fixedBuildings });
+      if (activeView === 'alliance' && allianceCode) {
+        await setDoc(doc(db, "allianceMapData", allianceCode), { 
+          buildings: fixedBuildings,
+          allianceStructures: allianceStructures,
+          hivePositions: playerOverrides,
+          hiveGridMeta: hiveGridMeta
+        }, { merge: true });
         alert(t('map.alliance_map_saved', { code: allianceCode }));
+      } else if (userRole === 'admin' || userRole === 'consulente') {
+        await setDoc(doc(db, "mapSettings", "fixedBuildings"), { buildings: fixedBuildings }, { merge: true });
+        alert(t('map.global_map_updated'));
       }
     } catch (error) {
-      alert(t('map.map_save_error'));
+      console.error("Errore salvataggio Firebase:", error);
+      alert(`${t('map.map_save_error')} - Controlla la console.`);
     }
     setIsLoadingCloud(false);
   }; 
@@ -224,7 +307,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         const docSnap = await getDoc(doc(db, "simulations", `${allianceCode}_tacticalPlan`));
         if (docSnap.exists()) {
           const data = docSnap.data();
-          if (data.overrides) setPlayerOverrides(data.overrides);
+          if (data.overrides) setPlayerOverrides(prev => ({...prev, ...data.overrides}));
           if (data.marches) setMarches(data.marches);
           if (data.tacticalMeta) {
             setTacticalMeta({ ...data.tacticalMeta, author: data.author }); 
@@ -236,7 +319,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   }, [setMarches, allianceCode]);
 
   const handleSaveSimulation = async () => {
-    if (userRole === 'guest' || allianceCode === 'DEMO') {
+    if (userRole === 'guest' || (allianceCode === 'DEMO' && userRole !== 'admin' && userRole !== 'consulente')) {
       return alert(t('map.sandbox_action_denied'));
     }
     if (!allianceCode) return alert(t('map.no_alliance_selected'));
@@ -246,9 +329,9 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         overrides: playerOverrides, 
         marches,
         tacticalMeta,
-        author: userRole === 'admin' ? 'ADMIN' : 'ALLIANCE', 
+        author: userRole.toUpperCase(), 
         timestamp: new Date().toISOString()
-      });
+      }, { merge: true });
       alert(t('map.tactical_plan_saved', { code: allianceCode }));
     } catch (error) {
       console.error("Errore salvataggio simulazione:", error);
@@ -305,7 +388,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
           const height = Math.max(maxY - minY, 50);
           
           let targetScale = Math.min(rect.width / (width * 1.5), rect.height / (height * 1.5));
-          targetScale = Math.max(5.0, targetScale); 
+          targetScale = Math.max(15.0, targetScale); 
 
           setPosition({ x: (rect.width / 2) - (centerX * targetScale), y: (rect.height / 2) - (centerY * targetScale) });
           setScale(targetScale);
@@ -344,7 +427,9 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     const zoomFactor = 1.15;
     const direction = e.deltaY < 0 ? 1 : -1;
     let newScale = direction > 0 ? scale * zoomFactor : scale / zoomFactor;
-    newScale = Math.max(0.1, Math.min(newScale, 40));
+    
+    newScale = Math.max(0.1, Math.min(newScale, 250));
+    
     const rect = mainRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
@@ -368,10 +453,17 @@ export default function MapPage({ roster, userRole, allianceCode }) {
       const svgPoint = pt.matrixTransform(svgElement.getScreenCTM().inverse());
       const coords = svgToGameCoordinates(svgPoint.x, svgPoint.y);
 
-      setPlayerOverrides(prev => ({
-        ...prev,
-        [draggedPlayerId]: { x: Math.round(coords.x), y: Math.round(coords.y) }
-      }));
+      if (String(draggedPlayerId).startsWith('structure:')) {
+        const structId = draggedPlayerId.split(':')[1];
+        handleAllianceStructureChange(structId, 'x', Math.round(coords.x));
+        handleAllianceStructureChange(structId, 'y', Math.round(coords.y));
+      } else {
+        const playerId = String(draggedPlayerId).startsWith('player:') ? draggedPlayerId.split(':')[1] : draggedPlayerId;
+        setPlayerOverrides(prev => ({
+          ...prev,
+          [playerId]: { x: Math.round(coords.x), y: Math.round(coords.y) }
+        }));
+      }
     } 
     else if (isDragging) {
       setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); 
@@ -437,8 +529,8 @@ export default function MapPage({ roster, userRole, allianceCode }) {
 
   const handleDrop = (e) => {
     e.preventDefault();
-    const playerId = e.dataTransfer.getData('text/plain');
-    if (!playerId) return;
+    const dragData = e.dataTransfer.getData('text/plain');
+    if (!dragData) return;
     const svgElement = document.getElementById('map-svg');
     if (!svgElement) return;
     const pt = svgElement.createSVGPoint();
@@ -446,10 +538,18 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     pt.y = e.clientY;
     const svgPoint = pt.matrixTransform(svgElement.getScreenCTM().inverse());
     const coords = svgToGameCoordinates(svgPoint.x, svgPoint.y);
-    setPlayerOverrides(prev => ({
-      ...prev,
-      [playerId]: { x: Math.round(coords.x), y: Math.round(coords.y) }
-    }));
+    
+    if (String(dragData).startsWith('structure:')) {
+      const structId = dragData.split(':')[1];
+      handleAllianceStructureChange(structId, 'x', Math.round(coords.x));
+      handleAllianceStructureChange(structId, 'y', Math.round(coords.y));
+    } else {
+      const playerId = String(dragData).startsWith('player:') ? dragData.split(':')[1] : dragData;
+      setPlayerOverrides(prev => ({
+        ...prev,
+        [playerId]: { x: Math.round(coords.x), y: Math.round(coords.y) }
+      }));
+    }
   };
 
   const handleConfirmTacticalDispatch = (playerId) => {
@@ -469,18 +569,58 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     selectedBuilding, setSelectedBuilding: handleSelectBuilding,
     marchOrigin, setMarchOrigin, marchDestination, setMarchDestination,
     selectedTool, showLabels, activeView, setActiveView, enemyHQs,
-    setDraggedPlayerId, setPopupPlayerId 
+    setDraggedPlayerId, setPopupPlayerId,
+    hiveGridMeta 
   };
 
   return (
     <div className="h-screen w-screen bg-slate-950 flex text-slate-100 overflow-hidden select-none relative">
-    <MapSidebar 
-        roster={roster} selectedTool={selectedTool} setSelectedTool={setSelectedTool}
+      
+      {/* 💡 MODAL DI BENVENUTO DEMO */}
+      {showDemoWelcome && (
+        <div className="absolute inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-cyan-500/50 rounded-2xl shadow-2xl max-w-2xl w-full p-6 flex flex-col gap-4 animate-fade-in">
+            <h2 className="text-2xl font-black text-cyan-400">Benvenuto nella Demo di Kingshot! 👑</h2>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Sei in modalità Sandbox. Abbiamo caricato alcuni dati fittizi per te: esplora liberamente tutte le funzionalità della mappa senza paura di intaccare i database reali.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 hover:border-cyan-500/50 transition-colors">
+                <h3 className="text-cyan-300 font-bold mb-2">🌍 Mappa Globale</h3>
+                <p className="text-xs text-slate-400">Esplora la mappa, calcola le distanze esatte di marcia e filtra i centri di potere.</p>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl border border-rose-900/50 hover:border-rose-500/50 transition-colors">
+                <h3 className="text-rose-400 font-bold mb-2">⚔️ Sala Tattica</h3>
+                <p className="text-xs text-slate-400">Pianifica attacchi al secondo. Usa lo slider in basso per spostare il tempo e lancia finti rally.</p>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl border border-indigo-900/50 hover:border-indigo-500/50 transition-colors">
+                <h3 className="text-indigo-400 font-bold mb-2">🐝 Gestione Alveare</h3>
+                <p className="text-xs text-slate-400">Usa la Griglia Olografica. Trascina i giocatori dal menu direttamente sulla mappa per incastrarli.</p>
+              </div>
+            </div>
+            <button onClick={() => setShowDemoWelcome(false)} className="mt-4 w-full bg-cyan-700 hover:bg-cyan-600 text-white font-black tracking-widest uppercase py-3 rounded-lg transition-colors">
+              Inizia l'esplorazione
+            </button>
+          </div>
+        </div>
+      )}
+
+      <MapSidebar 
+        roster={effectiveRoster} selectedTool={selectedTool} setSelectedTool={setSelectedTool}
         filters={filters} toggleFilter={toggleFilter} toggleAllFilters={toggleAllFilters} areAllFiltersActive={areAllFiltersActive}
         showLabels={showLabels} setShowLabels={setShowLabels}
+        
         marchOrigin={marchOrigin} setMarchOrigin={setMarchOrigin} marchDestination={marchDestination} setMarchDestination={setMarchDestination}
-        fixedBuildings={fixedBuildings} handleBuildingChange={()=>{}} handleAddBuilding={()=>{}} handleDeleteBuilding={()=>{}}
-        allianceStructures={allianceStructures} handleAllianceStructureChange={()=>{}}
+        marchResult={marchResult}
+        handleManualCoord={handleManualCoord}
+        fixedBuildings={fixedBuildings} 
+        handleBuildingChange={handleBuildingChange} 
+        handleAddBuilding={handleAddBuilding} 
+        handleDeleteBuilding={handleDeleteBuilding}
+        
+        allianceStructures={allianceStructures} 
+        handleAllianceStructureChange={handleAllianceStructureChange}
+        
         handleSaveToCloud={handleSaveMapToCloud} isLoadingCloud={isLoadingCloud} selectedBuilding={selectedBuilding}
         userRole={userRole}
         activeView={activeView}
@@ -490,6 +630,11 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         tacticalMeta={tacticalMeta}
         setTacticalMeta={setTacticalMeta}
         setSelectedBuilding={handleSelectBuilding}
+        playerOverrides={playerOverrides}       
+        setPlayerOverrides={setPlayerOverrides} 
+
+        hiveGridMeta={hiveGridMeta}
+        setHiveGridMeta={setHiveGridMeta}
       />
 
       <main 
@@ -578,7 +723,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         buildings={fixedBuildings}
         getAvailableMarches={getAvailableMarches}
         activeDeployment={validPlayers}
-        roster={roster} 
+        roster={effectiveRoster} 
         allianceStructures={allianceStructures}
       />
 
@@ -586,7 +731,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         isOpen={isExportModalOpen} 
         onClose={() => setIsExportModalOpen(false)} 
         playerOverrides={playerOverrides} 
-        roster={roster}
+        roster={effectiveRoster}
         targetBuilding={selectedBuilding}
       />
     </div>

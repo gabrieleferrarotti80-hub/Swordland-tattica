@@ -37,7 +37,10 @@ function App() {
             />
           } 
         />
-        <Route path="/swordland" element={<Swordland roster={roster} setRoster={setRoster} />} />
+        <Route 
+  path="/swordland" 
+  element={<Swordland roster={roster} setRoster={setRoster} allianceCode={allianceCode} />} 
+/>
         <Route path="/viking" element={<Viking roster={roster} />} />
         <Route 
           path="/map" 

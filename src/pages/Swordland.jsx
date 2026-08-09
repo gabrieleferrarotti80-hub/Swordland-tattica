@@ -2,7 +2,7 @@ import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
+import { useTranslation } from 'react-i18next';
 import { initialBuildings } from '../data/buildings';
 import { BuildingTable } from '../components/BuildingTable';
 import { RosterTable } from '../components/RosterTable';
@@ -14,9 +14,9 @@ import { calculateDynamicScores } from '../utils/scoreEngine';
 import { useMarches } from '../hooks/useMarches';
 import { ExportModal } from '../components/ExportModal';
 
-export default function Swordland({ roster, setRoster }) {
+export default function Swordland({ roster, setRoster, allianceCode }) {
   const navigate = useNavigate();
-  const { t } = useTranslation(); // 🌍 Hook di traduzione
+  const { t } = useTranslation(); 
   
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState(null);
@@ -32,6 +32,10 @@ export default function Swordland({ roster, setRoster }) {
   const [selectedBuildingForEdit, setSelectedBuildingForEdit] = useState('');
   const [isEditorUnlocked, setIsEditorUnlocked] = useState(false);
   const [editorPassword, setEditorPassword] = useState('');
+
+  // 💡 STATI PER I SUGGERIMENTI E LA DEMO
+  const [showDemoWelcome, setShowDemoWelcome] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const [manualCaptures, setManualCaptures] = useState(() => {
     const saved = localStorage.getItem('swordland-manual-captures');
@@ -60,6 +64,27 @@ export default function Swordland({ roster, setRoster }) {
     setManualCaptures, setHealingEvents
   });
 
+  // 💡 EFFETTO DEMO ROBUSTO: Apre il pannello schieramento e mostra la guida in automatico!
+  useEffect(() => {
+    if (allianceCode === 'DEMO') {
+      setShowDemoWelcome(true);
+      setActivePanel('deployment'); // Forza l'apertura del menu laterale
+      setShowHelp(true); // Mostra il box dei suggerimenti
+      
+      const demoPlayers = [
+        { id: 'd1', name: 'Ragnar', tag: 'DEMO', role: 'R5', power: 120, marches: 2, isParticipating: true, positions: { 0: 'base-blue' } },
+        { id: 'd2', name: 'Lagertha', tag: 'DEMO', role: 'R4', power: 105, marches: 2, isParticipating: true, positions: { 0: 'base-blue' } },
+        { id: 'd3', name: 'Bjorn', tag: 'DEMO', role: 'R3', power: 90, marches: 2, isParticipating: true, positions: { 0: 'base-blue' } }
+      ];
+
+      if (!roster || roster.length === 0) {
+        setRoster(demoPlayers);
+      }
+      setActiveDeployment(demoPlayers);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allianceCode]);
+
   useEffect(() => {
     const fetchMasterBuildings = async () => {
       try {
@@ -71,7 +96,6 @@ export default function Swordland({ roster, setRoster }) {
             return cloudMatch ? { ...initial, ...cloudMatch } : initial;
           });
           setBuildings(mergedBuildings);
-          console.log(t('swordland.cloud_master_loaded'));
         }
       } catch (error) {
         console.warn(t('swordland.cloud_master_error'), error);
@@ -212,17 +236,55 @@ export default function Swordland({ roster, setRoster }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950 relative">
+      
+      {/* 💡 MODAL DI BENVENUTO DEMO */}
+      {showDemoWelcome && (
+        <div className="absolute inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl shadow-2xl max-w-2xl w-full p-6 flex flex-col gap-4 animate-fade-in">
+            <h2 className="text-2xl font-black text-amber-400">{t('swordland.demo_title', 'Benvenuto in Swordland! ⚔️')}</h2>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              {t('swordland.demo_desc', 'Sei in modalità Sandbox con 3 Vichinghi pronti. Segui questi 3 passaggi per imparare a usare il simulatore:')}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+              <div className="bg-slate-950 p-4 rounded-xl border border-indigo-900/50 hover:border-indigo-500/50 transition-colors">
+                <h3 className="text-indigo-400 font-bold mb-2">{t('swordland.demo_f1_title', '1. I Menu Segreti')}</h3>
+                <p className="text-xs text-slate-400">{t('swordland.demo_f1_desc', 'Usa le icone a sinistra: 🏢 (Edifici), 👥 (Roster), ⚔️ (Schieramento). Clicca sulle spade ⚔️ per aprire le tue truppe.')}</p>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl border border-cyan-900/50 hover:border-cyan-500/50 transition-colors">
+                <h3 className="text-cyan-400 font-bold mb-2">{t('swordland.demo_f2_title', '2. Trascina e Rilascia')}</h3>
+                <p className="text-xs text-slate-400">{t('swordland.demo_f2_desc', 'Nel pannello Schieramento, prendi la card di un vichingo e TRASCINALA su un edificio nella mappa per ordinare la marcia.')}</p>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl border border-rose-900/50 hover:border-rose-500/50 transition-colors">
+                <h3 className="text-rose-400 font-bold mb-2">{t('swordland.demo_f3_title', '3. Macchina del Tempo')}</h3>
+                <p className="text-xs text-slate-400">{t('swordland.demo_f3_desc', 'Premi Play o usa la barra in basso a destra per scorrere i minuti. Vedrai le tue truppe viaggiare e i punti salire!')}</p>
+              </div>
+            </div>
+            <button onClick={() => setShowDemoWelcome(false)} className="mt-4 w-full bg-amber-700 hover:bg-amber-600 text-white font-black tracking-widest uppercase py-3 rounded-lg transition-colors">
+              {t('swordland.demo_start_btn', 'Inizia la Simulazione')}
+            </button>
+          </div>
+        </div>
+      )}
+
       <SidebarNav activePanel={activePanel} setActivePanel={setActivePanel} teamBase={teamBase} setTeamBase={setTeamBase} handleExportProject={handleExportProject} handleImportProject={handleImportProject} handleSaveToFirebase={handleSaveToFirebase} handleLoadFromFirebase={handleLoadFromFirebase} fileInputRef={fileInputRef} handleNewProject={handleNewProject} />
       
       {activePanel && (
         <aside className={`absolute lg:relative left-12 lg:left-0 top-0 bottom-0 my-6 lg:ml-6 app-panel flex flex-col z-50 shrink-0 transition-all duration-300 ease-in-out bg-slate-950/95 lg:bg-transparent shadow-2xl lg:shadow-none border lg:border-none border-slate-700/50 ${activePanel === 'buildings' ? 'w-[85vw] lg:w-[850px]' : activePanel === 'roster' ? 'w-[85vw] lg:w-[680px]' : 'w-[75vw] lg:w-[320px]'}`}>
+          
+          {/* 💡 HEADER CON IL PULSANTE DI AIUTO */}
           <div className="flex justify-between items-center p-4 border-b border-slate-700/50 shrink-0 bg-slate-800/50 rounded-t-xl">
-            <h2 className="text-lg font-bold uppercase tracking-wider flex items-center gap-2">
-              {activePanel === 'buildings' && <span className="text-cyan-400">{t('swordland.buildings')}</span>}
-              {activePanel === 'roster' && <span className="text-cyan-400">{t('swordland.players')}</span>}
-              {activePanel === 'deployment' && <span className="text-amber-400">{t('swordland.singles')}</span>}
-              {activePanel === 'settings' && <span className="text-amber-400">{t('swordland.hitbox_editor')}</span>}
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold uppercase tracking-wider flex items-center gap-2">
+                {activePanel === 'buildings' && <span className="text-cyan-400">{t('swordland.buildings')}</span>}
+                {activePanel === 'roster' && <span className="text-cyan-400">{t('swordland.players')}</span>}
+                {activePanel === 'deployment' && <span className="text-amber-400">{t('swordland.singles')}</span>}
+                {activePanel === 'settings' && <span className="text-amber-400">{t('swordland.hitbox_editor')}</span>}
+              </h2>
+              {/* Bottone Help */}
+              <button onClick={() => setShowHelp(!showHelp)} className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors text-xs font-bold shadow-md ${showHelp ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-700 hover:bg-slate-600 border-slate-500 text-white'}`}>
+                ?
+              </button>
+            </div>
             <button onClick={() => { 
                 setActivePanel(null); 
                 setSelectedBuildingForEdit(''); 
@@ -233,6 +295,29 @@ export default function Swordland({ roster, setRoster }) {
               ✕
             </button>
           </div>
+
+          {/* 💡 BOX SUGGERIMENTI DINAMICI */}
+          {showHelp && activePanel === 'deployment' && (
+            <div className="bg-amber-950/40 border-b border-amber-500/50 p-3 text-xs text-amber-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
+              <strong>💡 {t('swordland.help_deploy_title', 'Guida Schieramento:')}</strong> {t('swordland.help_deploy_desc', 'Trascina la card di un giocatore da questo pannello verso un edificio sulla mappa per ordinare la marcia! Premi la X sulle marce per annullarle.')}
+            </div>
+          )}
+          {showHelp && activePanel === 'buildings' && (
+            <div className="bg-cyan-950/40 border-b border-cyan-500/50 p-3 text-xs text-cyan-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
+              <strong>💡 {t('swordland.help_build_title', 'Guida Edifici:')}</strong> {t('swordland.help_build_desc', 'Visualizza i punti generati da ogni struttura e i tempi esatti che le truppe impiegano a raggiungerli partendo dalle rispettive basi.')}
+            </div>
+          )}
+          {showHelp && activePanel === 'roster' && (
+            <div className="bg-indigo-950/40 border-b border-indigo-500/50 p-3 text-xs text-indigo-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
+              <strong>💡 {t('swordland.help_roster_title', 'Guida Roster:')}</strong> {t('swordland.help_roster_desc', 'Seleziona i giocatori della tua Alleanza che parteciperanno all\'evento spuntando le caselle, poi clicca sul pulsante "Schieramento" in alto a destra.')}
+            </div>
+          )}
+          {showHelp && activePanel === 'settings' && (
+            <div className="bg-red-950/40 border-b border-red-500/50 p-3 text-xs text-red-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
+              <strong>💡 {t('swordland.help_admin_title', 'Guida Editor:')}</strong> {t('swordland.help_admin_desc', 'Modalità riservata ai Master. Permette di calibrare l\'area di clic (Hitbox) e il centro matematico per il calcolo geometrico delle distanze.')}
+            </div>
+          )}
+
           <div className="overflow-y-auto flex-1 w-full rounded-b-xl bg-slate-900/50">
             {activePanel === 'buildings' && <div className="px-6 pb-6 pt-4"><BuildingTable buildings={buildings} onEdit={handleEditBuilding} /></div>}
             

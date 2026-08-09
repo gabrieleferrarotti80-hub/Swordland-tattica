@@ -132,7 +132,12 @@
     "tactical_plan_saved": "✅ Plan taktyczny zapisany dla sojuszu [{{code}}]!",
     "save_error": "❌ Błąd podczas zapisu.",
     "secret_code_prompt": "Wpisz tajny kod, aby uzyskać dostęp do ustawień:",
-    "wrong_code": "❌ Błędny kod!"
+    "wrong_code": "❌ Błędny kod!",
+    "hive_grid": "Siatka holograficzna",
+    "center_x": "Środek X",
+    "center_y": "Środek Y",
+    "radius": "Promień",
+    "territory": "Granice terytorium"
   },
   "swordland": {
     "cloud_master_loaded": "✅ Dane budynków Master załadowane z chmury!",
@@ -180,7 +185,24 @@
     "export_orders": "Eksportuj rozkazy",
     "team_blue": "Niebieska drużyna",
     "team_red": "Czerwona drużyna",
-    "export_filename": "swordland_tactic_"
+    "export_filename": "swordland_tactic_",
+    "demo_title": "Witamy w Swordland! ⚔️",
+    "demo_desc": "Jesteś w trybie Sandbox z 3 gotowymi Wikingami. Wykonaj te 3 kroki, aby dowiedzieć się, jak korzystać z symulatora:",
+    "demo_f1_title": "1. Tajne Menu",
+    "demo_f1_desc": "Użyj ikon po lewej: 🏢 (Budynki), 👥 (Skład), ⚔️ (Rozmieszczenie). Kliknij miecze ⚔️, aby otworzyć swoje wojska.",
+    "demo_f2_title": "2. Przeciągnij i Upuść",
+    "demo_f2_desc": "W panelu Rozmieszczenia chwyć kartę Wikinga i PRZECIĄGNIJ ją na budynek na mapie, aby wydać rozkaz marszu.",
+    "demo_f3_title": "3. Wehikuł Czasu",
+    "demo_f3_desc": "Naciśnij Play lub użyj paska w prawym dolnym rogu, aby przewijać minuty. Zobaczysz, jak twoje wojska podróżują, a punkty rosną!",
+    "demo_start_btn": "Rozpocznij symulację",
+    "help_deploy_title": "Przewodnik Rozmieszczenia:",
+    "help_deploy_desc": "Przeciągnij kartę gracza z tego panelu na budynek na mapie, aby wydać rozkaz marszu! Naciśnij X na marszach, aby je anulować.",
+    "help_build_title": "Przewodnik po Budynkach:",
+    "help_build_desc": "Zobacz punkty generowane przez każdą strukturę oraz dokładny czas, jaki zajmuje wojskom dotarcie do nich z ich baz.",
+    "help_roster_title": "Przewodnik po Składzie:",
+    "help_roster_desc": "Wybierz graczy ze swojego sojuszu, którzy wezmą udział w wydarzeniu, zaznaczając pola, a następnie kliknij przycisk 'Rozmieszczenie' w prawym górnym rogu.",
+    "help_admin_title": "Przewodnik Edytora:",
+    "help_admin_desc": "Tryb tylko dla Mastera. Pozwala na kalibrację obszaru kliknięcia (Hitbox) oraz matematycznego środka do geometrycznego obliczania odległości."
   },
   "sidebar": {
     "buildings": "Budynki",
@@ -711,5 +733,21 @@
   "scoreboard": {
     "blue_alliance": "Niebieski Sojusz",
     "red_alliance": "Czerwony Sojusz"
+  },
+  "alliance_view": {
+    "occupied": "Zajęte: ",
+    "member_type": "Członek sojuszu"
+  },
+  "alliance_sidebar": {
+    "title": "Zarządzanie ulem (Hive)",
+    "subtitle": "Przeciągnij członków na mapę lub wpisz współrzędne.",
+    "search_placeholder": "Szukaj członka...",
+    "positioned": "Na mapie",
+    "unpositioned": "Bez współrzędnych",
+    "coord_x": "X",
+    "coord_y": "Y",
+    "not_set": "Nie ustawiono",
+    "structures": "Struktury sojuszu",
+    "members": "Członkowie sojuszu"
   }
 }

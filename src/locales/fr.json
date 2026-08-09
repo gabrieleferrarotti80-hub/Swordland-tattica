@@ -132,7 +132,12 @@
     "tactical_plan_saved": "✅ Plan tactique enregistré pour l'alliance [{{code}}] !",
     "save_error": "❌ Erreur lors de l'enregistrement.",
     "secret_code_prompt": "Entrez le code secret pour accéder aux paramètres :",
-    "wrong_code": "❌ Mauvais code !"
+    "wrong_code": "❌ Mauvais code !",
+    "hive_grid": "Grille holographique",
+    "center_x": "Centre X",
+    "center_y": "Centre Y",
+    "radius": "Rayon",
+    "territory": "Frontières du territoire"
   },
   "swordland": {
     "cloud_master_loaded": "✅ Données de bâtiment Maître chargées depuis le cloud !",
@@ -180,7 +185,24 @@
     "export_orders": "Exporter les ordres",
     "team_blue": "Équipe bleue",
     "team_red": "Équipe rouge",
-    "export_filename": "swordland_tactic_"
+    "export_filename": "swordland_tactic_",
+    "demo_title": "Bienvenue dans Swordland ! ⚔️",
+    "demo_desc": "Vous êtes en mode Sandbox avec 3 Vikings prêts. Suivez ces 3 étapes pour apprendre à utiliser le simulateur :",
+    "demo_f1_title": "1. Les Menus Secrets",
+    "demo_f1_desc": "Utilisez les icônes de gauche : 🏢 (Bâtiments), 👥 (Roster), ⚔️ (Déploiement). Cliquez sur les épées ⚔️ pour voir vos troupes.",
+    "demo_f2_title": "2. Glisser-Déposer",
+    "demo_f2_desc": "Dans le panneau Déploiement, prenez la carte d'un Viking et FAITES-LA GLISSER sur un bâtiment de la carte pour ordonner la marche.",
+    "demo_f3_title": "3. Machine à Remonter le Temps",
+    "demo_f3_desc": "Appuyez sur Play ou utilisez la barre en bas à droite pour faire défiler les minutes. Regardez vos troupes voyager et les points monter !",
+    "demo_start_btn": "Démarrer la simulation",
+    "help_deploy_title": "Guide de Déploiement :",
+    "help_deploy_desc": "Faites glisser la carte d'un joueur de ce panneau vers un bâtiment sur la carte pour ordonner la marche ! Appuyez sur le X des marches pour les annuler.",
+    "help_build_title": "Guide des Bâtiments :",
+    "help_build_desc": "Consultez les points générés par chaque structure et les temps exacts que les troupes mettent pour les atteindre depuis leurs bases respectives.",
+    "help_roster_title": "Guide du Roster :",
+    "help_roster_desc": "Sélectionnez les joueurs de votre Alliance qui participeront à l'événement en cochant les cases, puis cliquez sur le bouton 'Déploiement' en haut à droite.",
+    "help_admin_title": "Guide de l'Éditeur :",
+    "help_admin_desc": "Mode réservé aux Maîtres. Permet de calibrer la zone de clic (Hitbox) et le centre mathématique pour le calcul géométrique des distances."
   },
   "sidebar": {
     "buildings": "Bâtiments",
@@ -628,7 +650,7 @@
     "col_deployed": "Troupes déployées",
     "col_kills": "Kills finaux",
     "col_waves": "Vagues moy. vécues",
-    "col_avg_ratio": "Ratio moyen",
+    "col_ratio": "Ratio moyen",
     "col_jump_real": "Saut vs tier préc. (Réel)",
     "col_jump_theo": "Saut vs tier préc. (Théorique)",
     "infantry": "Infanterie (Première ligne)",
@@ -711,5 +733,21 @@
   "scoreboard": {
     "blue_alliance": "Alliance bleue",
     "red_alliance": "Alliance rouge"
+  },
+  "alliance_view": {
+    "occupied": "Occupé : ",
+    "member_type": "Membre de l'alliance"
+  },
+  "alliance_sidebar": {
+    "title": "Gestion de la ruche (Hive)",
+    "subtitle": "Glissez les membres sur la carte ou entrez les coordonnées.",
+    "search_placeholder": "Rechercher un membre...",
+    "positioned": "Sur la carte",
+    "unpositioned": "Sans coordonnées",
+    "coord_x": "X",
+    "coord_y": "Y",
+    "not_set": "Non défini",
+    "structures": "Structures de l'alliance",
+    "members": "Membres de l'alliance"
   }
 }
