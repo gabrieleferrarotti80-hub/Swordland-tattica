@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { getBasePosition, checkIsAtBuilding, isMarchGathering, getEntityDisplayState } from './mapUtils';
 import { DispatchModal } from './DispatchModal';
 import { GarrisonPopup } from './GarrisonPopup'; 
@@ -33,6 +34,7 @@ export const InteractiveMap = ({
   selectedBuildingForEdit,       
   setSelectedBuildingForEdit     
 }) => {
+  const { t } = useTranslation(); // 🌍 Hook traduzione
   
   const mapRef = useRef(null);
   const [popupPlayerId, setPopupPlayerId] = useState(null);
@@ -58,7 +60,6 @@ export const InteractiveMap = ({
   const handleBuildingClick = (e, buildingId) => { 
     e.stopPropagation(); 
     
-    // SE SIAMO NELLA MODALITÀ EDITOR, SELEZIONA L'EDIFICIO PER LA SIDEBAR
     if (isEditorMode && setSelectedBuildingForEdit) {
       setSelectedBuildingForEdit(buildingId);
       return;
@@ -70,7 +71,7 @@ export const InteractiveMap = ({
 
   const handleDrop = (e) => {
     e.preventDefault();
-    if (isEditorMode) return; // Disabilita drag and drop dei giocatori in modalità editor
+    if (isEditorMode) return; 
     
     const dragData = e.dataTransfer.getData('text/plain');
     if (!dragData || !onUpdatePosition) return;
@@ -169,12 +170,12 @@ export const InteractiveMap = ({
           if (garrisons[bId].some(g => String(g.id) === String(entity.id))) return;
           captured.add(bId);
           
-          let leaderName = 'Sconosciuto';
+          let leaderName = t('interactive_map.unknown');
           if (entity.type === 'player') {
-            leaderName = entity.name || entity.tag || 'Singolo';
+            leaderName = entity.name || entity.tag || t('interactive_map.single');
           } else if (entity.type === 'march') {
             const leader = activeDeployment.find(p => String(p.id) === String(entity.leaderId));
-            leaderName = leader ? `${leader.name || leader.tag} (M)` : `Marcia`;
+            leaderName = leader ? `${leader.name || leader.tag} (M)` : t('interactive_map.march');
             
             if (entity.marchType === 'rally' && entity.members && entity.members.length > 0) {
               const memberTags = entity.members.map(mObj => {
@@ -199,7 +200,7 @@ export const InteractiveMap = ({
       }
     });
     return { capturedBuildingIds: captured, buildingGarrisons: garrisons };
-  }, [activeDeployment, marches, draftPositions, buildings, currentTime, healingEvents, teamBase]);
+  }, [activeDeployment, marches, draftPositions, buildings, currentTime, healingEvents, teamBase, t]);
 
   const getPlayersInBuilding = (bId) => {
     const players = [];
@@ -208,7 +209,7 @@ export const InteractiveMap = ({
     garrisonEntities.forEach(g => {
       const entity = g.entity;
       if (entity.type === 'player') {
-        players.push({ id: entity.id, name: entity.name || entity.tag || 'Singolo', isLeader: true });
+        players.push({ id: entity.id, name: entity.name || entity.tag || t('interactive_map.single'), isLeader: true });
       } else if (entity.type === 'march') {
         const leader = activeDeployment.find(p => String(p.id) === String(entity.leaderId));
         if (leader) players.push({ id: leader.id, name: leader.name || leader.tag, isLeader: true });
@@ -242,21 +243,21 @@ export const InteractiveMap = ({
             onClick={() => setShowManualPanel(!showManualPanel)}
             className="bg-slate-800 text-cyan-400 p-2 rounded-lg border border-cyan-500/50 shadow-lg hover:bg-slate-700 hover:border-cyan-400 transition-all font-bold text-sm flex items-center gap-2"
           >
-            {showManualPanel ? '✖ Chiudi Pannello' : '📍 Sposta Segnalino'}
+            {showManualPanel ? t('interactive_map.close_panel') : t('interactive_map.move_marker')}
           </button>
 
           {showManualPanel && (
             <div className="mt-2 bg-slate-800/95 p-4 rounded-xl border border-slate-600 shadow-2xl flex flex-col gap-3 w-64 backdrop-blur-sm">
-              <h3 className="text-cyan-400 font-bold text-xs uppercase border-b border-slate-700 pb-1 tracking-wider">Coordinate Manuali</h3>
+              <h3 className="text-cyan-400 font-bold text-xs uppercase border-b border-slate-700 pb-1 tracking-wider">{t('interactive_map.manual_coords')}</h3>
               <select className="bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm focus:border-cyan-500 outline-none w-full" value={manualPlayerId} onChange={(e) => setManualPlayerId(e.target.value)}>
-                <option value="">-- Seleziona Giocatore --</option>
-                {activeDeployment?.map(p => ( <option key={p.id} value={p.id}>{p.name || p.tag || `Player ${p.id}`}</option> ))}
+                <option value="">{t('interactive_map.select_player')}</option>
+                {activeDeployment?.map(p => ( <option key={p.id} value={p.id}>{p.name || p.tag || `${t('interactive_map.player')} ${p.id}`}</option> ))}
               </select>
               <div className="flex gap-2">
                 <input type="number" placeholder="X" className="bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm w-full focus:border-cyan-500 outline-none" value={manualX} onChange={(e) => setManualX(e.target.value)} />
                 <input type="number" placeholder="Y" className="bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm w-full focus:border-cyan-500 outline-none" value={manualY} onChange={(e) => setManualY(e.target.value)} />
               </div>
-              <button onClick={handleManualPositioning} disabled={!manualPlayerId || manualX === '' || manualY === ''} className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold py-2 rounded">Teletrasporta</button>
+              <button onClick={handleManualPositioning} disabled={!manualPlayerId || manualX === '' || manualY === ''} className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold py-2 rounded">{t('interactive_map.teleport_btn')}</button>
             </div>
           )}
         </div>
@@ -264,7 +265,7 @@ export const InteractiveMap = ({
 
       {isEditorMode && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-amber-500/90 text-slate-900 font-bold px-4 py-2 rounded-lg z-[110] shadow-xl animate-pulse">
-          MODALITÀ EDITOR HITBOX ATTIVA
+          {t('interactive_map.editor_mode_active')}
         </div>
       )}
 
@@ -276,16 +277,12 @@ export const InteractiveMap = ({
             <polygon points={`${getVisualLeft(0, 200)},${getVisualTop(0, 200)} ${getVisualLeft(38, 200)},${getVisualTop(38, 200)} ${getVisualLeft(39, 239)},${getVisualTop(39, 239)}`} fill="rgba(34, 211, 238, 0.15)" stroke="rgba(34, 211, 238, 0.6)" strokeWidth="0.3" strokeDasharray="1 1" />
             <polygon points={`${getVisualLeft(200, 0)},${getVisualTop(200, 0)} ${getVisualLeft(200, 38)},${getVisualTop(200, 38)} ${getVisualLeft(239, 39)},${getVisualTop(239, 39)}`} fill="rgba(248, 113, 113, 0.15)" stroke="rgba(248, 113, 113, 0.6)" strokeWidth="0.3" strokeDasharray="1 1" />
             
-            {/* DISEGNO DEGLI HITBOX IN MODALITÀ EDITOR (IN BACKGROUND PER EDIFICI NON SELEZIONATI) */}
             {isEditorMode && buildings.map(b => {
-              // Applichiamo un default per assicurarci che ci sia sempre un rettangolo visibile anche prima del salvataggio
               const currentHitbox = b.hitbox || { xMin: b.x - 2, xMax: b.x + 2, yMin: b.y - 2, yMax: b.y + 2 };
               const isSelected = selectedBuildingForEdit === b.id;
               
-              // Nascondiamo quello selezionato qui per disegnarlo in primo piano più tardi
               if (isSelected) return null;
 
-              // Vertici isometrici
               const p1 = `${getVisualLeft(currentHitbox.xMin, currentHitbox.yMin)},${getVisualTop(currentHitbox.xMin, currentHitbox.yMin)}`;
               const p2 = `${getVisualLeft(currentHitbox.xMax, currentHitbox.yMin)},${getVisualTop(currentHitbox.xMax, currentHitbox.yMin)}`;
               const p3 = `${getVisualLeft(currentHitbox.xMax, currentHitbox.yMax)},${getVisualTop(currentHitbox.xMax, currentHitbox.yMax)}`;
@@ -364,7 +361,7 @@ export const InteractiveMap = ({
                     <div className="text-cyan-400 uppercase text-center">{building.name}</div>
                     {hasGarrison && (
                       <div className="flex flex-col gap-1 border-t border-slate-700 pt-1 mt-0.5">
-                        <div className="text-amber-400 uppercase text-[9px] text-center tracking-widest">In Presidio</div>
+                        <div className="text-amber-400 uppercase text-[9px] text-center tracking-widest">{t('interactive_map.in_garrison')}</div>
                         {garrison.map((g, idx) => ( <div key={`${g.id}-${idx}`} className="flex items-center gap-1.5 text-[11px]"><span>{g.marchType === 'difesa' ? '🛡️' : g.marchType === 'supporto' ? '🤝' : '⚔️'}</span><span>{g.leaderName}</span></div> ))}
                       </div>
                     )}
@@ -394,10 +391,9 @@ export const InteractiveMap = ({
             const typeIcon = state.marchType === 'difesa' ? '🛡️' : state.marchType === 'supporto' ? '🤝' : '⚔️';
             const tag = isPlayer ? (entity.tag || '?') : (leader ? `${leader.tag} ${typeIcon}` : 'M');
             
-            // CREIAMO IL TESTO PER IL TOOLTIP HOVER (NOME COMPLETO)
             const hoverTitle = isPlayer 
-              ? (entity.name || entity.tag || `Giocatore ${entity.id}`) 
-              : (leader ? (leader.name || leader.tag || `Marcia di ${leader.id}`) : 'Marcia');
+              ? (entity.name || entity.tag || `${t('interactive_map.player')} ${entity.id}`) 
+              : (leader ? (leader.name || leader.tag || `${t('interactive_map.march_of')} ${leader.id}`) : t('interactive_map.march'));
 
             let offsetX = 0, offsetY = 0;
             if (!isPlayer && !state.isMarching) {
@@ -434,7 +430,6 @@ export const InteractiveMap = ({
           })}
         </div>
 
-        {/* OVERLAY HITBOX SELEZIONATO IN PRIMO PIANO */}
         {isEditorMode && selectedBuildingForEdit && (
           <div className="absolute inset-0 pointer-events-none z-[80]">
             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">

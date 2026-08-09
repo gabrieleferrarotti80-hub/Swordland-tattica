@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSave, onClose }) {
+  const { t } = useTranslation(); // 🌍 Hook traduzione
   const [wave, setWave] = useState(JSON.parse(JSON.stringify(eventData.ondate[waveIndex])));
   const [isSaving, setIsSaving] = useState(false);
 
@@ -87,7 +89,6 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
       const ondataDaSalvare = { ...wave, giocatori: giocatoriAggiornati };
       const ondataOriginale = eventData.ondate[waveIndex]; 
 
-      // 1. IDENTIFICA I GIOCATORI MODIFICATI TRAMITE INDICE (Infallibile per l'Host)
       const giocatoriModificati = new Set();
       
       ondataDaSalvare.giocatori.forEach((pMod, pIndex) => {
@@ -100,7 +101,6 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
 
         let isCambiato = false;
 
-        // Rileva se hai corretto il Nome dell'Host o gli Eroi
         if (pMod.nome !== pOrig.nome) isCambiato = true;
         if (JSON.stringify(pMod.eroi) !== JSON.stringify(pOrig.eroi)) isCambiato = true;
 
@@ -128,18 +128,14 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
         }
       });
 
-      console.log(`🎯 [VikingWaveEditor] Indici giocatori modificati:`, Array.from(giocatoriModificati));
-
       const newOndate = JSON.parse(JSON.stringify(eventData.ondate));
       newOndate[waveIndex] = ondataDaSalvare;
 
-      // 2. PROPAGAZIONE LIMITATA (MATCH TRAMITE INDICE)
       if (giocatoriModificati.size > 0) {
         for (let i = waveIndex + 1; i < newOndate.length; i++) {
           const ondataSucc = newOndate[i];
           
           ondataSucc.giocatori = ondataSucc.giocatori.map((pSucc, pIndex) => {
-            // SE L'INDICE NON È NELLA LISTA DEI MODIFICATI, NON TOCCARE I SUOI DATI
             if (!giocatoriModificati.has(pIndex)) {
               return pSucc; 
             }
@@ -162,7 +158,6 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
 
                 let inviateCorrette;
 
-                // SBLOCCO CASCATA HOST
                 if (pIndex === 0) {
                   inviateCorrette = inviateEdit;
                 } else {
@@ -189,18 +184,16 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
         }
       }
 
-      console.log("📦 [VikingWaveEditor] Scrittura su Firebase...", newOndate);
-
       await setDoc(doc(db, 'eventi_vichinghi', eventoId), { ondate: newOndate }, { merge: true });
       
-      console.log("✅ [VikingWaveEditor] Salvataggio completato!");
+      alert(t('viking_editor.alert_save_success'));
 
       if (onSave) onSave(); 
       if (onClose) onClose(); 
 
     } catch (error) {
       console.error("❌ [VikingWaveEditor] Errore di salvataggio:", error);
-      alert("❌ Errore durante il salvataggio: " + error.message);
+      alert(`${t('viking_editor.alert_save_error')} ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -211,32 +204,32 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
   return (
     <div style={{ backgroundColor: '#2a2a40', padding: '20px', borderRadius: '8px', border: '2px solid #FF9800', marginBottom: '40px', boxShadow: '0 0 15px rgba(255, 152, 0, 0.3)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #444', paddingBottom: '15px', marginBottom: '20px' }}>
-        <h2 style={{ margin: 0, color: '#FF9800' }}>✏️ Modalità Modifica - Ondata {wave.livello}</h2>
+        <h2 style={{ margin: 0, color: '#FF9800' }}>{t('viking_editor.title', { lvl: wave.livello })}</h2>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={onClose} style={{ padding: '8px 15px', backgroundColor: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Annulla</button>
+          <button onClick={onClose} style={{ padding: '8px 15px', backgroundColor: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>{t('viking_editor.cancel')}</button>
           <button onClick={handleSaveWave} disabled={isSaving} style={{ padding: '8px 15px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-            {isSaving ? "Salvataggio..." : "💾 Salva Modifiche"}
+            {isSaving ? t('viking_editor.saving') : t('viking_editor.save_changes')}
           </button>
         </div>
       </div>
 
       <div style={{ backgroundColor: '#1e1e2f', padding: '15px', borderRadius: '6px', marginBottom: '20px' }}>
-        <h4 style={{ margin: '0 0 10px 0', color: '#b2ebf2' }}>Dati Orda Nemica</h4>
+        <h4 style={{ margin: '0 0 10px 0', color: '#b2ebf2' }}>{t('viking_editor.enemy_data')}</h4>
         <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>Nemici Totali</label>
+            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>{t('viking_editor.total_enemies')}</label>
             <input type="number" value={wave.nemiciTotali || ''} onChange={e => handleEnemyChange('nemiciTotali', null, e.target.value)} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>Fanteria</label>
+            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>{t('viking_editor.infantry')}</label>
             <input type="number" value={wave.dettagliNemici?.fant || ''} onChange={e => handleEnemyChange('dettagliNemici', 'fant', e.target.value)} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>Cavalleria</label>
+            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>{t('viking_editor.cavalry')}</label>
             <input type="number" value={wave.dettagliNemici?.cav || ''} onChange={e => handleEnemyChange('dettagliNemici', 'cav', e.target.value)} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>Arcieri</label>
+            <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '3px' }}>{t('viking_editor.archers')}</label>
             <input type="number" value={wave.dettagliNemici?.arc || ''} onChange={e => handleEnemyChange('dettagliNemici', 'arc', e.target.value)} style={inputStyle} />
           </div>
         </div>
@@ -249,20 +242,20 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
               <input type="text" value={p.nome || ''} onChange={e => handlePlayerChange(pIndex, 'nome', e.target.value)} style={{...inputStyle, fontWeight: 'bold', fontSize: '15px', width: '150px'}} />
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ fontSize: '12px', color: '#888' }}>Tier Globale:</span>
+                <span style={{ fontSize: '12px', color: '#888' }}>{t('viking_editor.global_tier')}</span>
                 <input type="text" value={p.livelloTier || ''} onChange={e => handlePlayerChange(pIndex, 'livelloTier', e.target.value)} style={{...inputStyle, width: '60px'}} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ fontSize: '12px', color: '#888' }}>Punti OCR:</span>
+                <span style={{ fontSize: '12px', color: '#888' }}>{t('viking_editor.ocr_points')}</span>
                 <input type="number" value={p.punteggio || 0} onChange={e => handlePlayerChange(pIndex, 'punteggio', e.target.value)} style={{...inputStyle, width: '100px', borderColor: '#ffd54f'}} />
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', alignItems: 'center' }}>
-                <span style={{color: '#aaa', fontSize: '12px', fontWeight: 'bold'}}>🦸 Eroi:</span>
+                <span style={{color: '#aaa', fontSize: '12px', fontWeight: 'bold'}}>{t('viking_editor.heroes')}</span>
                 {[0, 1, 2].map(hIndex => (
                     <input 
-                        key={hIndex} type="text" placeholder={`Eroe ${hIndex + 1}`} 
+                        key={hIndex} type="text" placeholder={t('viking_editor.hero_ph', { num: hIndex + 1 })} 
                         value={p.eroi?.[hIndex] || ''} 
                         onChange={e => handleHeroChange(pIndex, hIndex, e.target.value)} 
                         style={{ ...inputStyle, width: '120px' }} 
@@ -271,17 +264,17 @@ export default function VikingWaveEditor({ eventoId, eventData, waveIndex, onSav
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
-              {[ { key: 'fant', label: 'Fanteria', color: '#4CAF50' }, { key: 'cav', label: 'Cavalleria', color: '#2196F3' }, { key: 'arc', label: 'Arcieri', color: '#9C27B0' } ].map(cat => (
+              {[ { key: 'fant', label: t('viking_editor.infantry'), color: '#4CAF50' }, { key: 'cav', label: t('viking_editor.cavalry'), color: '#2196F3' }, { key: 'arc', label: t('viking_editor.archers'), color: '#9C27B0' } ].map(cat => (
                 <div key={cat.key} style={{ backgroundColor: '#1a1a24', padding: '10px', borderRadius: '6px', borderTop: `2px solid ${cat.color}` }}>
                   <div style={{ color: cat.color, fontWeight: 'bold', marginBottom: '10px', display: 'flex', justifyContent: 'space-between' }}>
                     {cat.label}
-                    <button onClick={() => handleAddTroopRow(pIndex, cat.key)} style={{ background: 'none', border: 'none', color: cat.color, cursor: 'pointer', fontWeight: 'bold' }}>+ Riga</button>
+                    <button onClick={() => handleAddTroopRow(pIndex, cat.key)} style={{ background: 'none', border: 'none', color: cat.color, cursor: 'pointer', fontWeight: 'bold' }}>{t('viking_editor.btn_add_row')}</button>
                   </div>
                   
                   <div style={{ display: 'flex', gap: '5px', marginBottom: '5px', color: '#888', fontSize: '11px', paddingLeft: '2px' }}>
-                      <div style={{ flex: 1 }}>Tier</div>
-                      <div style={{ flex: 1 }}>Inviate</div>
-                      <div style={{ flex: 1 }}>Uccise</div>
+                      <div style={{ flex: 1 }}>{t('viking_editor.tier')}</div>
+                      <div style={{ flex: 1 }}>{t('viking_editor.sent')}</div>
+                      <div style={{ flex: 1 }}>{t('viking_editor.killed')}</div>
                       <div style={{ width: '20px' }}></div>
                   </div>
 

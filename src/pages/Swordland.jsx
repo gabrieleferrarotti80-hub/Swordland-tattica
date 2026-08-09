@@ -2,6 +2,7 @@ import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { initialBuildings } from '../data/buildings';
 import { BuildingTable } from '../components/BuildingTable';
 import { RosterTable } from '../components/RosterTable';
@@ -15,6 +16,7 @@ import { ExportModal } from '../components/ExportModal';
 
 export default function Swordland({ roster, setRoster }) {
   const navigate = useNavigate();
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
   
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [activePanel, setActivePanel] = useState(null);
@@ -27,7 +29,6 @@ export default function Swordland({ roster, setRoster }) {
   const [movementMode, setMovementMode] = useState('march');
   const [teamScores, setTeamScores] = useState({ blue: 0, red: 0 });
   
-  // STATO PER L'EDITOR DEGLI HITBOX E LA PASSWORD
   const [selectedBuildingForEdit, setSelectedBuildingForEdit] = useState('');
   const [isEditorUnlocked, setIsEditorUnlocked] = useState(false);
   const [editorPassword, setEditorPassword] = useState('');
@@ -70,15 +71,15 @@ export default function Swordland({ roster, setRoster }) {
             return cloudMatch ? { ...initial, ...cloudMatch } : initial;
           });
           setBuildings(mergedBuildings);
-          console.log("✅ Dati Edifici Master caricati dal Cloud!");
+          console.log(t('swordland.cloud_master_loaded'));
         }
       } catch (error) {
-        console.warn("⚠️ Impossibile caricare il Master dal Cloud. Uso i dati locali.", error);
+        console.warn(t('swordland.cloud_master_error'), error);
       }
     };
     
     fetchMasterBuildings();
-  }, []);
+  }, [t]);
 
   useEffect(() => { localStorage.setItem('swordland-buildings', JSON.stringify(buildings)); }, [buildings]);
   useEffect(() => { localStorage.setItem('swordland-manual-captures', JSON.stringify(manualCaptures)); }, [manualCaptures]);
@@ -121,7 +122,7 @@ export default function Swordland({ roster, setRoster }) {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectData, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `tattica_swordland_${new Date().toISOString().slice(0,10)}.json`);
+    downloadAnchorNode.setAttribute("download", `${t('swordland.export_filename')}${new Date().toISOString().slice(0,10)}.json`);
     document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove();
   };
 
@@ -140,39 +141,39 @@ export default function Swordland({ roster, setRoster }) {
         if (pd.manualCaptures) setManualCaptures(pd.manualCaptures);
         setCurrentTime(0); setDraftPositions({}); setIsPlaying(false); setActivePanel(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        alert("Progetto caricato con successo!");
-      } catch (error) { alert("File non valido."); }
+        alert(t('swordland.project_loaded'));
+      } catch (error) { alert(t('swordland.invalid_file')); }
     };
     reader.readAsText(file);
   };
 
   const handleSaveMasterToCloud = async () => {
-    if (window.confirm("ATTENZIONE: Stai per sovrascrivere le coordinate e gli hitbox per TUTTI gli utenti di Kingshot. Sei sicuro di voler aggiornare la mappa globale?")) {
+    if (window.confirm(t('swordland.master_overwrite_warning'))) {
       try {
         await setDoc(doc(db, "projects", "MASTER_MAP_DATA"), { 
           buildings: buildings,
           updatedAt: new Date().toISOString()
         });
-        alert("✅ Mappa Globale aggiornata con successo su Firebase! Tutti gli utenti ora vedranno queste modifiche.");
+        alert(t('swordland.master_updated'));
       } catch (error) {
         console.error("Errore salvataggio Master:", error);
-        alert("❌ Errore durante l'aggiornamento del Cloud.");
+        alert(t('swordland.cloud_update_error'));
       }
     }
   };
 
   const handleSaveToFirebase = async () => {
-    const code = window.prompt("Inserisci il Codice della tua Alleanza per SALVARE il progetto mappa in Cloud:", "");
+    const code = window.prompt(t('swordland.save_prompt'), "");
     if (!code) return;
     try {
       const projectData = { version: '1.4', teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures };
       await setDoc(doc(db, "projects", code.toUpperCase()), projectData);
-      alert(`Progetto salvato con successo per l'alleanza: ${code.toUpperCase()}`);
-    } catch (error) { alert("Errore durante il salvataggio su Firebase."); }
+      alert(t('swordland.project_saved', { code: code.toUpperCase() }));
+    } catch (error) { alert(t('swordland.firebase_save_error')); }
   };
 
   const handleLoadFromFirebase = async () => {
-    const code = window.prompt("Inserisci il Codice della tua Alleanza per CARICARE il progetto mappa dal Cloud:", "");
+    const code = window.prompt(t('swordland.load_prompt'), "");
     if (!code) return;
     try {
       const docSnap = await getDoc(doc(db, "projects", code.toUpperCase()));
@@ -185,26 +186,24 @@ export default function Swordland({ roster, setRoster }) {
         if (pd.healingEvents) setHealingEvents(pd.healingEvents);
         if (pd.manualCaptures) setManualCaptures(pd.manualCaptures);
         setCurrentTime(0); setDraftPositions({}); setIsPlaying(false); setActivePanel(null);
-        alert(`Progetto mappa caricato con successo (Codice: ${code.toUpperCase()})`);
-      } else alert("Nessun salvataggio mappa trovato per questo codice.");
-    } catch (error) { alert("Errore durante il caricamento."); }
+        alert(t('swordland.project_loaded_code', { code: code.toUpperCase() }));
+      } else alert(t('swordland.no_save_found'));
+    } catch (error) { alert(t('swordland.load_error')); }
   };
 
   const handleNewProject = () => {
-    if (window.confirm("Sei sicuro di voler avviare un nuovo progetto? Tutti i dati non salvati andranno persi.")) {
+    if (window.confirm(t('swordland.new_project_warning'))) {
       setTeamBase('blue'); setBuildings(initialBuildings); setActiveDeployment([]); setMarches([]); setManualCaptures([]);
       setHealingEvents({}); setCurrentTime(0); setDraftPositions({}); setIsPlaying(false); setActivePanel(null);
     }
   };
 
-  // Funzione per sbloccare l'editor
   const handleUnlockEditor = () => {
-    // CAMBIA QUESTA PASSWORD CON QUELLA CHE PREFERISCI
     if (editorPassword === 'FGgabriele1') {
       setIsEditorUnlocked(true);
       setEditorPassword('');
     } else {
-      alert("❌ Password errata!");
+      alert(t('swordland.wrong_password'));
       setEditorPassword('');
     }
   };
@@ -219,15 +218,15 @@ export default function Swordland({ roster, setRoster }) {
         <aside className={`absolute lg:relative left-12 lg:left-0 top-0 bottom-0 my-6 lg:ml-6 app-panel flex flex-col z-50 shrink-0 transition-all duration-300 ease-in-out bg-slate-950/95 lg:bg-transparent shadow-2xl lg:shadow-none border lg:border-none border-slate-700/50 ${activePanel === 'buildings' ? 'w-[85vw] lg:w-[850px]' : activePanel === 'roster' ? 'w-[85vw] lg:w-[680px]' : 'w-[75vw] lg:w-[320px]'}`}>
           <div className="flex justify-between items-center p-4 border-b border-slate-700/50 shrink-0 bg-slate-800/50 rounded-t-xl">
             <h2 className="text-lg font-bold uppercase tracking-wider flex items-center gap-2">
-              {activePanel === 'buildings' && <span className="text-cyan-400">Edifici</span>}
-              {activePanel === 'roster' && <span className="text-cyan-400">Giocatori</span>}
-              {activePanel === 'deployment' && <span className="text-amber-400">Singoli</span>}
-              {activePanel === 'settings' && <span className="text-amber-400">Editor Hitbox</span>}
+              {activePanel === 'buildings' && <span className="text-cyan-400">{t('swordland.buildings')}</span>}
+              {activePanel === 'roster' && <span className="text-cyan-400">{t('swordland.players')}</span>}
+              {activePanel === 'deployment' && <span className="text-amber-400">{t('swordland.singles')}</span>}
+              {activePanel === 'settings' && <span className="text-amber-400">{t('swordland.hitbox_editor')}</span>}
             </h2>
             <button onClick={() => { 
                 setActivePanel(null); 
                 setSelectedBuildingForEdit(''); 
-                setIsEditorUnlocked(false); // Blocca di nuovo l'editor quando si chiude il pannello
+                setIsEditorUnlocked(false); 
               }} 
               className="text-slate-400 hover:text-red-400 transition-colors w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-700"
             >
@@ -240,10 +239,10 @@ export default function Swordland({ roster, setRoster }) {
             {activePanel === 'roster' && (
               <div className="flex flex-col h-full">
                <div className="flex justify-between items-center px-6 pt-4 pb-4 border-b border-slate-700/50 bg-slate-800/20">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Modifiche in Home</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('swordland.home_modifications')}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => navigate('/')} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-bold rounded-lg border border-slate-600 flex items-center shadow-sm">⬅ Hub</button>
-                    <button onClick={handleDeploy} disabled={roster.filter(p => p.isParticipating).length === 0} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg border border-amber-500 flex items-center shadow-sm ml-2">⚔️ Schieramento</button>
+                    <button onClick={() => navigate('/')} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-bold rounded-lg border border-slate-600 flex items-center shadow-sm">{t('swordland.hub')}</button>
+                    <button onClick={handleDeploy} disabled={roster.filter(p => p.isParticipating).length === 0} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg border border-amber-500 flex items-center shadow-sm ml-2">{t('swordland.deployment')}</button>
                   </div>
                 </div>
                 <div className="px-6 pb-6 pt-4 overflow-y-auto">
@@ -254,21 +253,19 @@ export default function Swordland({ roster, setRoster }) {
 
             {activePanel === 'deployment' && <DeploymentPanel activeDeployment={activeDeployment} getAvailableMarches={getAvailableMarches} healingEvents={healingEvents} currentTime={currentTime} getCurrentPosition={getCurrentPosition} draftPositions={draftPositions} handleWithdraw={handleWithdraw} handleHeal={handleHeal} handleCancelHeal={handleCancelHeal} />}
 
-            {/* PANNELLO IMPOSTAZIONI / EDITOR HITBOX CON PASSWORD */}
             {activePanel === 'settings' && (
               <div className="flex flex-col h-full p-4 gap-4">
                 
                 {!isEditorUnlocked ? (
-                  // SCHERMATA DI BLOCCO
                   <div className="bg-slate-800 p-6 rounded-xl border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)] flex flex-col items-center justify-center gap-4 text-center mt-10">
                     <span className="text-4xl">🔒</span>
                     <div>
-                      <h3 className="text-red-400 font-bold text-sm uppercase mb-1">Accesso Riservato</h3>
-                      <p className="text-[10px] text-slate-400">Inserisci la password per modificare il Master della mappa globale.</p>
+                      <h3 className="text-red-400 font-bold text-sm uppercase mb-1">{t('swordland.restricted_access')}</h3>
+                      <p className="text-[10px] text-slate-400">{t('swordland.password_desc')}</p>
                     </div>
                     <input 
                       type="password" 
-                      placeholder="Password..." 
+                      placeholder={t('swordland.password_placeholder')}
                       value={editorPassword}
                       onChange={(e) => setEditorPassword(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleUnlockEditor(); }}
@@ -278,16 +275,15 @@ export default function Swordland({ roster, setRoster }) {
                       onClick={handleUnlockEditor}
                       className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded text-xs transition-colors shadow-md uppercase"
                     >
-                      Sblocca Editor
+                      {t('swordland.unlock_editor')}
                     </button>
                   </div>
                 ) : (
-                  // EDITOR VERO E PROPRIO (VISIBILE SOLO SE SBLOCCATO)
                   <>
                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                      <label className="block text-xs font-bold text-cyan-400 mb-2">Seleziona Edificio sulla Mappa o qui:</label>
+                      <label className="block text-xs font-bold text-cyan-400 mb-2">{t('swordland.select_building')}</label>
                       <select value={selectedBuildingForEdit} onChange={(e) => setSelectedBuildingForEdit(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm outline-none">
-                        <option value="">-- Nessuno Selezionato --</option>
+                        <option value="">{t('swordland.none_selected')}</option>
                         {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
                     </div>
@@ -297,40 +293,40 @@ export default function Swordland({ roster, setRoster }) {
                        if (!b) return null;
                       return (
                       <div key={b.id} className="bg-slate-800 p-4 rounded-xl border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)] flex flex-col gap-3 relative">
-                        <h3 className="text-amber-400 font-bold text-xs uppercase">Coordinate Perimetro (Quadrati)</h3>
+                        <h3 className="text-amber-400 font-bold text-xs uppercase">{t('swordland.perimeter_coords')}</h3>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-[10px] text-slate-400 uppercase">X Minimo</label>
+                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.x_min')}</label>
                             <input type="number" id="hb-xmin" defaultValue={b.hitbox?.xMin || b.x - 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
                           </div>
                           <div>
-                            <label className="text-[10px] text-slate-400 uppercase">Y Minimo</label>
+                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.y_min')}</label>
                             <input type="number" id="hb-ymin" defaultValue={b.hitbox?.yMin || b.y - 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
                           </div>
                           <div>
-                            <label className="text-[10px] text-slate-400 uppercase">X Massimo</label>
+                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.x_max')}</label>
                             <input type="number" id="hb-xmax" defaultValue={b.hitbox?.xMax || b.x + 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
                           </div>
                           <div>
-                            <label className="text-[10px] text-slate-400 uppercase">Y Massimo</label>
+                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.y_max')}</label>
                             <input type="number" id="hb-ymax" defaultValue={b.hitbox?.yMax || b.y + 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
                           </div>
                         </div>
                         
                         <div className="mt-1">
-                          <label className="text-[10px] text-slate-400 uppercase">Scala Visiva Grafica</label>
+                          <label className="text-[10px] text-slate-400 uppercase">{t('swordland.visual_scale')}</label>
                           <input type="number" step="0.1" id="hb-scale" defaultValue={b.scale || 1} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
                         </div>
 
                         <div className="mt-2 pt-3 border-t border-slate-700/50">
-                          <h3 className="text-cyan-400 font-bold text-xs uppercase mb-2">Centro Matematico (Marce)</h3>
+                          <h3 className="text-cyan-400 font-bold text-xs uppercase mb-2">{t('swordland.math_center')}</h3>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="text-[10px] text-slate-400 uppercase">Centro X</label>
+                              <label className="text-[10px] text-slate-400 uppercase">{t('swordland.center_x')}</label>
                               <input type="number" id="hb-center-x" defaultValue={b.x} className="w-full bg-slate-900 border border-cyan-700/50 rounded p-1.5 text-cyan-100" />
                             </div>
                             <div>
-                              <label className="text-[10px] text-slate-400 uppercase">Centro Y</label>
+                              <label className="text-[10px] text-slate-400 uppercase">{t('swordland.center_y')}</label>
                               <input type="number" id="hb-center-y" defaultValue={b.y} className="w-full bg-slate-900 border border-cyan-700/50 rounded p-1.5 text-cyan-100" />
                             </div>
                           </div>
@@ -353,7 +349,7 @@ export default function Swordland({ roster, setRoster }) {
                           );
                           setBuildings(updated);
                         }} className="mt-3 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs transition-colors shadow-md">
-                          Applica Hitbox, Scala e Centro
+                          {t('swordland.apply_hitbox')}
                         </button>
                       </div>
                        )
@@ -361,14 +357,13 @@ export default function Swordland({ roster, setRoster }) {
 
                     <div className="mt-auto pt-4 border-t border-slate-700/50">
                       <p className="text-[10px] text-slate-400 mb-3 leading-tight">
-                        Quando hai finito di sistemare le coordinate di tutti gli edifici, salva le modifiche in Cloud. 
-                        Diventeranno immediatamente effettive per tutti gli utenti dell'applicazione.
+                        {t('swordland.save_master_desc')}
                       </p>
                       <button 
                         onClick={handleSaveMasterToCloud} 
                         className="w-full bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.4)] transition-all"
                       >
-                        ☁️ SALVA MASTER IN CLOUD
+                        {t('swordland.save_master_btn')}
                       </button>
                     </div>
                   </>
@@ -395,8 +390,6 @@ export default function Swordland({ roster, setRoster }) {
             handleHeal={handleHeal} 
             handleCancelHeal={handleCancelHeal} 
             handleGarrisonAction={handleGarrisonAction}
-            
-            // PROPS PER L'EDITOR
             isEditorMode={activePanel === 'settings'}
             selectedBuildingForEdit={selectedBuildingForEdit}
             setSelectedBuildingForEdit={setSelectedBuildingForEdit}
@@ -404,20 +397,20 @@ export default function Swordland({ roster, setRoster }) {
         </div>
         <div className="w-full lg:w-48 xl:w-56 shrink-0 flex flex-col gap-3 xl:gap-4 z-10 h-[350px] lg:h-full">
           <button onClick={() => navigate('/')} className="w-full shrink-0 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-2 xl:py-3 rounded-2xl xl:rounded-3xl text-[10px] xl:text-xs uppercase flex items-center justify-center gap-2 shadow-lg backdrop-blur-xl transition-all">
-            ⬅ Hub Kingshot
+            {t('swordland.hub_kingshot')}
           </button>
           <button onClick={() => setIsExportModalOpen(true)} className="w-full shrink-0 bg-indigo-500/20 hover:bg-indigo-500 border border-indigo-500/50 text-indigo-400 hover:text-white font-bold py-2 xl:py-3 rounded-2xl xl:rounded-3xl text-[10px] xl:text-xs uppercase flex items-center justify-center gap-2 shadow-lg backdrop-blur-xl">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-            Esporta Ordini
+            {t('swordland.export_orders')}
           </button>
           
           <div className="bg-slate-900/40 backdrop-blur-xl rounded-2xl xl:rounded-3xl border border-slate-700/50 p-4 shadow-2xl flex flex-col gap-3 shrink-0">
             <div className="flex justify-between items-end border-b border-slate-700/50 pb-2">
-              <span className="text-[9px] xl:text-[10px] font-bold text-cyan-400 uppercase pb-1">Team Blu</span>
+              <span className="text-[9px] xl:text-[10px] font-bold text-cyan-400 uppercase pb-1">{t('swordland.team_blue')}</span>
               <span className="text-2xl xl:text-3xl font-black text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] leading-none">{Math.floor(teamScores.blue)}</span>
             </div>
             <div className="flex justify-between items-end pt-1">
-              <span className="text-[9px] xl:text-[10px] font-bold text-red-400 uppercase pb-1">Team Rosso</span>
+              <span className="text-[9px] xl:text-[10px] font-bold text-red-400 uppercase pb-1">{t('swordland.team_red')}</span>
               <span className="text-2xl xl:text-3xl font-black text-white drop-shadow-[0_0_8px_rgba(248,113,113,0.5)] leading-none">{Math.floor(teamScores.red)}</span>
             </div>
           </div>

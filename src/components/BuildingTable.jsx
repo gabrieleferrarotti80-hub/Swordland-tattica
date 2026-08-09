@@ -1,17 +1,21 @@
+import React from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
+
 export const BuildingTable = ({ buildings, onEdit }) => {
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
+
   return (
     <div className="w-full">
       <table className="w-full text-left text-sm border-separate border-spacing-0">
         <thead>
           <tr>
-            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold z-10 border-b-2 border-slate-700 shadow-sm">Edificio</th>
-            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">Sblocco</th>
-            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">Punti/Min</th>
-            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">Punti/Player</th>
-            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">1° Controllo</th>
-            {/* INTESTAZIONI MODIFICATE IN (sec) */}
-            <th className="sticky top-0 bg-slate-800 text-blue-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">Marcia Blu (sec)</th>
-            <th className="sticky top-0 bg-slate-800 text-red-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">Marcia Rossa (sec)</th>
+            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold z-10 border-b-2 border-slate-700 shadow-sm">{t('swordland.building_table.building')}</th>
+            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">{t('swordland.building_table.unlock')}</th>
+            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">{t('swordland.building_table.points_min')}</th>
+            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">{t('swordland.building_table.points_player')}</th>
+            <th className="sticky top-0 bg-slate-800 text-cyan-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">{t('swordland.building_table.first_control')}</th>
+            <th className="sticky top-0 bg-slate-800 text-blue-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">{t('swordland.building_table.blue_march_sec')}</th>
+            <th className="sticky top-0 bg-slate-800 text-red-400 p-3 font-semibold text-center z-10 border-b-2 border-slate-700 shadow-sm">{t('swordland.building_table.red_march_sec')}</th>
           </tr>
         </thead>
         <tbody>

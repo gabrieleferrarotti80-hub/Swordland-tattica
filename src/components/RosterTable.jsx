@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
-// Generiamo automaticamente le opzioni del livello
 const levelOptions = [
   ...Array.from({ length: 30 }, (_, i) => String(i + 1)),
   ...Array.from({ length: 11 }, (_, i) => `TG${i + 1}`)
@@ -8,7 +8,6 @@ const levelOptions = [
 
 const roleOptions = ['R1', 'R2', 'R3', 'R4', 'R5'];
 
-// Logica di calcolo automatico marce in base al potere
 const getDefaultMarches = (power) => {
   const p = Number(power);
   if (p < 90) return 4;
@@ -16,19 +15,14 @@ const getDefaultMarches = (power) => {
   return 6;
 };
 
-// --- NUOVO COMPONENTE: INPUT INTELLIGENTE ---
-// Questo input aggiorna la UI mentre scrivi senza disturbare la tabella.
-// Salva i dati reali solo quando clicchi fuori o premi Invio.
 const EditableInput = ({ initialValue, onSave, type = "text", className, maxLength, placeholder }) => {
   const [value, setValue] = useState(initialValue ?? '');
 
-  // Sincronizza se i dati cambiano dall'esterno
   useEffect(() => {
     setValue(initialValue ?? '');
   }, [initialValue]);
 
   const handleBlur = () => {
-    // Salva solo se il valore è effettivamente cambiato
     if (value !== (initialValue ?? '')) {
       onSave(value);
     }
@@ -36,7 +30,7 @@ const EditableInput = ({ initialValue, onSave, type = "text", className, maxLeng
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
-      e.target.blur(); // Toglie il focus e innesca handleBlur
+      e.target.blur();
     }
   };
 
@@ -55,6 +49,8 @@ const EditableInput = ({ initialValue, onSave, type = "text", className, maxLeng
 };
 
 export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
+  
   const [newPlayer, setNewPlayer] = useState({
     tag: '',
     name: '',
@@ -82,7 +78,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
     e.preventDefault(); 
     
     if (!newPlayer.name || newPlayer.name.trim() === '') {
-      alert("Devi inserire il Nome del Giocatore!");
+      alert(t('roster_table.alert_name_required'));
       return; 
     }
 
@@ -135,7 +131,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
       
       <div className="sticky top-0 z-50 bg-slate-950 pb-2 flex flex-col gap-3 shadow-md">
         <div className="flex justify-between items-center pt-2">
-          <h3 className="text-lg font-semibold text-slate-200">Database Giocatori</h3>
+          <h3 className="text-lg font-semibold text-slate-200">{t('roster_table.title')}</h3>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900 p-3 rounded-lg border border-slate-700 shadow-xl">
@@ -144,7 +140,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
               type="text" 
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)} 
-              placeholder="🔍 Cerca per nome o sigla..." 
+              placeholder={t('roster_table.search_placeholder')} 
               className="bg-slate-800 border border-slate-600 text-slate-200 px-3 py-1.5 rounded focus:outline-none focus:border-cyan-500 text-sm w-full max-w-sm"
             />
           </div>
@@ -156,16 +152,16 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
                 onChange={(e) => setSortOrder(e.target.value)} 
                 className="bg-slate-800 border border-slate-600 text-slate-200 px-3 py-1.5 rounded focus:outline-none focus:border-cyan-500 text-sm cursor-pointer"
               >
-                <option value="default">↕ Ordine: Predefinito</option>
-                <option value="asc">↕ Ordine: A ➝ Z</option>
-                <option value="desc">↕ Ordine: Z ➝ A</option>
+                <option value="default">{t('roster_table.sort_default')}</option>
+                <option value="asc">{t('roster_table.sort_asc')}</option>
+                <option value="desc">{t('roster_table.sort_desc')}</option>
               </select>
             </div>
 
             <button 
               onClick={() => setShowAddForm(!showAddForm)}
               className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl shadow-lg transition-all duration-300 flex-shrink-0 ${showAddForm ? 'bg-red-600 hover:bg-red-500 text-white rotate-45' : 'bg-cyan-600 hover:bg-cyan-500 text-white hover:scale-105'}`}
-              title={showAddForm ? "Chiudi modulo" : "Aggiungi nuovo giocatore"}
+              title={showAddForm ? t('roster_table.close_form') : t('roster_table.add_player')}
             >
               +
             </button>
@@ -174,47 +170,46 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
 
         {showAddForm && (
           <form onSubmit={handleSubmit} className="bg-slate-800 p-4 rounded-lg border border-cyan-700/50 flex flex-wrap gap-3 items-end shadow-inner animate-in slide-in-from-top-4 fade-in duration-300">
-            {/* Form inputs (rimasti invariati) */}
             <div className="flex flex-col gap-1 w-14">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">Sigla</label>
+              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.tag')}</label>
               <input type="text" maxLength="4" value={newPlayer.tag} onChange={e => setNewPlayer({...newPlayer, tag: e.target.value.toUpperCase()})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 font-bold text-center text-sm" />
             </div>
             <div className="flex flex-col gap-1 flex-1 min-w-[100px]">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">Nome *</label>
-              <input type="text" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm" placeholder="es. Re_Artù" />
+              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.name')} *</label>
+              <input type="text" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm" placeholder={t('roster_table.name_placeholder')} />
             </div>
             <div className="flex flex-col gap-1 w-16">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">Ruolo</label>
+              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.role')}</label>
               <select value={newPlayer.role} onChange={e => setNewPlayer({...newPlayer, role: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-1 py-2 rounded focus:outline-none focus:border-cyan-500 cursor-pointer text-sm">
                 {roleOptions.map(opt => <option key={`new-role-${opt}`} value={opt}>{opt}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1 w-16">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">Livello</label>
+              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.level')}</label>
               <select value={newPlayer.level} onChange={e => setNewPlayer({...newPlayer, level: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-1 py-2 rounded focus:outline-none focus:border-cyan-500 cursor-pointer text-sm">
                 {levelOptions.map(opt => <option key={`new-${opt}`} value={opt}>{opt}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1 w-16">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">Pot. (M)</label>
+              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.power')}</label>
               <input type="number" min="0" value={newPlayer.power} onChange={e => setNewPlayer({...newPlayer, power: e.target.value, marches: getDefaultMarches(e.target.value)})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm text-center" />
             </div>
             <div className="flex flex-col gap-1 w-14">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">Marce</label>
+              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.marches')}</label>
               <input type="number" min="1" value={newPlayer.marches} onChange={e => setNewPlayer({...newPlayer, marches: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm text-center" />
             </div>
             
             <div className="flex flex-col gap-1 w-16 border-l border-slate-600 pl-3 ml-1">
-              <label className="text-[10px] text-cyan-400 uppercase font-bold">Map X</label>
+              <label className="text-[10px] text-cyan-400 uppercase font-bold">{t('roster_table.map_x')}</label>
               <input type="number" value={newPlayer.x} onChange={e => setNewPlayer({...newPlayer, x: e.target.value})} placeholder="---" className="bg-slate-950 border border-cyan-800 text-cyan-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-400 text-sm text-center" />
             </div>
             <div className="flex flex-col gap-1 w-14">
-              <label className="text-[10px] text-amber-400 uppercase font-bold">Map Y</label>
+              <label className="text-[10px] text-amber-400 uppercase font-bold">{t('roster_table.map_y')}</label>
               <input type="number" value={newPlayer.y} onChange={e => setNewPlayer({...newPlayer, y: e.target.value})} placeholder="---" className="bg-slate-950 border border-amber-800 text-amber-200 px-2 py-2 rounded focus:outline-none focus:border-amber-400 text-sm text-center" />
             </div>
 
             <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-bold transition-colors h-[38px] text-sm ml-auto shadow-lg">
-              Salva
+              {t('roster_table.save')}
             </button>
           </form>
         )}
@@ -224,24 +219,24 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
         <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 z-20 bg-slate-900 shadow-md">
             <tr className="border-b border-slate-700">
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">Sigla</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">{t('roster_table.tag')}</th>
               <th 
                 className="px-2 py-3 text-cyan-400 font-bold text-[10px] uppercase w-auto cursor-pointer hover:text-cyan-300 transition-colors select-none flex items-center gap-1"
                 onClick={toggleSort}
                 title="Clicca per cambiare ordine"
               >
-                Nome
+                {t('roster_table.name')}
                 <span className="text-slate-500 text-[14px]">
                   {sortOrder === 'asc' ? '▲' : sortOrder === 'desc' ? '▼' : '↕'}
                 </span>
               </th>
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-16 text-center">Ruolo</th>
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-16 text-center">Livello</th>
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-24 text-center">Potere</th>
-              <th className="px-1 py-3 text-cyan-400 font-bold text-[10px] uppercase w-16 text-center border-l border-slate-700/50">Coord X</th>
-              <th className="px-1 py-3 text-amber-400 font-bold text-[10px] uppercase w-16 text-center">Coord Y</th>
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center border-l border-slate-700/50">Marce</th>
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">In Uso</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-16 text-center">{t('roster_table.role')}</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-16 text-center">{t('roster_table.level')}</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-24 text-center">{t('roster_table.power')}</th>
+              <th className="px-1 py-3 text-cyan-400 font-bold text-[10px] uppercase w-16 text-center border-l border-slate-700/50">{t('roster_table.coord_x')}</th>
+              <th className="px-1 py-3 text-amber-400 font-bold text-[10px] uppercase w-16 text-center">{t('roster_table.coord_y')}</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center border-l border-slate-700/50">{t('roster_table.marches')}</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">{t('roster_table.in_use')}</th>
               <th className="px-1 py-3 text-slate-400 font-semibold text-xs w-8 text-center"></th>
             </tr>
           </thead>
@@ -250,8 +245,8 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
               <tr>
                 <td colSpan="10" className="p-6 text-center text-slate-500 italic">
                   {roster.length === 0 
-                    ? "Nessun giocatore nel database. Usa il bottone '+' in alto per aggiungerne uno." 
-                    : "Nessun giocatore trovato corrispondente alla ricerca."}
+                    ? t('roster_table.empty_db') 
+                    : t('roster_table.no_match')}
                 </td>
               </tr>
             ) : (
@@ -269,7 +264,6 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
                       />
                     </td>
                     <td className="px-2 py-2">
-                      {/* Ora puoi cercare e modificare liberamente: non si sposterà finché non clicchi fuori! */}
                       <EditableInput 
                         initialValue={player.name} 
                         onSave={(val) => onEdit(player.id, 'name', val)} 
@@ -327,11 +321,11 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
                     </td>
                     <td className="px-1 py-2 flex justify-center">
                       <button onClick={() => onEdit(player.id, 'isParticipating', !player.isParticipating)} className={`px-2 py-1 rounded font-bold w-full text-center text-white transition-colors text-[10px] ${player.isParticipating ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}>
-                        {player.isParticipating ? 'Sì' : 'No'}
+                        {player.isParticipating ? t('roster_table.yes') : t('roster_table.no')}
                       </button>
                     </td>
                     <td className="px-1 py-2 text-center">
-                      <button onClick={() => onDelete(player.id)} className="text-slate-500 hover:text-red-400 font-bold px-1 py-1 transition-colors" title="Rimuovi giocatore">✕</button>
+                      <button onClick={() => onDelete(player.id)} className="text-slate-500 hover:text-red-400 font-bold px-1 py-1 transition-colors" title={t('roster_table.remove_player')}>✕</button>
                     </td>
                   </tr>
                 );

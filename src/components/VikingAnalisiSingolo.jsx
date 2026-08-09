@@ -4,6 +4,7 @@ import { doc, deleteDoc } from 'firebase/firestore';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { 
   PESI_RELATIVI, 
   preparaDatiGrafico, 
@@ -17,7 +18,6 @@ import VikingWaveEditor from './VikingWaveEditor';
 import { VikingTierEfficiency } from './VikingTierEfficiency';
 import { VikingEngagementRules } from './VikingEngagementRules';
 
-// MATRICE FISSA DEI NEMICI (estratta dalla tabella ufficiale del gioco)
 const COMPOSIZIONE_ORDE_VICHINGHE = {
   1: { fant: 6973, cav: 8136, arc: 8136, tot: 23245 },
   2: { fant: 12630, cav: 14955, arc: 14722, tot: 42307 },
@@ -37,27 +37,6 @@ const COMPOSIZIONE_ORDE_VICHINGHE = {
   17: { fant: 2091536, cav: 2440074, arc: 2440074, tot: 6971684 },
   18: { fant: 2903602, cav: 3387587, arc: 3387587, tot: 9678776 },
   19: { fant: 4035614, cav: 4708125, arc: 4708125, tot: 13451864 }
-};
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div style={{ backgroundColor: '#2a2a40', padding: '15px', border: '1px solid #555', borderRadius: '5px', color: '#fff', minWidth: '220px' }}>
-        <h4 style={{ margin: '0 0 10px 0', color: '#FFB300' }}>{label}</h4>
-        <p style={{ margin: '5px 0', fontSize: '14px' }}>Bersagli Totali: <strong>{data.vTotali.toLocaleString()}</strong></p>
-        <hr style={{ borderColor: '#444' }} />
-        <p style={{ margin: '5px 0', color: '#fff', fontWeight: 'bold' }}>Andamento Reale: {data['Andamento Reale'].toLocaleString()}</p>
-        <p style={{ margin: '5px 0', color: '#FFEB3B', fontStyle: 'italic' }}>Andamento Teorico: {data['Andamento Teorico'].toLocaleString()}</p>
-        <hr style={{ borderColor: '#444' }} />
-        <p style={{ margin: '5px 0', color: '#4CAF50' }}>Fanteria: {data['Uccisioni Fanteria'].toLocaleString()}</p>
-        <p style={{ margin: '5px 0', color: '#2196F3' }}>Cavalleria: {data['Uccisioni Cavalleria'].toLocaleString()}</p>
-        <p style={{ margin: '5px 0', color: '#F44336' }}>Arcieri: {data['Uccisioni Arcieri'].toLocaleString()}</p>
-        {data['Nemici Sopravvissuti'] > 0 && <p style={{ margin: '5px 0', color: '#9e9e9e', fontWeight: 'bold' }}>Sopravvissuti: {data['Nemici Sopravvissuti'].toLocaleString()}</p>}
-      </div>
-    );
-  }
-  return null;
 };
 
 const calcolaMedianaRatei = (arr) => {
@@ -88,70 +67,9 @@ const getHighlightStyle = (valore, mediana, conteggio, baseColor) => {
   return { color: baseColor };
 };
 
-const verificaCoerenzaRatei = (giocatori, livelloOndata) => {
-  const erroriTrovati = [];
-  const TOLLERANZA_MAX = 0.001; 
-  const MIN_TRUPPE = 1000;
-  
-  const mappaRatei = {};
-
-  giocatori.forEach(giocatore => {
-    // Esaminiamo le truppe passate nel dettaglioTruppe
-    ['fant', 'cav', 'arc'].forEach(tipo => {
-      const dettaglio = giocatore.dettaglioTruppe?.[tipo] || [];
-      
-      dettaglio.forEach(t => {
-        const inviate = Number(t.inviate) || 0;
-        const uccisioni = Number(t.uccise) || 0;
-        const tier = t.tier;
-        const isHost = giocatore.isHost || false;
-
-        // Escludi gli arcieri dell'Host (Regola Backline/Soccorso)
-        if (isHost && tipo === 'arc') return;
-
-        if (inviate >= MIN_TRUPPE && tier) {
-          const rateo = uccisioni / inviate;
-          const chiave = `${tipo.toUpperCase()}_${tier}`;
-
-          if (!mappaRatei[chiave]) {
-            mappaRatei[chiave] = [];
-          }
-          
-          mappaRatei[chiave].push({ 
-            nome: giocatore.nome || 'Sconosciuto', 
-            rateo: rateo
-          });
-        }
-      });
-    });
-  });
-
-  // Confronto i ratei trovati
-  for (const [chiave, listaDati] of Object.entries(mappaRatei)) {
-    if (listaDati.length > 1) {
-      const base = listaDati[0];
-
-      for (let i = 1; i < listaDati.length; i++) {
-        const corrente = listaDati[i];
-        const scarto = Math.abs(corrente.rateo - base.rateo);
-
-        if (scarto > TOLLERANZA_MAX) {
-          // Formattazione identica al tuo array nuoviErrori
-          erroriTrovati.push({
-            ondata: livelloOndata,
-            giocatore: corrente.nome,
-            tipo: 'Discrepanza Rateo OCR',
-            msg: `Incongruenza in ${chiave}. Rateo ${corrente.rateo.toFixed(4)} contro il ${base.rateo.toFixed(4)} di ${base.nome} (Scarto: ${scarto.toFixed(4)}).`
-          });
-        }
-      }
-    }
-  }
-
-  return erroriTrovati;
-};
-
 export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEventId, handleSelectChange, fetchEventi }) {
+  const { t } = useTranslation(); // 🌍 Hook traduzione
+  
   const [mostraJsonAnalisi, setMostraJsonAnalisi] = useState(false);
   const [editingWaveIndex, setEditingWaveIndexState] = useState(() => {
     const salvato = sessionStorage.getItem('vikingEditingWave');
@@ -176,13 +94,11 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
     y: typeof window !== 'undefined' ? window.innerHeight - 500 : 50 
   });
   
-  // ---> ECCO LA FUNZIONE INSERITA CORRETTAMENTE NEL SUO SCOPE <---
   const handleRimuoviErrore = (indexDaRimuovere) => {
     setRapportoErrori(prevErrori => 
       prevErrori.filter((_, index) => index !== indexDaRimuovere)
     );
   };
-  // -----------------------------------------------------------------
 
   const pdfRef = useRef();
 
@@ -199,30 +115,26 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
       const nomeFile = datiEvento?.nomeEvento ? `Analisi_${datiEvento.nomeEvento}` : 'Analisi_Vichinghi';
       pdf.save(`${nomeFile}.pdf`);
     } catch (error) {
-      alert("❌ Errore durante la creazione del PDF.");
+      alert(t('viking_analysis.pdf_error'));
     }
   };
 
   const handleDeleteEvent = async () => {
     if (!selectedEventId) return;
-    if (window.confirm("Sei sicuro di voler eliminare definitivamente questo evento e tutte le sue ondate?")) {
+    if (window.confirm(t('viking_analysis.confirm_delete'))) {
       try {
         await deleteDoc(doc(db, "eventi_vichinghi", selectedEventId));
-        alert("🗑️ Evento eliminato con successo!");
+        alert(t('viking_analysis.delete_success'));
         fetchEventi();
       } catch (error) {
-        alert("❌ Errore durante l'eliminazione dell'evento.");
+        alert(t('viking_analysis.delete_error'));
       }
     }
   };
 
   const handleSaveEditor = () => {
-    console.log("💾 [VikingAnalisiSingolo] Ricevuto segnale di salvataggio terminato dall'Editor!");
     if (fetchEventi) {
-      console.log("🔄 [VikingAnalisiSingolo] Avvio fetchEventi(true) per ricaricare i dati in background...");
       fetchEventi(true); 
-    } else {
-      console.warn("⚠️ [VikingAnalisiSingolo] fetchEventi non è definito!");
     }
   };
 
@@ -252,6 +164,54 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
     };
   }, [isDragging, dragOffset]);
 
+  // ---> Spostato dentro per accedere a `t` <---
+  const verificaCoerenzaRatei = (giocatori, livelloOndata) => {
+    const erroriTrovati = [];
+    const TOLLERANZA_MAX = 0.001; 
+    const MIN_TRUPPE = 1000;
+    const mappaRatei = {};
+
+    giocatori.forEach(giocatore => {
+      ['fant', 'cav', 'arc'].forEach(tipo => {
+        const dettaglio = giocatore.dettaglioTruppe?.[tipo] || [];
+        dettaglio.forEach(tr => {
+          const inviate = Number(tr.inviate) || 0;
+          const uccisioni = Number(tr.uccise) || 0;
+          const tier = tr.tier;
+          const isHost = giocatore.isHost || false;
+
+          if (isHost && tipo === 'arc') return;
+
+          if (inviate >= MIN_TRUPPE && tier) {
+            const rateo = uccisioni / inviate;
+            const chiave = `${tipo.toUpperCase()}_${tier}`;
+            if (!mappaRatei[chiave]) mappaRatei[chiave] = [];
+            mappaRatei[chiave].push({ nome: giocatore.nome || t('viking_analysis.unknown'), rateo: rateo });
+          }
+        });
+      });
+    });
+
+    for (const [chiave, listaDati] of Object.entries(mappaRatei)) {
+      if (listaDati.length > 1) {
+        const base = listaDati[0];
+        for (let i = 1; i < listaDati.length; i++) {
+          const corrente = listaDati[i];
+          const scarto = Math.abs(corrente.rateo - base.rateo);
+          if (scarto > TOLLERANZA_MAX) {
+            erroriTrovati.push({
+              ondata: livelloOndata,
+              giocatore: corrente.nome,
+              tipo: t('viking_analysis.err_ocr_mismatch'),
+              msg: t('viking_analysis.err_ocr_mismatch_msg', { chiave, rateo: corrente.rateo.toFixed(4), baseRateo: base.rateo.toFixed(4), baseNome: base.nome, scarto: scarto.toFixed(4) })
+            });
+          }
+        }
+      }
+    }
+    return erroriTrovati;
+  };
+
   const eseguiScansioneErrori = () => {
     if (!datiEvento || !datiEvento.ondate) return;
     
@@ -269,24 +229,18 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
         uccisioniRealiTotali += (g.truppeUccise?.fant || 0) + (g.truppeUccise?.cav || 0) + (g.truppeUccise?.arc || 0);
       });
 
-      const handleRimuoviErrore = (indexDaRimuovere) => {
-    setRapportoErrori(prevErrori => 
-      prevErrori.filter((_, index) => index !== indexDaRimuovere)
-    );
-  };
-
       const ordaFissa = COMPOSIZIONE_ORDE_VICHINGHE[liv];
       if (ordaFissa && uccisioniRealiTotali > ordaFissa.tot) {
         const surplus = uccisioniRealiTotali - ordaFissa.tot;
         nuoviErrori.push({
           ondata: liv,
           giocatore: 'Report Globale',
-          tipo: 'Overkill Anomalo',
-          msg: `Anomalia Kill: Registrate ${uccisioniRealiTotali.toLocaleString()} uccisioni contro ${ordaFissa.tot.toLocaleString()} vichinghi disponibili. (Surplus: +${surplus.toLocaleString()})`
+          tipo: t('viking_analysis.err_overkill'),
+          msg: t('viking_analysis.err_overkill_msg', { uccisioni: uccisioniRealiTotali.toLocaleString(), totali: ordaFissa.tot.toLocaleString(), surplus: surplus.toLocaleString() })
         });
       }
       if (!ordaFissa && (!stats.vTotali || stats.vTotali <= 0) && uccisioniRealiTotali === 0) {
-        nuoviErrori.push({ ondata: liv, giocatore: 'Orda Nemica', tipo: 'Dati Mancanti', msg: 'Nemici totali a zero e nessuna uccisione registrata (Dati Livello non in memoria).' });
+        nuoviErrori.push({ ondata: liv, giocatore: 'Orda Nemica', tipo: t('viking_analysis.err_missing_data'), msg: t('viking_analysis.err_missing_data_msg') });
       }
 
       ondataOriginale.giocatori.forEach((g, pIndex) => {
@@ -300,9 +254,9 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
         
         ['fant', 'cav', 'arc'].forEach(cat => {
           const truppe = g.dettaglioTruppe?.[cat] || [];
-          truppe.forEach(t => {
-            const inv = Number(t.inviate) || 0;
-            const ucc = Number(t.uccise) || 0;
+          truppe.forEach(tr => {
+            const inv = Number(tr.inviate) || 0;
+            const ucc = Number(tr.uccise) || 0;
             
             if (cat === 'fant') totInviateFant += inv;
             if (cat === 'cav') totInviateCav += inv;
@@ -311,26 +265,19 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
             totUccise += ucc;
             
             if (ucc > 0 && inv === 0) {
-              nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: 'Dati Illogici', msg: `Registrate ${ucc} uccisioni in ${cat}, ma risultano 0 truppe inviate.` });
+              nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: t('viking_analysis.err_illogical'), msg: t('viking_analysis.err_illogical_msg', { ucc, cat }) });
             }
-            if (ucc > 0 && (!t.tier || t.tier.trim() === '')) {
-              nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: 'Dati Incompleti', msg: `Manca il Tier assegnato alle truppe in ${cat} che hanno registrato uccisioni.` });
+            if (ucc > 0 && (!tr.tier || tr.tier.trim() === '')) {
+              nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: t('viking_analysis.err_incomplete'), msg: t('viking_analysis.err_incomplete_msg', { cat }) });
             }
           });
         });
 
         if (truppePrecedenti[pName]) {
           const prev = truppePrecedenti[pName];
-          
-          if (totInviateFant > prev.fant && prev.fant > 0) {
-            nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: 'Truppe In Aumento (Glitch OCR)', msg: `La Fanteria schierata è salita da ${prev.fant.toLocaleString()} a ${totInviateFant.toLocaleString()}. I numeri in battaglia possono solo scendere o restare invariati.` });
-          }
-          if (totInviateCav > prev.cav && prev.cav > 0) {
-            nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: 'Truppe In Aumento (Glitch OCR)', msg: `La Cavalleria schierata è salita da ${prev.cav.toLocaleString()} a ${totInviateCav.toLocaleString()}. I numeri in battaglia possono solo scendere o restare invariati.` });
-          }
-          if (totInviateArc > prev.arc && prev.arc > 0) {
-            nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: 'Truppe In Aumento (Glitch OCR)', msg: `Gli Arcieri schierati sono saliti da ${prev.arc.toLocaleString()} a ${totInviateArc.toLocaleString()}. I numeri in battaglia possono solo scendere o restare invariati.` });
-          }
+          if (totInviateFant > prev.fant && prev.fant > 0) nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: t('viking_analysis.err_glitch'), msg: t('viking_analysis.err_glitch_msg', { cat: t('viking_analysis.inf'), prev: prev.fant.toLocaleString(), tot: totInviateFant.toLocaleString() }) });
+          if (totInviateCav > prev.cav && prev.cav > 0) nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: t('viking_analysis.err_glitch'), msg: t('viking_analysis.err_glitch_msg', { cat: t('viking_analysis.cav'), prev: prev.cav.toLocaleString(), tot: totInviateCav.toLocaleString() }) });
+          if (totInviateArc > prev.arc && prev.arc > 0) nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: t('viking_analysis.err_glitch'), msg: t('viking_analysis.err_glitch_msg', { cat: t('viking_analysis.arc'), prev: prev.arc.toLocaleString(), tot: totInviateArc.toLocaleString() }) });
         }
 
         truppePrecedenti[pName] = {
@@ -342,11 +289,10 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
         const punteggio = Number(g.punteggio) || 0;
 
         if (totUccise > 0 && punteggio === 0) {
-          nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: 'Punteggio', msg: `Il punteggio è 0, ma risultano ${totUccise} truppe nemiche uccise.` });
+          nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: t('viking_analysis.err_points'), msg: t('viking_analysis.err_points_msg_1', { tot: totUccise }) });
         }
-        
         if (punteggio > 0 && totUccise === 0 && !isHost) {
-          nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: 'Punteggio', msg: `Punteggio rilevato (${punteggio}), ma zero uccisioni registrate.` });
+          nuoviErrori.push({ ondata: liv, giocatore: pName, tipo: t('viking_analysis.err_points'), msg: t('viking_analysis.err_points_msg_2', { punti: punteggio }) });
         }
       });
 
@@ -355,10 +301,7 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
         if (g.isHost) return; 
         const p = Number(g.punteggio) || 0;
         const u = (Number(g.truppeUccise?.fant) || 0) + (Number(g.truppeUccise?.cav) || 0) + (Number(g.truppeUccise?.arc) || 0);
-        
-        if (p > 0 && u > 0) {
-          rateiOndata.push(u / p);
-        }
+        if (p > 0 && u > 0) rateiOndata.push(u / p);
       });
 
       if (rateiOndata.length > 0) {
@@ -377,33 +320,29 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
             const scarto = Math.abs(totUccise - uccisioniAttese);
             
             if (scarto > (uccisioniAttese * 0.03)) {
-              
               let suggerimento = '';
               if (Math.abs(totUccise - (punteggio * 10) * rateoMediano) < (totUccise * 0.03)) {
-                  suggerimento = `(💡 Sembra mancare uno zero finale al Punteggio, letto ${punteggio} invece di ${punteggio * 10})`;
+                  suggerimento = t('viking_analysis.hint_zero');
               } else if (totUccise < uccisioniAttese) {
-                  suggerimento = `(💡 Probabile riga di uccisioni mancante / saltata dallo scanner)`;
+                  suggerimento = t('viking_analysis.hint_skip');
               }
-
               nuoviErrori.push({ 
                 ondata: liv, 
                 giocatore: pName, 
-                tipo: 'Rateo Matematico Errato', 
-                msg: `Con ${punteggio.toLocaleString()} punti dovrebbe avere ~${uccisioniAttese.toLocaleString()} uccisioni (Rateo Ondata: ${rateoMediano.toFixed(2)}), ma ne ha registrate ${totUccise.toLocaleString()}. ${suggerimento}` 
+                tipo: t('viking_analysis.err_math'), 
+                msg: t('viking_analysis.err_math_msg', { punti: punteggio.toLocaleString(), attese: uccisioniAttese.toLocaleString(), rateo: rateoMediano.toFixed(2), tot: totUccise.toLocaleString() }) + ' ' + suggerimento
               });
             }
           }
         });
-      } // <-- Fine del blocco if (rateiOndata.length > 0)
+      } 
 
-      // ---> INIZIO INSERIMENTO NUOVO CONTROLLO OCR <---
       const erroriRateoOCR = verificaCoerenzaRatei(ondataOriginale.giocatori, liv);
       if (erroriRateoOCR.length > 0) {
         nuoviErrori.push(...erroriRateoOCR);
       }
-      // ---> FINE INSERIMENTO NUOVO CONTROLLO OCR <---
 
-    }); // <-- Chiusura di datiEvento.ondate.forEach
+    }); 
 
     setRapportoErrori(nuoviErrori);
   };
@@ -416,41 +355,63 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
   }, [datiEvento]);
 
 
+  // ---> Spostato dentro per accedere a `t` <---
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div style={{ backgroundColor: '#2a2a40', padding: '15px', border: '1px solid #555', borderRadius: '5px', color: '#fff', minWidth: '220px' }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#FFB300' }}>{label}</h4>
+          <p style={{ margin: '5px 0', fontSize: '14px' }}>{t('viking_analysis.total_targets')}: <strong>{data.vTotali.toLocaleString()}</strong></p>
+          <hr style={{ borderColor: '#444' }} />
+          <p style={{ margin: '5px 0', color: '#fff', fontWeight: 'bold' }}>{t('viking_analysis.real_trend')}: {data['Andamento Reale'].toLocaleString()}</p>
+          <p style={{ margin: '5px 0', color: '#FFEB3B', fontStyle: 'italic' }}>{t('viking_analysis.theo_trend')}: {data['Andamento Teorico'].toLocaleString()}</p>
+          <hr style={{ borderColor: '#444' }} />
+          <p style={{ margin: '5px 0', color: '#4CAF50' }}>{t('viking_analysis.infantry')}: {data['Uccisioni Fanteria'].toLocaleString()}</p>
+          <p style={{ margin: '5px 0', color: '#2196F3' }}>{t('viking_analysis.cavalry')}: {data['Uccisioni Cavalleria'].toLocaleString()}</p>
+          <p style={{ margin: '5px 0', color: '#F44336' }}>{t('viking_analysis.archers')}: {data['Uccisioni Arcieri'].toLocaleString()}</p>
+          {data['Nemici Sopravvissuti'] > 0 && <p style={{ margin: '5px 0', color: '#9e9e9e', fontWeight: 'bold' }}>{t('viking_analysis.survivors')}: {data['Nemici Sopravvissuti'].toLocaleString()}</p>}
+        </div>
+      );
+    }
+    return null;
+  };
+
   const chartData = preparaDatiGrafico(datiEvento);
 
   return (
     <div>
       <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', flexWrap: 'wrap', gap: '15px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-          <label style={{ fontWeight: 'bold' }}>Seleziona Evento:</label>
+          <label style={{ fontWeight: 'bold' }}>{t('viking_analysis.select_event')}</label>
           {eventi.length > 0 ? (
             <select value={selectedEventId} onChange={handleSelectChange} style={{ padding: '10px 15px', borderRadius: '4px', backgroundColor: '#2a2a40', color: '#fff', border: '1px solid #555' }}>
               {eventi.map(ev => <option key={ev.id} value={ev.id}>{ev.nomeEvento ? `${ev.dataEvento || ''} - ${ev.nomeEvento}` : ev.id}</option>)}
             </select>
-          ) : <span style={{ color: '#ff5252' }}>Nessun evento disponibile.</span>}
+          ) : <span style={{ color: '#ff5252' }}>{t('viking_analysis.no_events')}</span>}
 
           {datiEvento?.rosterRiferimento && (
             <span style={{ fontSize: '13px', color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-              👥 Roster: <strong>{datiEvento.rosterRiferimento}</strong>
+              👥 {t('viking_analysis.roster')} <strong>{datiEvento.rosterRiferimento}</strong>
             </span>
           )}
         </div>
         
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={eseguiScansioneErrori} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: '#FF9800', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }} disabled={!datiEvento}>
-            🔍 Diagnostica Errori OCR
+            {t('viking_analysis.btn_diagnostics')}
           </button>
 
           <button onClick={handleExportPDF} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: '#2196F3', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }} disabled={!datiEvento}>
-            📄 Esporta PDF
+            {t('viking_analysis.btn_export_pdf')}
           </button>
           
           <button onClick={() => setMostraJsonAnalisi(!mostraJsonAnalisi)} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: '#9C27B0', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }} disabled={!datiEvento}>
-            {mostraJsonAnalisi ? 'Nascondi JSON' : 'Visualizza JSON'}
+            {mostraJsonAnalisi ? t('viking_analysis.btn_hide_json') : t('viking_analysis.btn_show_json')}
           </button>
           
           <button onClick={handleDeleteEvent} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: '#d32f2f', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }} disabled={!datiEvento}>
-            🗑️ Elimina Evento
+            {t('viking_analysis.btn_delete_event')}
           </button>
         </div>
       </div>
@@ -489,14 +450,14 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
             }}
           >
             <h3 style={{ margin: 0, color: rapportoErrori.length > 0 ? '#ff5252' : '#4CAF50', fontSize: '16px', pointerEvents: 'none' }}>
-              {rapportoErrori.length > 0 ? `⚠️ ${rapportoErrori.length} Anomalie Rilevate` : '✅ Dati perfetti e coerenti!'}
+              {rapportoErrori.length > 0 ? t('viking_analysis.anomalies_detected', { count: rapportoErrori.length }) : t('viking_analysis.perfect_data')}
             </h3>
             <button 
               onMouseDown={(e) => e.stopPropagation()} 
               onClick={() => setRapportoErrori(null)} 
               style={{ padding: '6px 12px', backgroundColor: '#333', color: '#fff', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
             >
-              ✕ Chiudi
+              {t('viking_analysis.close')}
             </button>
           </div>
           
@@ -505,11 +466,10 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #555', color: '#888' }}>
-                    <th style={{ padding: '8px 4px' }}>Ondata</th>
-                    <th style={{ padding: '8px 4px' }}>Giocatore</th>
-                    <th style={{ padding: '8px 4px' }}>Problema</th>
-                    {/* ---> NUOVA COLONNA AZIONI <--- */}
-                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>Ignora</th>
+                    <th style={{ padding: '8px 4px' }}>{t('viking_analysis.col_wave')}</th>
+                    <th style={{ padding: '8px 4px' }}>{t('viking_analysis.col_player')}</th>
+                    <th style={{ padding: '8px 4px' }}>{t('viking_analysis.col_problem')}</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'center' }}>{t('viking_analysis.col_ignore')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -527,20 +487,11 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
                         </span>
                         {err.msg}
                       </td>
-                      {/* ---> NUOVO PULSANTE ELIMINA <--- */}
                       <td style={{ padding: '8px 4px', verticalAlign: 'top', textAlign: 'center' }}>
                         <button 
                           onClick={() => handleRimuoviErrore(i)}
-                          style={{ 
-                            background: 'transparent', 
-                            border: 'none', 
-                            color: '#ff5252', 
-                            cursor: 'pointer', 
-                            fontSize: '16px',
-                            padding: '4px',
-                            borderRadius: '4px'
-                          }}
-                          title="Ignora questo errore"
+                          style={{ background: 'transparent', border: 'none', color: '#ff5252', cursor: 'pointer', fontSize: '16px', padding: '4px', borderRadius: '4px' }}
+                          title={t('viking_analysis.ignore_tooltip')}
                           onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(255, 82, 82, 0.2)'}
                           onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
                         >
@@ -560,14 +511,14 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
         
         {mostraJsonAnalisi && datiEvento && (
           <div style={{ backgroundColor: '#121212', padding: '20px', borderRadius: '8px', marginBottom: '30px', border: '1px solid #444' }}>
-            <h3 style={{ color: '#9C27B0', marginTop: 0 }}>JSON Evento (Sola Lettura)</h3>
+            <h3 style={{ color: '#9C27B0', marginTop: 0 }}>{t('viking_analysis.json_title')}</h3>
             <textarea readOnly value={JSON.stringify(datiEvento, null, 2)} style={{ width: '100%', height: '400px', backgroundColor: '#000', color: '#00FF00', fontFamily: 'monospace', padding: '15px', border: 'none', borderRadius: '4px', boxSizing: 'border-box' }} />
           </div>
         )}
 
         {chartData.length > 0 && (
           <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-            <h3 style={{ marginTop: 0, color: '#FFB300' }}>Capacità di Uccisione vs Volume Orda</h3>
+            <h3 style={{ marginTop: 0, color: '#FFB300' }}>{t('viking_analysis.chart_title')}</h3>
             <div style={{ width: '100%', height: '450px' }}>
               <ResponsiveContainer>
                 <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
@@ -591,21 +542,21 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
         {datiEvento && (
           <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', marginBottom: '40px', border: '1px solid #FF9800', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
             <h3 style={{ marginTop: 0, color: '#FF9800', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              🔬 Ingegneria Inversa: Pesi Interni del Gioco
+              {t('viking_analysis.rev_eng_title')}
             </h3>
             <p style={{ color: '#aaa', fontSize: '14px', marginBottom: '15px' }}>
-              Questa tabella calcola i moltiplicatori reali usati dal codice sorgente del gioco analizzando e incrociando i ratei reali di tutte le truppe in ogni singola ondata.
+              {t('viking_analysis.rev_eng_desc')}
             </p>
             
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #555', color: '#fff', backgroundColor: '#2a2a40' }}>
-                    <th style={{ padding: '10px' }}>Confronto Tier</th>
-                    <th style={{ padding: '10px', color: '#4CAF50' }}>Vantaggio Reale Gioco</th>
-                    <th style={{ padding: '10px', color: '#FFEB3B' }}>Il tuo Pesi_Relativi attuale</th>
-                    <th style={{ padding: '10px' }}>Campioni Analizzati</th>
-                    <th style={{ padding: '10px' }}>Stato Affidabilità</th>
+                    <th style={{ padding: '10px' }}>{t('viking_analysis.col_tier_comp')}</th>
+                    <th style={{ padding: '10px', color: '#4CAF50' }}>{t('viking_analysis.col_real_adv')}</th>
+                    <th style={{ padding: '10px', color: '#FFEB3B' }}>{t('viking_analysis.col_your_weight')}</th>
+                    <th style={{ padding: '10px' }}>{t('viking_analysis.col_samples')}</th>
+                    <th style={{ padding: '10px' }}>{t('viking_analysis.col_reliability')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -618,19 +569,19 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
                     return (
                       <tr key={idx} style={{ borderBottom: '1px solid #333' }}>
                        <td style={{ padding: '10px', fontWeight: 'bold' }}>
-  {risultato.tipoConfronto === 'Fazione' ? (
-    <span style={{ color: '#b2ebf2' }}>{risultato.confronto}</span>
-  ) : (
-    <>
-      <span style={{ color: '#aaa', marginRight: '8px', fontSize: '12px' }}>
-        {risultato.confronto.split(' ')[0]} 
-      </span>
-      <span style={{ color: getTierColor(risultato.tierAlto) }}>{risultato.tierAlto}</span>
-      <span style={{ color: '#888', margin: '0 5px' }}>vs</span>
-      <span style={{ color: getTierColor(risultato.tierBasso) }}>{risultato.tierBasso}</span>
-    </>
-  )}
-</td>
+                          {risultato.tipoConfronto === 'Fazione' ? (
+                            <span style={{ color: '#b2ebf2' }}>{risultato.confronto}</span>
+                          ) : (
+                            <>
+                              <span style={{ color: '#aaa', marginRight: '8px', fontSize: '12px' }}>
+                                {risultato.confronto.split(' ')[0]} 
+                              </span>
+                              <span style={{ color: getTierColor(risultato.tierAlto) }}>{risultato.tierAlto}</span>
+                              <span style={{ color: '#888', margin: '0 5px' }}>vs</span>
+                              <span style={{ color: getTierColor(risultato.tierBasso) }}>{risultato.tierBasso}</span>
+                            </>
+                          )}
+                        </td>
                         <td style={{ padding: '10px', fontWeight: 'bold', color: '#4CAF50' }}>
                           {risultato.moltiplicatoreEsatto.toFixed(4)}x 
                           <span style={{ fontSize: '11px', color: '#888', marginLeft: '10px' }}>
@@ -647,15 +598,15 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
                                 </span>
                               )}
                             </>
-                          ) : 'Dato Mancante'}
+                          ) : t('viking_analysis.missing_data')}
                         </td>
                         <td style={{ padding: '10px', color: '#aaa' }}>
-                          {risultato.campioni} ondate (Min {risultato.min} - Max {risultato.max})
+                          {risultato.campioni} {t('viking_analysis.waves_samples')} ({t('viking_analysis.min')} {risultato.min} - {t('viking_analysis.max')} {risultato.max})
                         </td>
                         <td style={{ padding: '10px' }}>
                           {risultato.affidabile ? 
-                            <span style={{ color: '#4CAF50', backgroundColor: 'rgba(76,175,80,0.1)', padding: '4px 8px', borderRadius: '4px' }}>✓ Certificato</span> : 
-                            <span style={{ color: '#ff5252', backgroundColor: 'rgba(255,82,82,0.1)', padding: '4px 8px', borderRadius: '4px' }}>⚠️ Pochi dati / Instabile</span>
+                            <span style={{ color: '#4CAF50', backgroundColor: 'rgba(76,175,80,0.1)', padding: '4px 8px', borderRadius: '4px' }}>{t('viking_analysis.certified')}</span> : 
+                            <span style={{ color: '#ff5252', backgroundColor: 'rgba(255,82,82,0.1)', padding: '4px 8px', borderRadius: '4px' }}>{t('viking_analysis.unstable')}</span>
                           }
                         </td>
                       </tr>
@@ -775,25 +726,25 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
               <div style={{ backgroundColor: '#2a2a40', padding: '15px 20px', borderBottom: wipeoutReale < 100 ? '2px solid #ff5252' : '2px solid #4CAF50', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <h2 style={{ margin: 0, minWidth: '180px' }}>Livello Ondata: {ondata.livello}</h2>
-                    {stats.validationStatus === "VALIDATED" && <span style={{ padding: '3px 8px', fontSize: '11px', fontFamily: 'monospace', fontWeight: 'bold', textTransform: 'uppercase', color: '#4CAF50', backgroundColor: 'rgba(76, 175, 80, 0.1)', border: '1px solid rgba(76, 175, 80, 0.3)', borderRadius: '4px' }}>✓ Cascata Verificata</span>}
-                    {stats.validationStatus === "FAILED" && <span style={{ padding: '3px 8px', fontSize: '11px', fontFamily: 'monospace', fontWeight: 'bold', textTransform: 'uppercase', color: '#ff5252', backgroundColor: 'rgba(255, 82, 82, 0.1)', border: '1px solid rgba(255, 82, 82, 0.3)', borderRadius: '4px' }}>❌ Cascata Anomala</span>}
+                    <h2 style={{ margin: 0, minWidth: '180px' }}>{t('viking_analysis.wave_level')}: {ondata.livello}</h2>
+                    {stats.validationStatus === "VALIDATED" && <span style={{ padding: '3px 8px', fontSize: '11px', fontFamily: 'monospace', fontWeight: 'bold', textTransform: 'uppercase', color: '#4CAF50', backgroundColor: 'rgba(76, 175, 80, 0.1)', border: '1px solid rgba(76, 175, 80, 0.3)', borderRadius: '4px' }}>{t('viking_analysis.validated')}</span>}
+                    {stats.validationStatus === "FAILED" && <span style={{ padding: '3px 8px', fontSize: '11px', fontFamily: 'monospace', fontWeight: 'bold', textTransform: 'uppercase', color: '#ff5252', backgroundColor: 'rgba(255, 82, 82, 0.1)', border: '1px solid rgba(255, 82, 82, 0.3)', borderRadius: '4px' }}>{t('viking_analysis.anomalous')}</span>}
                     
                     <button 
                       onClick={() => setEditingWaveIndex(index)}
                       style={{ padding: '4px 10px', backgroundColor: '#FF9800', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
                     >
-                      ✏️ Modifica
+                      {t('viking_analysis.btn_edit')}
                     </button>
                   </div>
                   <div style={{ display: 'flex', gap: '15px', color: '#aaa', alignItems: 'center', fontSize: '14px', flexWrap: 'wrap', backgroundColor: '#1e1e2f', padding: '8px 15px', borderRadius: '6px', border: '1px solid #444' }}>
-                    <span>V-Totali: <strong style={{color:'#FF9800', fontSize:'15px'}}>{displayVTotali.toLocaleString()}</strong> {!ordaFissa && <span style={{fontSize: '10px', color: '#ff5252'}}>(Stima)</span>}</span>
-                    <span>Wipeout: <strong style={{color: wipeoutReale < 100 ? '#ff5252' : '#4CAF50', fontSize:'15px'}}>{wipeoutReale}%</strong></span>
+                    <span>{t('viking_analysis.v_total')} <strong style={{color:'#FF9800', fontSize:'15px'}}>{displayVTotali.toLocaleString()}</strong> {!ordaFissa && <span style={{fontSize: '10px', color: '#ff5252'}}>{t('viking_analysis.est')}</span>}</span>
+                    <span>{t('viking_analysis.wipeout')} <strong style={{color: wipeoutReale < 100 ? '#ff5252' : '#4CAF50', fontSize:'15px'}}>{wipeoutReale}%</strong></span>
                     <span style={{color: '#555'}}>|</span>
-                    <span>Nemici: </span>
-                    <span>Fant <strong style={{color:'#fff'}}>{displayVFant.toLocaleString()}</strong> <small style={{color:'#FFD54F'}}>({displayPercFant}%)</small></span>
-                    <span>Cav <strong style={{color:'#fff'}}>{displayVCav.toLocaleString()}</strong> <small style={{color:'#FFD54F'}}>({displayPercCav}%)</small></span>
-                    <span>Arc <strong style={{color:'#fff'}}>{displayVArc.toLocaleString()}</strong> <small style={{color:'#FFD54F'}}>({displayPercArc}%)</small></span>
+                    <span>{t('viking_analysis.enemies')} </span>
+                    <span>{t('viking_analysis.inf')} <strong style={{color:'#fff'}}>{displayVFant.toLocaleString()}</strong> <small style={{color:'#FFD54F'}}>({displayPercFant}%)</small></span>
+                    <span>{t('viking_analysis.cav')} <strong style={{color:'#fff'}}>{displayVCav.toLocaleString()}</strong> <small style={{color:'#FFD54F'}}>({displayPercCav}%)</small></span>
+                    <span>{t('viking_analysis.arc')} <strong style={{color:'#fff'}}>{displayVArc.toLocaleString()}</strong> <small style={{color:'#FFD54F'}}>({displayPercArc}%)</small></span>
                   </div>
                 </div>
               </div>
@@ -802,40 +753,40 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', whiteSpace: 'nowrap', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #444', color: '#888', backgroundColor: 'rgba(0,0,0,0.2)' }}>
-                      <th rowSpan="2" style={{ textAlign: 'left', padding: '10px' }}>Alleato</th>
-                      <th rowSpan="2" style={{ padding: '10px', color: '#fff' }}>Tier (G)</th>
-                      <th rowSpan="2" style={{ padding: '10px', color: '#b2ebf2', textAlign: 'center' }}>Inviati Tot.</th>
-<th rowSpan="2" style={{ padding: '10px', color: '#ff5252', textAlign: 'center' }}>Uccisi Tot.</th>
-                      <th rowSpan="2" style={{ padding: '10px', color: '#FFD54F' }}>Punti</th>
-                      <th rowSpan="2" style={{ padding: '10px', color: '#4fc3f7' }}>Fant (I/U)</th>
-                      <th rowSpan="2" style={{ padding: '10px', color: '#ba68c8' }}>Cav (I/U)</th>
-                      <th rowSpan="2" style={{ padding: '10px', color: '#ffb74d' }}>Arc (I/U)</th>
+                      <th rowSpan="2" style={{ textAlign: 'left', padding: '10px' }}>{t('viking_analysis.col_ally')}</th>
+                      <th rowSpan="2" style={{ padding: '10px', color: '#fff' }}>{t('viking_analysis.col_tier_g')}</th>
+                      <th rowSpan="2" style={{ padding: '10px', color: '#b2ebf2', textAlign: 'center' }}>{t('viking_analysis.col_sent_tot')}</th>
+                      <th rowSpan="2" style={{ padding: '10px', color: '#ff5252', textAlign: 'center' }}>{t('viking_analysis.col_killed_tot')}</th>
+                      <th rowSpan="2" style={{ padding: '10px', color: '#FFD54F' }}>{t('viking_analysis.col_points')}</th>
+                      <th rowSpan="2" style={{ padding: '10px', color: '#4fc3f7' }}>{t('viking_analysis.col_inf_iu')}</th>
+                      <th rowSpan="2" style={{ padding: '10px', color: '#ba68c8' }}>{t('viking_analysis.col_cav_iu')}</th>
+                      <th rowSpan="2" style={{ padding: '10px', color: '#ffb74d' }}>{t('viking_analysis.col_arc_iu')}</th>
                       
-                      <th colSpan="4" style={{ padding: '8px', color: '#4CAF50', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>Rateo Reale</th>
-                      <th colSpan="4" style={{ padding: '8px', color: '#FF9800', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>Rateo Teorico (Ponderato)</th>
-                      <th colSpan="4" style={{ padding: '8px', color: '#FFB300', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>Uccisioni Teoriche</th>
-                      <th colSpan="4" style={{ padding: '8px', color: '#fff', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>Delta Error</th>
+                      <th colSpan="4" style={{ padding: '8px', color: '#4CAF50', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>{t('viking_analysis.real_ratio')}</th>
+                      <th colSpan="4" style={{ padding: '8px', color: '#FF9800', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>{t('viking_analysis.theo_ratio')}</th>
+                      <th colSpan="4" style={{ padding: '8px', color: '#FFB300', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>{t('viking_analysis.theo_kills')}</th>
+                      <th colSpan="4" style={{ padding: '8px', color: '#fff', borderLeft: '2px solid #555', borderBottom: '1px solid #555', textAlign: 'center' }}>{t('viking_analysis.delta_error')}</th>
                     </tr>
                     <tr style={{ borderBottom: '1px solid #444', color: '#888', backgroundColor: 'rgba(0,0,0,0.1)', fontSize: '11px', textTransform: 'uppercase' }}>
-                      <th style={{ padding: '6px', color: '#4CAF50', borderLeft: '2px solid #555' }}>Globale</th>
-                      <th style={{ padding: '6px', color: '#4fc3f7' }}>Fant</th>
-                      <th style={{ padding: '6px', color: '#ba68c8' }}>Cav</th>
-                      <th style={{ padding: '6px', color: '#ffb74d' }}>Arc</th>
+                      <th style={{ padding: '6px', color: '#4CAF50', borderLeft: '2px solid #555' }}>{t('viking_analysis.global')}</th>
+                      <th style={{ padding: '6px', color: '#4fc3f7' }}>{t('viking_analysis.inf')}</th>
+                      <th style={{ padding: '6px', color: '#ba68c8' }}>{t('viking_analysis.cav')}</th>
+                      <th style={{ padding: '6px', color: '#ffb74d' }}>{t('viking_analysis.arc')}</th>
                       
-                      <th style={{ padding: '6px', color: '#FF9800', borderLeft: '2px solid #555' }}>Globale</th>
-                      <th style={{ padding: '6px', color: '#4fc3f7' }}>Fant</th>
-                      <th style={{ padding: '6px', color: '#ba68c8' }}>Cav</th>
-                      <th style={{ padding: '6px', color: '#ffb74d' }}>Arc</th>
+                      <th style={{ padding: '6px', color: '#FF9800', borderLeft: '2px solid #555' }}>{t('viking_analysis.global')}</th>
+                      <th style={{ padding: '6px', color: '#4fc3f7' }}>{t('viking_analysis.inf')}</th>
+                      <th style={{ padding: '6px', color: '#ba68c8' }}>{t('viking_analysis.cav')}</th>
+                      <th style={{ padding: '6px', color: '#ffb74d' }}>{t('viking_analysis.arc')}</th>
 
-                      <th style={{ padding: '6px', color: '#FFB300', borderLeft: '2px solid #555' }}>Globale</th>
-                      <th style={{ padding: '6px', color: '#4fc3f7' }}>Fant</th>
-                      <th style={{ padding: '6px', color: '#ba68c8' }}>Cav</th>
-                      <th style={{ padding: '6px', color: '#ffb74d' }}>Arc</th>
+                      <th style={{ padding: '6px', color: '#FFB300', borderLeft: '2px solid #555' }}>{t('viking_analysis.global')}</th>
+                      <th style={{ padding: '6px', color: '#4fc3f7' }}>{t('viking_analysis.inf')}</th>
+                      <th style={{ padding: '6px', color: '#ba68c8' }}>{t('viking_analysis.cav')}</th>
+                      <th style={{ padding: '6px', color: '#ffb74d' }}>{t('viking_analysis.arc')}</th>
 
-                      <th style={{ padding: '6px', color: '#fff', borderLeft: '2px solid #555' }}>Globale</th>
-                      <th style={{ padding: '6px', color: '#4fc3f7' }}>Fant</th>
-                      <th style={{ padding: '6px', color: '#ba68c8' }}>Cav</th>
-                      <th style={{ padding: '6px', color: '#ffb74d' }}>Arc</th>
+                      <th style={{ padding: '6px', color: '#fff', borderLeft: '2px solid #555' }}>{t('viking_analysis.global')}</th>
+                      <th style={{ padding: '6px', color: '#4fc3f7' }}>{t('viking_analysis.inf')}</th>
+                      <th style={{ padding: '6px', color: '#ba68c8' }}>{t('viking_analysis.cav')}</th>
+                      <th style={{ padding: '6px', color: '#ffb74d' }}>{t('viking_analysis.arc')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -889,7 +840,7 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
                       return (
                         <tr key={i} style={{ borderBottom: '1px solid #333', backgroundColor: isHost ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
                           <td style={{ textAlign: 'left', padding: '10px', fontWeight: 'bold' }}>
-                            {g.nome || 'Sconosciuto'} {isHost && <span style={{fontSize: '10px', color: '#888'}}>(Host)</span>}
+                            {g.nome || t('viking_analysis.unknown')} {isHost && <span style={{fontSize: '10px', color: '#888'}}>{t('viking_analysis.host')}</span>}
                             {g.eroi && g.eroi.some(e => e.trim() !== '') && (
                               <div style={{ fontSize: '10px', color: '#aaa', marginTop: '4px' }}>
                                 🦸 {g.eroi.filter(e => e.trim() !== '').join(' - ')}
@@ -901,13 +852,12 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
                             {g.livelloTier || '-'}
                           </td>
 
-                          {/* NUOVE CELLE INSERITE QUI */}
-<td style={{ padding: '10px', color: '#b2ebf2', fontWeight: 'bold', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.03)' }}>
-  {totInviate > 0 ? totInviate.toLocaleString('it-IT') : '-'}
-</td>
-<td style={{ padding: '10px', color: '#ff5252', fontWeight: 'bold', textAlign: 'center', backgroundColor: 'rgba(255,82,82,0.05)' }}>
-  {totUccise > 0 ? totUccise.toLocaleString('it-IT') : '-'}
-</td>
+                          <td style={{ padding: '10px', color: '#b2ebf2', fontWeight: 'bold', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.03)' }}>
+                            {totInviate > 0 ? totInviate.toLocaleString('it-IT') : '-'}
+                          </td>
+                          <td style={{ padding: '10px', color: '#ff5252', fontWeight: 'bold', textAlign: 'center', backgroundColor: 'rgba(255,82,82,0.05)' }}>
+                            {totUccise > 0 ? totUccise.toLocaleString('it-IT') : '-'}
+                          </td>
 
                           <td style={{ padding: '10px', color: '#FFD54F', fontWeight: 'bold' }}>{g.punteggio ? g.punteggio.toLocaleString() : '-'}</td>
                           
@@ -970,7 +920,7 @@ export default function VikingAnalisiSingolo({ eventi, datiEvento, selectedEvent
                             </>
                           ) : (
                             <td colSpan="12" style={{ padding: '10px', color: '#555', fontStyle: 'italic', borderLeft: '2px solid #555', textAlign: 'center' }}>
-                              {isHost ? "Escluso (Host)" : "Dati insufficienti (Manca configurazione Pesi per i Tier inviati)"}
+                              {isHost ? t('viking_analysis.excluded_host') : t('viking_analysis.insufficient_data')}
                             </td>
                           )}
                         </tr>

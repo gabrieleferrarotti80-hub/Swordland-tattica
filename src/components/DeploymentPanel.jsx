@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
 export const DeploymentPanel = ({
   activeDeployment,
@@ -11,6 +12,8 @@ export const DeploymentPanel = ({
   handleHeal,
   handleCancelHeal
 }) => {
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
+
   return (
     <div className="p-4">
       <div className="flex flex-col gap-2">
@@ -41,32 +44,34 @@ export const DeploymentPanel = ({
                   
                   {isHealing ? (
                     <div className="flex items-center gap-1">
-                      <span className="text-[9px] bg-emerald-900/80 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/50 font-bold tracking-wide">🏥 In Cura ({healRemaining}m)</span>
+                      <span className="text-[9px] bg-emerald-900/80 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/50 font-bold tracking-wide">
+                        {t('swordland.deployment.healing_status', { time: healRemaining })}
+                      </span>
                       <button onMouseDown={e => e.stopPropagation()} onClick={(e) => handleCancelHeal(e, p.id)} className="text-[9px] bg-slate-700 hover:bg-red-700 text-white px-1.5 py-0.5 rounded border border-slate-600 transition-colors">✕</button>
                     </div>
                   ) : isMarching ? (
                     <span className="text-[9px] bg-blue-900/80 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/50 font-bold tracking-wide">
-                      🚶 Arrivo min {currentPos.arrivalTime}
+                      {t('swordland.deployment.arriving_min', { time: currentPos.arrivalTime })}
                     </span>
                   ) : (
                     <>
                       {(currentPos && !currentPos.removed) && (
-                        <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); handleWithdraw(p.id); }} className="text-[9px] bg-red-900/80 hover:bg-red-700 text-white px-1.5 py-0.5 rounded border border-red-500/50 transition-colors" title="Ritira in Base">
-                          Ritira
+                        <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); handleWithdraw(p.id); }} className="text-[9px] bg-red-900/80 hover:bg-red-700 text-white px-1.5 py-0.5 rounded border border-red-500/50 transition-colors" title={t('swordland.deployment.withdraw_tooltip')}>
+                          {t('swordland.deployment.withdraw')}
                         </button>
                       )}
-                      <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => handleHeal(e, p.id)} className="text-[9px] bg-emerald-900/80 hover:bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded border border-emerald-500/50 transition-colors" title="Manda in cura (12 min)">
-                        🏥 Cura
+                      <button onMouseDown={(e) => e.stopPropagation()} onClick={(e) => handleHeal(e, p.id)} className="text-[9px] bg-emerald-900/80 hover:bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded border border-emerald-500/50 transition-colors" title={t('swordland.deployment.heal_tooltip')}>
+                        {t('swordland.deployment.heal')}
                       </button>
                     </>
                   )}
-                  <span className="bg-slate-700 text-slate-300 text-[10px] px-1.5 py-0.5 rounded border border-slate-600 shrink-0">Lv: {p.level}</span>
+                  <span className="bg-slate-700 text-slate-300 text-[10px] px-1.5 py-0.5 rounded border border-slate-600 shrink-0">{t('swordland.deployment.level')} {p.level}</span>
                 </div>
               </div>
 
               <div className="flex justify-between text-[10px] text-slate-400 px-1">
-                <span>Potere: <strong className="text-slate-300">{p.power}M</strong></span>
-                <span>Marce: <strong className={`${avail <= 0 ? 'text-red-400' : 'text-slate-300'}`}>{avail}/{p.marches}</strong> disp.</span>
+                <span>{t('swordland.deployment.power')} <strong className="text-slate-300">{p.power}M</strong></span>
+                <span>{t('swordland.deployment.marches')} <strong className={`${avail <= 0 ? 'text-red-400' : 'text-slate-300'}`}>{avail}/{p.marches}</strong> {t('swordland.deployment.available')}</span>
               </div>
             </div>
           );

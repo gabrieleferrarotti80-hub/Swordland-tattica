@@ -1,19 +1,20 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { PESI_RELATIVI, getTierColor } from '../utils/vikingCalculations';
 
 export const VikingTierEfficiency = ({ datiEvento }) => {
-  
+  const { t } = useTranslation(); // 🌍 Hook traduzione
+
   const statisticheDivise = useMemo(() => {
     if (!datiEvento || !datiEvento.ondate) return null;
 
     const aggregatoMax = {};
-    const playerWaves = {}; // <-- NUOVO: Tracciatore Ondate Sopravvissute
+    const playerWaves = {};
 
     datiEvento.ondate.forEach(ondata => {
       ondata.giocatori.forEach(g => {
         if (g.isHost) return; 
         
-        // Tracciamo quante ondate ha effettivamente giocato (se fa punti, è vivo)
         if (Number(g.punteggio) > 0) {
            if (!playerWaves[g.nome] || ondata.livello > playerWaves[g.nome]) {
                playerWaves[g.nome] = Number(ondata.livello);
@@ -136,9 +137,9 @@ export const VikingTierEfficiency = ({ datiEvento }) => {
   if (!statisticheDivise) return null;
 
   const categorie = [
-    { id: 'fant', nome: 'Fanteria (Prima Linea)', colore: '#4CAF50' },
-    { id: 'cav', nome: 'Cavalleria', colore: '#2196F3' },
-    { id: 'arc', nome: 'Arcieri (Retrovie)', colore: '#F44336' }
+    { id: 'fant', nome: t('viking_efficiency.infantry'), colore: '#4CAF50' },
+    { id: 'cav', nome: t('viking_efficiency.cavalry'), colore: '#2196F3' },
+    { id: 'arc', nome: t('viking_efficiency.archers'), colore: '#F44336' }
   ];
 
   let totaleInviate = 0;
@@ -150,28 +151,32 @@ export const VikingTierEfficiency = ({ datiEvento }) => {
     <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', border: '1px solid #9C27B0', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
         <h3 style={{ margin: 0, color: '#9C27B0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          📈 Efficienza Reale Tier per Tipo Truppa
+          {t('viking_efficiency.title')}
         </h3>
         <span style={{ fontSize: '12px', color: '#aaa', backgroundColor: '#2a2a40', padding: '4px 8px', borderRadius: '4px' }}>
-          Basato su {totaleInviate.toLocaleString()} truppe schierate
+          {t('viking_efficiency.based_on', { count: totaleInviate.toLocaleString() })}
         </span>
       </div>
       
       <p style={{ color: '#aaa', fontSize: '14px', marginBottom: '20px' }}>
-        Analisi basata sui <strong>picchi massimi sincroni</strong> di evento. I salti estremi tra Tier bassi e alti sono dovuti alle <strong style={{color:'#fff'}}>Ondate Sopravvissute</strong>: i giocatori con Tier alti sopravvivono di più e raccolgono il pool massivo di nemici delle fasi finali.
+        {t('viking_efficiency.description_pt1')}
+        <strong>{t('viking_efficiency.description_pt2')}</strong>
+        {t('viking_efficiency.description_pt3')}
+        <strong style={{color:'#fff'}}>{t('viking_efficiency.description_pt4')}</strong>
+        {t('viking_efficiency.description_pt5')}
       </p>
 
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '14px', whiteSpace: 'nowrap' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid #555', backgroundColor: '#2a2a40' }}>
-              <th style={{ padding: '10px', textAlign: 'left', color: '#fff' }}>Tier</th>
-              <th style={{ padding: '10px', color: '#888' }}>Truppe Schierate</th>
-              <th style={{ padding: '10px', color: '#ff5252' }}>Uccisioni Finali</th>
-              <th style={{ padding: '10px', color: '#38bdf8' }}>Ondate Medie Vissute</th>
-              <th style={{ padding: '10px', color: '#FFD54F' }}>Rateo Medio</th>
-              <th style={{ padding: '10px', borderLeft: '2px solid #555', color: '#4CAF50' }}>Salto vs Prev. Tier (Reale)</th>
-              <th style={{ padding: '10px', color: '#aaa' }}>Salto vs Prev. Tier (Teorico)</th>
+              <th style={{ padding: '10px', textAlign: 'left', color: '#fff' }}>{t('viking_efficiency.col_tier')}</th>
+              <th style={{ padding: '10px', color: '#888' }}>{t('viking_efficiency.col_deployed')}</th>
+              <th style={{ padding: '10px', color: '#ff5252' }}>{t('viking_efficiency.col_kills')}</th>
+              <th style={{ padding: '10px', color: '#38bdf8' }}>{t('viking_efficiency.col_waves')}</th>
+              <th style={{ padding: '10px', color: '#FFD54F' }}>{t('viking_efficiency.col_ratio')}</th>
+              <th style={{ padding: '10px', borderLeft: '2px solid #555', color: '#4CAF50' }}>{t('viking_efficiency.col_jump_real')}</th>
+              <th style={{ padding: '10px', color: '#aaa' }}>{t('viking_efficiency.col_jump_theo')}</th>
             </tr>
           </thead>
           <tbody>
@@ -199,9 +204,8 @@ export const VikingTierEfficiency = ({ datiEvento }) => {
                         <td style={{ padding: '10px', color: '#aaa' }}>{dati.inviate.toLocaleString()}</td>
                         <td style={{ padding: '10px', color: '#ff5252', fontWeight: 'bold' }}>{dati.uccise.toLocaleString()}</td>
                         
-                        {/* NUOVA COLONNA ONDATE */}
                         <td style={{ padding: '10px', color: '#38bdf8', fontWeight: 'bold' }}>
-                           {dati.ondateMedie > 0 ? `~ ${dati.ondateMedie} ondate` : '-'}
+                           {dati.ondateMedie > 0 ? t('viking_efficiency.waves_approx', { count: dati.ondateMedie }) : '-'}
                         </td>
 
                         <td style={{ padding: '10px', color: '#FFD54F', fontWeight: 'bold' }}>
@@ -209,10 +213,10 @@ export const VikingTierEfficiency = ({ datiEvento }) => {
                         </td>
                         
                         <td style={{ padding: '10px', borderLeft: '2px solid #555', fontWeight: 'bold', color: idx === 0 ? '#555' : (dati.saltoReale >= 0 ? '#4CAF50' : '#ff5252') }}>
-                          {idx === 0 ? 'Tier Base' : `${dati.saltoReale > 0 ? '+' : ''}${dati.saltoReale.toFixed(1)}%`}
+                          {idx === 0 ? t('viking_efficiency.base_tier') : `${dati.saltoReale > 0 ? '+' : ''}${dati.saltoReale.toFixed(1)}%`}
                           {idx !== 0 && Math.abs(deltaEfficienza) > 2 && (
                              <span style={{ display: 'block', fontSize: '11px', color: deltaEfficienza > 0 ? '#4CAF50' : '#ff5252' }}>
-                               ({deltaEfficienza > 0 ? '+' : ''}{deltaEfficienza.toFixed(1)}% vs Teoria)
+                               ({deltaEfficienza > 0 ? '+' : ''}{deltaEfficienza.toFixed(1)}% {t('viking_efficiency.vs_theory')})
                              </span>
                           )}
                         </td>

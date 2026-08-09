@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { VIKING_WAVES } from '../utils/vikingConfig'; 
 import { db } from '../firebase'; 
 import { doc, setDoc } from 'firebase/firestore'; 
 
 export default function VikingImporter({ onImportSuccess }) { 
+  const { t } = useTranslation(); // 🌍 Hook traduzione
   const [rawData, setRawData] = useState(''); 
   const [parsedBattles, setParsedBattles] = useState([]); 
   const [dataEvento, setDataEvento] = useState(''); 
@@ -36,7 +38,6 @@ export default function VikingImporter({ onImportSuccess }) {
         battles.push(currentBattle); 
       } 
       
-      // Aggiunto "livello" alle parole chiave da ignorare per evitare falsi giocatori
       else if (
         currentBattle && 
         firstCellStr !== '' && 
@@ -59,7 +60,6 @@ export default function VikingImporter({ onImportSuccess }) {
             cav: parseInt(cells[6], 10) || 0, 
             arc: parseInt(cells[7], 10) || 0, 
           },
-          // L'indice 10 è confermato. Rimuoviamo eventuali punti delle migliaia
           punteggio: parseInt(String(cells[10]).replace(/\./g, ''), 10) || 0 
         };
         
@@ -72,16 +72,16 @@ export default function VikingImporter({ onImportSuccess }) {
     const ondateValide = battles.filter(ondata => ondata.giocatori.length > 0);
 
     setParsedBattles(ondateValide); 
-    alert(`Trovati ${ondateValide.length} scontri validi pronti per il salvataggio.`); 
+    alert(t('viking_importer.alert_found', { count: ondateValide.length })); 
   };
 
   const handleSaveToFirestore = async () => {
     if (!dataEvento) {
-      alert("Seleziona una data per l'evento!");
+      alert(t('viking_importer.alert_date_req'));
       return;
     }
     
-    const conferma = window.confirm(`Stai per salvare i dati per la data ${dataEvento}. Se esiste già un evento per questa data, verrà sovrascritto. Vuoi procedere?`);
+    const conferma = window.confirm(t('viking_importer.confirm_overwrite', { date: dataEvento }));
     if (!conferma) return;
 
     const payload = {
@@ -95,7 +95,7 @@ export default function VikingImporter({ onImportSuccess }) {
       const docRef = doc(db, "eventi_vichinghi", dataEvento);
       await setDoc(docRef, payload);
       
-      alert("Evento salvato con successo!");
+      alert(t('viking_importer.alert_success'));
       
       setParsedBattles([]); 
       setRawData('');
@@ -106,36 +106,36 @@ export default function VikingImporter({ onImportSuccess }) {
       }
     } catch (error) {
       console.error("Errore nel salvataggio:", error);
-      alert("Si è verificato un errore durante il salvataggio.");
+      alert(t('viking_importer.alert_error'));
     }
   };
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#1e1e2f', color: '#fff', borderRadius: '8px', maxWidth: '800px', margin: '20px auto' }}>
-      <h2>Importatore Storico Vichinghi</h2>
-      <p>Copia i blocchi da Excel (comprese le intestazioni) e incollali qui sotto:</p>
+      <h2>{t('viking_importer.title')}</h2>
+      <p>{t('viking_importer.subtitle')}</p>
       
       <textarea 
         style={{ width: '100%', height: '150px', backgroundColor: '#2a2a40', color: '#fff', border: '1px solid #444', padding: '10px', marginBottom: '10px' }}
         value={rawData}
         onChange={(e) => setRawData(e.target.value)}
-        placeholder="Incolla qui le righe da Excel..."
+        placeholder={t('viking_importer.placeholder')}
       />
       
       <button 
         onClick={handleImport}
         style={{ padding: '10px 20px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold', borderRadius: '4px' }}
       >
-        Analizza Dati Excel
+        {t('viking_importer.btn_analyze')}
       </button>
 
       {parsedBattles.length > 0 && (
         <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#2a2a40', borderRadius: '4px', border: '1px solid #444' }}>
-          <h3 style={{ color: '#4CAF50', marginBottom: '15px' }}>Dati Pronti per il Salvataggio</h3>
-          <p>Trovati <strong>{parsedBattles.length}</strong> scontri validi.</p>
+          <h3 style={{ color: '#4CAF50', marginBottom: '15px' }}>{t('viking_importer.ready_title')}</h3>
+          <p dangerouslySetInnerHTML={{ __html: t('viking_importer.found_battles', { count: parsedBattles.length }) }} />
           
           <div style={{ margin: '20px 0' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>Data dell'evento Vichinghi:</label>
+            <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>{t('viking_importer.event_date')}</label>
             <input 
               type="date" 
               value={dataEvento}
@@ -148,7 +148,7 @@ export default function VikingImporter({ onImportSuccess }) {
             onClick={handleSaveToFirestore}
             style={{ padding: '10px 20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold', borderRadius: '4px' }}
           >
-            Salva Storico su Firestore
+            {t('viking_importer.btn_save')}
           </button>
         </div>
       )}

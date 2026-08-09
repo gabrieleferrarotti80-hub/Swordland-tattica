@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { getEntityDisplayState, getBasePosition } from './mapUtils';
 
 export const DispatchModal = ({
@@ -24,15 +25,14 @@ export const DispatchModal = ({
   handleHeal,
   handleCancelHeal
 }) => {
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
   
   if (!activePlayer) return null;
 
-  // Calcolo stato cure
   const healStart = healingEvents[activePlayer.id];
   const isHealing = healStart !== undefined && currentTime >= healStart && currentTime < healStart + 12;
   const healRemaining = isHealing ? (healStart + 12) - currentTime : 0;
 
-  // Calcoliamo la posizione corrente (X, Y) del giocatore sulla mappa
   const currentState = getEntityDisplayState(
     { ...activePlayer, type: 'player' }, 
     currentTime, 
@@ -51,7 +51,6 @@ export const DispatchModal = ({
     });
   };
 
-  // Calcolo tempo di marcia verso l'edificio
   const calculateTravelTime = (buildingId) => {
     if (!buildingId || !activePlayer || !teamBase) return null;
     
@@ -107,34 +106,33 @@ export const DispatchModal = ({
       >
         <div className={`font-bold text-[9px] uppercase flex items-center gap-1.5 pointer-events-none ${isHealing ? 'text-emerald-300' : 'text-cyan-400'}`}>
           <span>{isHealing ? '🏥' : '📋'}</span> 
-          {isHealing ? `In Cura (${healRemaining}m)` : `Ordini: ${activePlayer.name || activePlayer.tag || activePlayer.id}`}
+          {isHealing ? t('dispatch_modal.healing_status', { time: healRemaining }) : `${t('dispatch_modal.orders')} ${activePlayer.name || activePlayer.tag || activePlayer.id}`}
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); setPopupPlayerId(null); setMarchAssignments({}); }}
           onPointerDown={(e) => e.stopPropagation()}
           className="text-slate-400 hover:text-red-400 transition-colors w-4 h-4 flex items-center justify-center rounded-full hover:bg-slate-700 z-10 text-[8px]"
-          title="Chiudi"
+          title={t('dispatch_modal.close')}
         >
           ✕
         </button>
       </div>
 
-      {/* --- POSIZIONE X, Y (Subito sotto l'intestazione) --- */}
       <div className="px-2 py-1 bg-slate-900/80 border-b border-slate-700 flex justify-between items-center text-[9px]">
-        <span className="text-slate-400">Posizione:</span>
+        <span className="text-slate-400">{t('dispatch_modal.position')}</span>
         <span className="text-cyan-400 font-mono font-bold">X: {currentX} | Y: {currentY}</span>
       </div>
 
       {isHealing ? (
         <div className="p-3 text-center flex flex-col gap-2">
           <span className="text-emerald-400 text-[10px] font-bold animate-pulse">
-            Giocatore in convalescenza. <br/> Marce ritirate in base.
+            {t('dispatch_modal.recovering_pt1')} <br/> {t('dispatch_modal.recovering_pt2')}
           </span>
           <button 
             onClick={(e) => { e.stopPropagation(); handleCancelHeal(e, activePlayer.id); }}
             className="bg-slate-800 hover:bg-red-700 text-white text-[9px] py-1.5 px-2 rounded border border-slate-600 transition-colors mt-1"
           >
-            ✕ Interrompi Cura
+            {t('dispatch_modal.stop_healing')}
           </button>
         </div>
       ) : (
@@ -147,7 +145,7 @@ export const DispatchModal = ({
               }}
               className="w-full bg-emerald-900/40 hover:bg-emerald-700 text-emerald-200 border border-emerald-500/50 text-[9px] font-bold py-1.5 rounded transition-all shadow-sm flex items-center justify-center gap-1"
             >
-              🏥 Manda in Cura (12 min)
+              {t('dispatch_modal.send_heal')}
             </button>
           </div>
           
@@ -160,7 +158,7 @@ export const DispatchModal = ({
               return (
                 <div key={`march-assign-${marchIdx}`} className="flex flex-col gap-1 bg-slate-700/30 p-1.5 rounded border border-slate-600/50">
                   <div className="flex justify-between items-center">
-                    <span className="text-cyan-300 text-[8px] font-bold tracking-wider uppercase">Marcia {marchIdx}</span>
+                    <span className="text-cyan-300 text-[8px] font-bold tracking-wider uppercase">{t('dispatch_modal.march')} {marchIdx}</span>
                     {assignedMembers.length > 0 && <span className="text-[8px] text-slate-400">{assignedMembers.length + 1}/10</span>}
                   </div>
                   
@@ -170,13 +168,13 @@ export const DispatchModal = ({
                       value={currentAssign.buildingId} 
                       onChange={(e) => updateMarchAssignment(marchIdx, 'buildingId', e.target.value)}
                     >
-                      <option value="">Nessun bersaglio...</option>
+                      <option value="">{t('dispatch_modal.no_target')}</option>
                       {buildings.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}
                     </select>
 
                     {currentAssign.buildingId && (
                       <div className="text-cyan-300 text-[9px] font-semibold flex items-center gap-1 bg-slate-900/50 p-1 rounded border border-slate-700">
-                        ⏱️ Arrivo in: {calculateTravelTime(currentAssign.buildingId)}
+                        {t('dispatch_modal.arriving_in')} {calculateTravelTime(currentAssign.buildingId)}
                       </div>
                     )}
                     
@@ -185,16 +183,16 @@ export const DispatchModal = ({
                       value={currentAssign.type} 
                       onChange={(e) => updateMarchAssignment(marchIdx, 'type', e.target.value)}
                     >
-                      <option value="attacco">⚔️ Attacco</option>
-                      <option value="difesa">🛡️ Difesa</option>
-                      <option value="supporto">🤝 Supporto</option>
-                      <option value="rally">🔥 Chiama Rally (4 min)</option>
+                      <option value="attacco">{t('dispatch_modal.attack')}</option>
+                      <option value="difesa">{t('dispatch_modal.defense')}</option>
+                      <option value="supporto">{t('dispatch_modal.support')}</option>
+                      <option value="rally">{t('dispatch_modal.call_rally')}</option>
                     </select>
                     
                     {assignedMembers.length > 0 && (
                       <div className="flex flex-col gap-1.5 mt-2 bg-slate-900/50 p-1.5 rounded border border-slate-700">
                         <div className="text-[8px] text-slate-400 uppercase tracking-widest font-bold border-b border-slate-700 pb-1">
-                          Membri {currentAssign.type === 'rally' ? 'del Rally' : ''}
+                          {currentAssign.type === 'rally' ? t('dispatch_modal.rally_members') : t('dispatch_modal.members')}
                         </div>
                         
                         {assignedMembers.map((memObj) => {
@@ -228,7 +226,7 @@ export const DispatchModal = ({
                                 {currentAssign.type === 'rally' && (
                                   <div className="flex items-center justify-between border-t border-slate-700 pt-1">
                                     <span className={`${isTooSlow ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
-                                      Arrivo: {currentTimeCalc.toFixed(1)}m
+                                      {t('dispatch_modal.arrival')} {currentTimeCalc.toFixed(1)}m
                                     </span>
                                     
                                     {isTooSlow ? (
@@ -249,10 +247,10 @@ export const DispatchModal = ({
                                         }}
                                         className="bg-amber-600 hover:bg-amber-500 text-white text-[8px] px-1.5 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-colors"
                                       >
-                                        + Usa Speedup
+                                        {t('dispatch_modal.use_speedup')}
                                       </button>
                                     ) : (
-                                      <span className="text-emerald-400 text-[8px]">✓ In tempo</span>
+                                      <span className="text-emerald-400 text-[8px]">{t('dispatch_modal.on_time')}</span>
                                     )}
                                   </div>
                                 )}
@@ -305,7 +303,7 @@ export const DispatchModal = ({
                           updateMarchAssignment(marchIdx, 'members', newMembers);
                         }}
                       >
-                        <option value="" disabled>+ Unisci giocatore...</option>
+                        <option value="" disabled>{t('dispatch_modal.join_player')}</option>
                         {availablePlayers.filter(p => !assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id))).map(p => (
                             <option key={p.id} value={p.id}>{p.name} ({p.tag})</option>
                         ))}
@@ -320,7 +318,7 @@ export const DispatchModal = ({
             {getAvailableMarches(activePlayer.id) === 0 && (
               <div className="text-center text-slate-400 text-[9px] py-2 px-1 flex flex-col items-center gap-1">
                 <span className="text-sm">⚠️</span>
-                Tutte assegnate.
+                {t('dispatch_modal.all_assigned')}
               </div>
             )}
           </div>
@@ -330,7 +328,7 @@ export const DispatchModal = ({
               className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[9px] font-semibold py-1 rounded-sm transition-colors cursor-pointer" 
               onClick={() => { setPopupPlayerId(null); setMarchAssignments({}); }}
             >
-              Annulla
+              {t('dispatch_modal.cancel')}
             </button>
             <button 
               className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[9px] font-bold py-1 rounded-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md" 
@@ -346,7 +344,7 @@ export const DispatchModal = ({
                 )
               }
             >
-              Invia Ordini
+              {t('dispatch_modal.send_orders')}
             </button>
           </div>
         </>

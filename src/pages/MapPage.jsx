@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import React from 'react';
 import { mapBuildings } from '../data/mapBuildings';
 import { calculateMarchTime, svgToGameCoordinates } from '../utils/marchUtils';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
 import MapSidebar from '../components/map/MapSidebar';
 import MapDetails from '../components/map/MapDetails';
@@ -24,8 +25,9 @@ const INITIAL_BUILDINGS = mapBuildings.map(b => ({
 
 export default function MapPage({ roster, userRole, allianceCode }) {
   const mainRef = useRef(null);
-
   const location = useLocation();
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
+  
   const initialView = location.state?.initialView || 'global';
 
   const [activeView, setActiveView] = useState(initialView);
@@ -67,13 +69,12 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   };
 
   const [fixedBuildings, setFixedBuildings] = useState(INITIAL_BUILDINGS);
-  const [allianceStructures, setAllianceStructures] = useState([]); // Svuotato, lo riempiamo dinamicamente con l'useEffect
+  const [allianceStructures, setAllianceStructures] = useState([]); 
   const [allianceMeta, setAllianceMeta] = useState({ kingdom: '', tag: '' });
   const [enemyHQs, setEnemyHQs] = useState([]);
 
   const TILE_SF = 550 / 1200; 
 
-  // --- IMPOSTA LE STRUTTURE DELL'ALLEANZA (Incluso l'alveare DEMO) ---
   useEffect(() => {
     if (allianceCode === 'DEMO') {
       setAllianceStructures([
@@ -90,7 +91,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     }
   }, [allianceCode]);
 
-  // --- GENERAZIONE GIOCATORI VIRTUALI ---
   const validPlayers = useMemo(() => {
     const arr = Array.isArray(roster) ? roster : (roster?.players || []);
     const participants = tacticalMeta?.participants || [];
@@ -109,7 +109,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
       }));
   }, [roster, playerOverrides, TILE_SF, tacticalMeta?.participants, activeView]);
 
-  // --- MOTORE DELLE MARCE E TIMELINE ---
   const [currentTime, setCurrentTime] = useState(0); 
   const [manualCaptures, setManualCaptures] = useState([]);
   const [healingEvents, setHealingEvents] = useState({});
@@ -129,7 +128,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     setHealingEvents
   });
 
-  // --- CARICAMENTI DA FIREBASE ---
   useEffect(() => {
     if (allianceMeta.kingdom && allianceMeta.tag) {
       const fetchHQs = async () => {
@@ -160,7 +158,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     }
   };
 
-  // --- CARICAMENTO DATABASE MAPPA A DUE LIVELLI ---
   useEffect(() => {
     const fetchMapData = async () => {
       try {
@@ -199,28 +196,26 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     fetchMapData();
   }, [userRole, allianceCode]);
 
-  // --- SALVATAGGIO MAPPA A DUE LIVELLI ---
   const handleSaveMapToCloud = async () => {
     if (userRole === 'guest' || allianceCode === 'DEMO') {
-      return alert("☁️ Azione non permessa in modalità Sandbox (Demo).");
+      return alert(t('map.sandbox_action_denied'));
     }
     
     setIsLoadingCloud(true);
     try {
       if (userRole === 'admin') {
         await setDoc(doc(db, "mapSettings", "fixedBuildings"), { buildings: fixedBuildings });
-        alert("✅ Mappa Base Globale Aggiornata!");
+        alert(t('map.global_map_updated'));
       } else if (userRole === 'alliance' && allianceCode) {
         await setDoc(doc(db, "allianceMapData", allianceCode), { buildings: fixedBuildings });
-        alert(`✅ Mappa privata Alleanza [${allianceCode}] salvata!`);
+        alert(t('map.alliance_map_saved', { code: allianceCode }));
       }
     } catch (error) {
-      alert("❌ Errore durante il salvataggio della mappa.");
+      alert(t('map.map_save_error'));
     }
     setIsLoadingCloud(false);
   }; 
 
- // --- CARICAMENTO E SALVATAGGIO PIANO TATTICO ---
   useEffect(() => {
     const fetchSimulation = async () => {
       if (!allianceCode || allianceCode === 'DEMO') return; 
@@ -242,9 +237,9 @@ export default function MapPage({ roster, userRole, allianceCode }) {
 
   const handleSaveSimulation = async () => {
     if (userRole === 'guest' || allianceCode === 'DEMO') {
-      return alert("☁️ Azione non permessa in modalità Sandbox (Demo).");
+      return alert(t('map.sandbox_action_denied'));
     }
-    if (!allianceCode) return alert("Nessuna alleanza selezionata!");
+    if (!allianceCode) return alert(t('map.no_alliance_selected'));
     setIsSavingSim(true);
     try {
       await setDoc(doc(db, "simulations", `${allianceCode}_tacticalPlan`), { 
@@ -254,15 +249,14 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         author: userRole === 'admin' ? 'ADMIN' : 'ALLIANCE', 
         timestamp: new Date().toISOString()
       });
-      alert(`✅ Piano Tattico salvato per l'alleanza [${allianceCode}]!`);
+      alert(t('map.tactical_plan_saved', { code: allianceCode }));
     } catch (error) {
       console.error("Errore salvataggio simulazione:", error);
-      alert("❌ Errore durante il salvataggio.");
+      alert(t('map.save_error'));
     }
     setIsSavingSim(false);
   };
 
-  // --- LOGICA DELLA FOTOCAMERA E DELLA MAPPA ---
   const [scale, setScale] = useState(0.8);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -280,7 +274,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         const castle = fixedBuildings.find(b => b.type?.toLowerCase() === 'castle' || b.name?.toLowerCase().includes('castello'));
         let targetX = 600, targetY = 600;
         
-        // Se siamo in Demo, puntiamo la telecamera direttamente sull'alveare fittizio!
         if (allianceCode === 'DEMO') {
           targetX = 600 + (800 - 800) * TILE_SF;
           targetY = 1150 - (800 + 800) * TILE_SF;
@@ -468,7 +461,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     });
     handleConfirmMinute();
     setMarchAssignments({});
-    alert(`✅ Ordini registrati per il minuto ${currentTime}! (Esportali dal pulsante in sidebar sinistra)`);
+    alert(t('map.orders_registered', { time: currentTime }));
   };
 
   const commonProps = {
@@ -513,7 +506,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         
         {activeView === 'tactical' && (
           <div className="absolute bottom-6 left-6 z-50 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700/50 shadow-2xl flex items-center gap-3" onMouseDown={e => e.stopPropagation()}>
-            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider">⏱️ Minuto</span>
+            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider">⏱️ {t('map.minute')}</span>
             
             <button onClick={() => setCurrentTime(Math.max(0, currentTime - 1))} className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors border border-slate-700">-</button>
             
@@ -556,7 +549,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
               
               <g transform={`translate(600, 1150)`}>
                 <circle cx="0" cy="0" r={4 * TILE_SF} fill="#22d3ee" opacity="0.3" className="animate-pulse" />
-                <g transform={`scale(${1/scale})`}><text x="15" y="5" fill="#22d3ee" fontSize="18" fontWeight="bold">Origine (0:0)</text></g>
+                <g transform={`scale(${1/scale})`}><text x="15" y="5" fill="#22d3ee" fontSize="18" fontWeight="bold">{t('map.origin')} (0:0)</text></g>
               </g>
 
               {activeView === 'global' && <GlobalView {...commonProps} />}

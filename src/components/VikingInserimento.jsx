@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { db } from '../firebase';
 import { collection, addDoc, updateDoc, getDoc, getDocs, doc } from 'firebase/firestore'; 
 import VikingImporter from './VikingImporter'; 
 import VikingWizard from './VikingWizard'; 
 
 export default function VikingInserimento({ eventi, fetchEventi, setActiveView, roster }) {
+  const { t } = useTranslation(); // 🌍 Hook traduzione
   const [showImporter, setShowImporter] = useState(false); 
   const [showWizard, setShowWizard] = useState(false); 
   const [showJsonImporter, setShowJsonImporter] = useState(false);
@@ -56,7 +58,7 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
           if (ondata.giocatori && Array.isArray(ondata.giocatori)) {
             ondata.giocatori.forEach(g => {
               if (rosterMap[g.nome]) g.livelloTier = String(rosterMap[g.nome]);
-              else if (!g.livelloTier) g.livelloTier = "Sconosciuto"; 
+              else if (!g.livelloTier) g.livelloTier = t('viking_inserimento.unknown'); 
             });
           }
         });
@@ -65,12 +67,12 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
       if (targetEventId === 'nuovo') {
         const dataToSave = {
           ...parsedData,
-          nomeEvento: nuovoNomeEvento || 'Evento Vichinghi',
-          rosterRiferimento: nomeRosterUsato === 'locale' ? 'Roster Locale' : nomeRosterUsato,
+          nomeEvento: nuovoNomeEvento || t('viking_inserimento.default_event_name'),
+          rosterRiferimento: nomeRosterUsato === 'locale' ? t('viking_inserimento.default_roster') : nomeRosterUsato,
           dataEvento: parsedData.dataEvento || new Date().toISOString().split('T')[0]
         };
         await addDoc(collection(db, "eventi_vichinghi"), dataToSave);
-        alert("Nuovo evento creato con successo!");
+        alert(t('viking_inserimento.alert_new_success'));
       } else {
         const eventoEsistente = eventi.find(e => e.id === targetEventId);
         if (!eventoEsistente) throw new Error("Evento di destinazione non trovato");
@@ -81,7 +83,7 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
           ondateAggiornate.sort((a, b) => a.livello - b.livello);
         }
         await updateDoc(doc(db, "eventi_vichinghi", targetEventId), { ondate: ondateAggiornate });
-        alert("Nuovi report aggiunti all'evento con successo!");
+        alert(t('viking_inserimento.alert_add_success'));
       }
       
       setJsonInput('');
@@ -92,24 +94,24 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
       setActiveView('analisi');
     } catch (error) {
       console.error("Errore nell'importazione:", error);
-      alert("Errore: Formato JSON non valido o problema con Firebase.");
+      alert(t('viking_inserimento.alert_json_error'));
     }
   };
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <h1 style={{ marginTop: 0, marginBottom: '20px' }}>Inserimento Dati Vichinghi</h1>
+      <h1 style={{ marginTop: 0, marginBottom: '20px' }}>{t('viking_inserimento.title')}</h1>
       
       {!showImporter && !showWizard && !showJsonImporter && (
         <div style={{ display: 'flex', gap: '20px', marginTop: '30px' }}>
           <button onClick={() => setShowImporter(true)} style={{ padding: '20px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold', flex: 1, boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-            📥 Importa Dati da Excel
+            {t('viking_inserimento.btn_excel')}
           </button>
           <button onClick={() => setShowWizard(true)} style={{ padding: '20px', backgroundColor: '#2196F3', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold', flex: 1, boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-            🧙‍♂️ Usa Wizard Inserimento Rapido
+            {t('viking_inserimento.btn_wizard')}
           </button>
           <button onClick={() => setShowJsonImporter(true)} style={{ padding: '20px', backgroundColor: '#9C27B0', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold', flex: 1, boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
-            📜 Incolla Codice JSON
+            {t('viking_inserimento.btn_json')}
           </button>
         </div>
       )}
@@ -117,7 +119,7 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
       {showImporter && (
         <div>
           <button onClick={() => setShowImporter(false)} style={{ marginBottom: '20px', padding: '10px 15px', backgroundColor: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-            ⬅ Indietro alle opzioni
+            {t('viking_inserimento.btn_back')}
           </button>
           <VikingImporter onImportSuccess={() => { fetchEventi(); setShowImporter(false); setActiveView('analisi'); }} />
         </div>
@@ -126,7 +128,7 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
       {showWizard && (
         <div>
           <button onClick={() => setShowWizard(false)} style={{ marginBottom: '20px', padding: '10px 15px', backgroundColor: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-            ⬅ Indietro alle opzioni
+            {t('viking_inserimento.btn_back')}
           </button>
           <VikingWizard onComplete={() => { fetchEventi(); setShowWizard(false); setActiveView('analisi'); }} />
         </div>
@@ -135,18 +137,18 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
       {showJsonImporter && (
         <div>
           <button onClick={() => setShowJsonImporter(false)} style={{ marginBottom: '20px', padding: '10px 15px', backgroundColor: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-            ⬅ Indietro alle opzioni
+            {t('viking_inserimento.btn_back')}
           </button>
           
           <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px' }}>
-            <h3 style={{ marginTop: 0, color: '#9C27B0' }}>Importa Dati JSON</h3>
+            <h3 style={{ marginTop: 0, color: '#9C27B0' }}>{t('viking_inserimento.json_title')}</h3>
             
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '20px' }}>
               <div>
-                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Destinazione dei dati:</label>
+                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>{t('viking_inserimento.data_destination')}</label>
                 <select value={targetEventId} onChange={(e) => setTargetEventId(e.target.value)} style={{ padding: '10px 15px', borderRadius: '4px', backgroundColor: '#2a2a40', color: '#fff', border: '1px solid #555', width: '300px' }}>
-                  <option value="nuovo">✨ Crea un Nuovo Evento</option>
-                  <optgroup label="Aggiungi a Evento Esistente">
+                  <option value="nuovo">{t('viking_inserimento.new_event')}</option>
+                  <optgroup label={t('viking_inserimento.add_existing')}>
                     {eventi.map(ev => <option key={ev.id} value={ev.id}>{ev.dataEvento} {ev.nomeEvento ? `- ${ev.nomeEvento}` : ''}</option>)}
                   </optgroup>
                 </select>
@@ -155,14 +157,14 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
               {targetEventId === 'nuovo' && (
                 <>
                   <div>
-                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Nome Evento (Opzionale):</label>
-                    <input type="text" value={nuovoNomeEvento} onChange={(e) => setNuovoNomeEvento(e.target.value)} placeholder="Es. Vichinghi Alleanza XYZ" style={{ padding: '10px 15px', borderRadius: '4px', backgroundColor: '#2a2a40', color: '#fff', border: '1px solid #555', width: '250px' }} />
+                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>{t('viking_inserimento.event_name_opt')}</label>
+                    <input type="text" value={nuovoNomeEvento} onChange={(e) => setNuovoNomeEvento(e.target.value)} placeholder={t('viking_inserimento.event_name_ph')} style={{ padding: '10px 15px', borderRadius: '4px', backgroundColor: '#2a2a40', color: '#fff', border: '1px solid #555', width: '250px' }} />
                   </div>
 
                   <div>
-                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Roster di Riferimento:</label>
+                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>{t('viking_inserimento.reference_roster')}</label>
                     <select value={nomeRosterUsato} onChange={(e) => setNomeRosterUsato(e.target.value)} style={{ padding: '10px 15px', borderRadius: '4px', backgroundColor: '#2a2a40', color: '#fff', border: '1px solid #555', width: '250px' }}>
-                      <option value="locale">👥 Roster Attuale (Locale)</option>
+                      <option value="locale">{t('viking_inserimento.local_roster')}</option>
                       {cloudRosterNames.map(name => <option key={name} value={name}>☁️ {name}</option>)}
                     </select>
                   </div>
@@ -170,9 +172,9 @@ export default function VikingInserimento({ eventi, fetchEventi, setActiveView, 
               )}
             </div>
 
-            <textarea value={jsonInput} onChange={(e) => setJsonInput(e.target.value)} placeholder='Incolla qui il codice JSON... (es. { "ondate": [ ... ] })' style={{ width: '100%', height: '300px', backgroundColor: '#121212', color: '#00FF00', fontFamily: 'monospace', padding: '15px', borderRadius: '4px', border: '1px solid #444', marginBottom: '20px', boxSizing: 'border-box' }} />
+            <textarea value={jsonInput} onChange={(e) => setJsonInput(e.target.value)} placeholder={t('viking_inserimento.json_ph')} style={{ width: '100%', height: '300px', backgroundColor: '#121212', color: '#00FF00', fontFamily: 'monospace', padding: '15px', borderRadius: '4px', border: '1px solid #444', marginBottom: '20px', boxSizing: 'border-box' }} />
             <button onClick={handleJsonImport} disabled={!jsonInput.trim()} style={{ padding: '12px 24px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}>
-              {targetEventId === 'nuovo' ? '💾 Salva Nuovo Evento' : '🔄 Aggiungi all\'Evento Esistente'}
+              {targetEventId === 'nuovo' ? t('viking_inserimento.btn_save_new') : t('viking_inserimento.btn_add_existing')}
             </button>
           </div>
         </div>

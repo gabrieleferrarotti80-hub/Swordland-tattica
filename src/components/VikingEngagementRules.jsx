@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
-// MATRICE FISSA DEI NEMICI 
 const COMPOSIZIONE_ORDE_VICHINGHE = {
   1: { fant: 6973, cav: 8136, arc: 8136, tot: 23245 },
   2: { fant: 12630, cav: 14955, arc: 14722, tot: 42307 },
@@ -23,6 +23,8 @@ const COMPOSIZIONE_ORDE_VICHINGHE = {
 };
 
 export const VikingEngagementRules = ({ datiEvento }) => {
+  const { t } = useTranslation(); // 🌍 Hook traduzione
+
   const analisiIngaggio = useMemo(() => {
     if (!datiEvento || !datiEvento.ondate) return [];
 
@@ -42,21 +44,16 @@ export const VikingEngagementRules = ({ datiEvento }) => {
 
       const killTotali = killFantAlleata + killCavAlleata + killArcAlleati;
 
-      // Fallback pulito: se mancano i dati dell'orda, i bersagli sono uguali alle uccisioni (niente '1' forzati)
       const bersagliMischia = orda ? (orda.fant + orda.cav) : killFantAlleata; 
       const bersagliDistanza = orda ? (orda.arc) : killCavAlleata;
       const totaleNemici = orda ? orda.tot : killTotali;
 
-      // --- LOGICA DI SPILLOVER BIDIREZIONALE ---
-      // 1. Calcoliamo i danni in eccesso rispetto al bersaglio primario
       const eccessoFant = Math.max(0, killFantAlleata - bersagliMischia);
       const eccessoCav = Math.max(0, killCavAlleata - bersagliDistanza);
 
-      // 2. Calcoliamo quanto del bersaglio è stato abbattuto contando anche il "soccorso" dell'altra truppa
       const mischiaAbbattuta = Math.min(bersagliMischia, killFantAlleata + eccessoCav);
       const distanzaAbbattuta = Math.min(bersagliDistanza, killCavAlleata + eccessoFant);
 
-      // 3. Calcoliamo le percentuali reali di tenuta
       const tenutaMischia = bersagliMischia > 0 ? (mischiaAbbattuta / bersagliMischia) * 100 : 100;
       const tenutaDistanza = bersagliDistanza > 0 ? (distanzaAbbattuta / bersagliDistanza) * 100 : 100;
 
@@ -87,10 +84,10 @@ export const VikingEngagementRules = ({ datiEvento }) => {
     <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', border: '1px solid #38bdf8', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
       <div style={{ marginBottom: '15px' }}>
         <h3 style={{ margin: 0, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          ⚔️ Analisi Regole d'Ingaggio e Saturazione Fronte
+          {t('viking_engagement.title')}
         </h3>
         <p style={{ color: '#aaa', fontSize: '13px', marginTop: '5px' }}>
-          Tracciamento del <strong>Target Lock con Spillover</strong>: La Fanteria ha priorità sulla Mischia, la Cavalleria sulle Retrovie. Se una delle due spazza via il proprio target, i danni in eccesso si riversano in supporto all'altra. Gli Arcieri alleati ingaggiano <strong>solo</strong> l'Overflow netto.
+          {t('viking_engagement.description')}
         </p>
       </div>
 
@@ -101,29 +98,29 @@ export const VikingEngagementRules = ({ datiEvento }) => {
               <th rowSpan="2" style={{ padding: '10px', textAlign: 'center', color: '#fff', borderRight: '2px solid #555' }}>Lvl</th>
               
               <th colSpan="3" style={{ padding: '8px', textAlign: 'center', color: '#4CAF50', borderRight: '2px solid #555', borderBottom: '1px solid #555' }}>
-                🛡️ Fronte Mischia (Priorità: Fanteria)
+                {t('viking_engagement.melee_front')}
               </th>
               
               <th colSpan="3" style={{ padding: '8px', textAlign: 'center', color: '#2196F3', borderRight: '2px solid #555', borderBottom: '1px solid #555' }}>
-                🐎 Fronte Distanza (Priorità: Cavalleria)
+                {t('viking_engagement.ranged_front')}
               </th>
               
               <th colSpan="3" style={{ padding: '8px', textAlign: 'center', color: '#F44336', borderBottom: '1px solid #555' }}>
-                🏹 Retrovie e Saturazione Finale
+                {t('viking_engagement.backline_saturation')}
               </th>
             </tr>
             <tr style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: '#888', fontSize: '11px', textTransform: 'uppercase' }}>
-              <th style={{ padding: '6px' }}>Target (Fant+Cav)</th>
-              <th style={{ padding: '6px', color: '#4CAF50' }}>Kill Fant. Alleata</th>
-              <th style={{ padding: '6px', borderRight: '2px solid #555' }}>Tenuta %</th>
+              <th style={{ padding: '6px' }}>{t('viking_engagement.target_inf_cav')}</th>
+              <th style={{ padding: '6px', color: '#4CAF50' }}>{t('viking_engagement.kill_ally_inf')}</th>
+              <th style={{ padding: '6px', borderRight: '2px solid #555' }}>{t('viking_engagement.hold_perc')}</th>
 
-              <th style={{ padding: '6px' }}>Target (Arcieri)</th>
-              <th style={{ padding: '6px', color: '#2196F3' }}>Kill Cav. Alleata</th>
-              <th style={{ padding: '6px', borderRight: '2px solid #555' }}>Tenuta %</th>
+              <th style={{ padding: '6px' }}>{t('viking_engagement.target_archers')}</th>
+              <th style={{ padding: '6px', color: '#2196F3' }}>{t('viking_engagement.kill_ally_cav')}</th>
+              <th style={{ padding: '6px', borderRight: '2px solid #555' }}>{t('viking_engagement.hold_perc')}</th>
 
-              <th style={{ padding: '6px', color: '#FF9800' }}>Overflow (Bucano)</th>
-              <th style={{ padding: '6px', color: '#F44336' }}>Kill Arc. Alleati</th>
-              <th style={{ padding: '6px', color: '#fff' }}>Sopravvissuti</th>
+              <th style={{ padding: '6px', color: '#FF9800' }}>{t('viking_engagement.overflow_breach')}</th>
+              <th style={{ padding: '6px', color: '#F44336' }}>{t('viking_engagement.kill_ally_arc')}</th>
+              <th style={{ padding: '6px', color: '#fff' }}>{t('viking_engagement.survivors')}</th>
             </tr>
           </thead>
           <tbody>
@@ -138,27 +135,24 @@ export const VikingEngagementRules = ({ datiEvento }) => {
                     {dati.livello} {!dati.ordaFissa && '*'}
                   </td>
 
-                  {/* MISCHIA */}
                   <td style={{ padding: '10px', color: '#aaa' }}>{dati.bersagliMischia.toLocaleString()}</td>
                   <td style={{ padding: '10px', color: '#4CAF50', fontWeight: 'bold' }}>
                     {dati.killFantAlleata.toLocaleString()}
-                    {dati.eccessoCav > 0 && <span style={{display: 'block', fontSize: '10px', color: '#2196F3', fontWeight: 'normal'}}>+{dati.eccessoCav.toLocaleString()} (Soccorso Cav)</span>}
+                    {dati.eccessoCav > 0 && <span style={{display: 'block', fontSize: '10px', color: '#2196F3', fontWeight: 'normal'}}>{t('viking_engagement.cav_support', { val: dati.eccessoCav.toLocaleString() })}</span>}
                   </td>
                   <td style={{ padding: '10px', borderRight: '2px solid #555', fontWeight: 'bold', color: isBrokenMischia ? '#ff5252' : '#4CAF50' }}>
                     {dati.tenutaMischia.toFixed(1)}%
                   </td>
 
-                  {/* DISTANZA */}
                   <td style={{ padding: '10px', color: '#aaa' }}>{dati.bersagliDistanza.toLocaleString()}</td>
                   <td style={{ padding: '10px', color: '#2196F3', fontWeight: 'bold' }}>
                     {dati.killCavAlleata.toLocaleString()}
-                    {dati.eccessoFant > 0 && <span style={{display: 'block', fontSize: '10px', color: '#4CAF50', fontWeight: 'normal'}}>+{dati.eccessoFant.toLocaleString()} (Soccorso Fant)</span>}
+                    {dati.eccessoFant > 0 && <span style={{display: 'block', fontSize: '10px', color: '#4CAF50', fontWeight: 'normal'}}>{t('viking_engagement.inf_support', { val: dati.eccessoFant.toLocaleString() })}</span>}
                   </td>
                   <td style={{ padding: '10px', borderRight: '2px solid #555', fontWeight: 'bold', color: isBrokenDistanza ? '#ff5252' : '#4CAF50' }}>
                     {dati.tenutaDistanza.toFixed(1)}%
                   </td>
 
-                  {/* OVERFLOW & ARCIERI */}
                   <td style={{ padding: '10px', color: hasOverflow ? '#FF9800' : '#555', fontWeight: hasOverflow ? 'bold' : 'normal' }}>
                     {dati.overflowTotale.toLocaleString()}
                   </td>

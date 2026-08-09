@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
 export default function MapDetails({ 
   selectedBuilding, 
@@ -21,6 +22,7 @@ export default function MapDetails({
   roster, 
   allianceStructures = [] 
 }) {
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
   const [newHQ, setNewHQ] = useState({ name: '', x: '', y: '' });
   const [currentTargetId, setCurrentTargetId] = useState('');
 
@@ -47,7 +49,6 @@ export default function MapDetails({
     });
   };
 
-  // --- FORMATTATORE TEMPO (DA DECIMALE A MINUTI E SECONDI) ---
   const formatTimeMinSec = (decimalMinutes) => {
     if (isNaN(decimalMinutes) || decimalMinutes < 0) return "0m 00s";
     const m = Math.floor(decimalMinutes);
@@ -57,7 +58,6 @@ export default function MapDetails({
     return `${finalM}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
-  // --- CALCOLO MATEMATICO DISTANZA TRA COORDINATE ---
   const calculateDistanceMinutes = (targetX, targetY, originX, originY, speedups = 0) => {
     if (targetX === undefined || targetY === undefined || originX === undefined || originY === undefined) return 0;
     const tX = Number(targetX);
@@ -69,11 +69,7 @@ export default function MapDetails({
     const dx = tX - oX;
     const dy = tY - oY;
     const distanceInTiles = Math.sqrt(dx * dx + dy * dy);
-    
-    // 4 secondi per casella
     const travelTimeMins = (distanceInTiles * 4) / 60; 
-    
-    // Ogni acceleratore applica un +25% di velocità (riduce il tempo al 75%)
     return travelTimeMins * Math.pow(0.75, speedups);
   };
 
@@ -92,7 +88,6 @@ export default function MapDetails({
     };
   };
 
-  // Coordinate dell'Alveare (Primo QG dell'alleanza)
   const hiveHQ = allianceStructures?.find(s => s.type === 'headquarters');
   const HIVE_X = hiveHQ ? Number(hiveHQ.x) : 0;
   const HIVE_Y = hiveHQ ? Number(hiveHQ.y) : 0;
@@ -114,7 +109,7 @@ export default function MapDetails({
           <div className="flex flex-col border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm shrink-0">
             <div className="p-4 bg-slate-950 flex justify-between items-center sticky top-0 z-10 border-b border-slate-800/80 shadow-md">
               <h2 className="text-sm font-black text-cyan-400 uppercase tracking-wider">
-                {isPlayerSelected ? 'Comandante' : 'Info Edificio'}
+                {isPlayerSelected ? t('map.commander') : t('map.building_info')}
               </h2>
               {selectedBuilding && (
                 <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-rose-400 text-lg font-bold transition-colors w-6 h-6 flex items-center justify-center rounded bg-slate-900 border border-slate-700">✕</button>
@@ -126,7 +121,7 @@ export default function MapDetails({
                 <div className="flex flex-col gap-4 animate-fade-in">
                   <div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      {isPlayerSelected ? 'Nome Giocatore' : 'Nome Identificativo'}
+                      {isPlayerSelected ? t('map.player_name') : t('map.id_name')}
                     </span>
                     <h3 className="text-xl font-black text-white leading-tight mt-1">
                       {selectedBuilding.code && <span className="text-cyan-400 mr-2">[{selectedBuilding.code}]</span>}
@@ -135,11 +130,11 @@ export default function MapDetails({
                   </div>
                   <div className="flex gap-3">
                     <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 flex-1 shadow-inner">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase block">Coord X</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">{t('map.coord_x')}</span>
                       <span className="text-base font-mono font-bold text-cyan-400">{selectedBuilding.x}</span>
                     </div>
                     <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 flex-1 shadow-inner">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase block">Coord Y</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">{t('map.coord_y')}</span>
                       <span className="text-base font-mono font-bold text-amber-400">{selectedBuilding.y}</span>
                     </div>
                   </div>
@@ -148,7 +143,7 @@ export default function MapDetails({
                 <div className="flex flex-col items-center justify-center text-center gap-3 mt-4 mb-4 opacity-50">
                   <span className="text-4xl">🖱️</span>
                   <span className="text-xs text-slate-400 font-medium leading-relaxed px-4">
-                    Clicca su un edificio, un alleato o un QG nemico per esaminare le coordinate.
+                    {t('map.click_hint')}
                   </span>
                 </div>
               )}
@@ -159,10 +154,10 @@ export default function MapDetails({
             <div className="flex flex-col bg-slate-950 flex-1 animate-fade-in">
               <div className="p-4 border-b border-slate-800 bg-cyan-950/10">
                 <h2 className="text-sm font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2">
-                  <span>⚔️</span> Ordini Tattici
+                  <span>⚔️</span> {t('map.tactical_orders')}
                 </h2>
                 <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                  <span className="text-amber-400 font-bold">Attenzione:</span> gli ordini creati verranno assegnati al Minuto <b>{currentTime}</b>.
+                  <span className="text-amber-400 font-bold">{t('map.warning_time')}</span> {t('map.orders_minute')} <b>{currentTime}</b>.
                 </p>
               </div>
 
@@ -182,8 +177,8 @@ export default function MapDetails({
                   return (
                     <div key={`march-${marchIdx}`} className="bg-slate-900 border border-slate-700/50 rounded-xl p-3 flex flex-col gap-2 shadow-inner">
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-cyan-300 text-[10px] font-black uppercase">Marcia {marchIdx}</span>
-                        {assignedMembers.length > 0 && <span className="text-[10px] font-bold text-slate-400">{assignedMembers.length + 1}/10 Membri</span>}
+                        <span className="text-cyan-300 text-[10px] font-black uppercase">{t('map.march')} {marchIdx}</span>
+                        {assignedMembers.length > 0 && <span className="text-[10px] font-bold text-slate-400">{assignedMembers.length + 1}/10 {t('map.members')}</span>}
                       </div>
                       
                       <select 
@@ -191,7 +186,7 @@ export default function MapDetails({
                         value={currentAssign.buildingId} 
                         onChange={(e) => updateMarchAssignment(marchIdx, 'buildingId', e.target.value)}
                       >
-                        <option value="">-- Seleziona Bersaglio --</option>
+                        <option value="">{t('map.select_target')}</option>
                         {buildings?.map(b => (<option key={b.id} value={b.id}>[{b.code}] {b.name}</option>))}
                       </select>
 
@@ -200,8 +195,8 @@ export default function MapDetails({
                         const timing = calculateTravelTime(currentAssign.buildingId, selectedBuilding.x, selectedBuilding.y, isRally);
                         return timing && (
                           <div className="text-[10px] font-black flex flex-col gap-0.5 bg-slate-950 p-2 rounded border border-slate-800">
-                            <span className="text-slate-400">Durata Viaggio: <span className="text-white">{timing.duration}</span></span>
-                            <span className="text-amber-400">Impatto a Minuto: <span className="text-white">{timing.arrival}</span></span>
+                            <span className="text-slate-400">{t('map.travel_duration')}: <span className="text-white">{timing.duration}</span></span>
+                            <span className="text-amber-400">{t('map.impact_minute')}: <span className="text-white">{timing.arrival}</span></span>
                           </div>
                         );
                       })()}
@@ -211,15 +206,15 @@ export default function MapDetails({
                         value={currentAssign.type} 
                         onChange={(e) => updateMarchAssignment(marchIdx, 'type', e.target.value)}
                       >
-                        <option value="attacco">⚔️ Attacco Singolo</option>
-                        <option value="difesa">🛡️ Guarnigione / Difesa</option>
-                        <option value="supporto">🤝 Supporto (Rinforzo)</option>
-                        <option value="rally">🔥 Lancia Rally (5 min prep.)</option>
+                        <option value="attacco">{t('map.single_attack')}</option>
+                        <option value="difesa">{t('map.garrison_defense')}</option>
+                        <option value="supporto">{t('map.support')}</option>
+                        <option value="rally">{t('map.rally')}</option>
                       </select>
 
                       {assignedMembers.length > 0 && (
                         <div className="flex flex-col gap-1 mt-2 bg-slate-950 p-2 rounded border border-slate-800">
-                          <div className="text-[9px] text-slate-500 uppercase font-black border-b border-slate-800 pb-1 mb-1">Membri Aggregati</div>
+                          <div className="text-[9px] text-slate-500 uppercase font-black border-b border-slate-800 pb-1 mb-1">{t('map.aggregated_members')}</div>
                           {assignedMembers.map((memObj) => {
                               const isObj = typeof memObj === 'object';
                               const memId = isObj ? memObj.id : memObj;
@@ -228,13 +223,9 @@ export default function MapDetails({
                               const mem = roster?.find(p => String(p.id) === String(memId));
                               const isDeployed = mem?.numX !== undefined && mem?.numX !== '' && mem?.numX !== null;
                               
-                              // Origine del membro (Sua posizione o Alveare)
                               const memX = isDeployed ? Number(mem.numX) : HIVE_X;
                               const memY = isDeployed ? Number(mem.numY) : HIVE_Y;
                               
-                              // Bersaglio del membro:
-                              // Se è un Rally, il bersaglio è il Capo Rally (selectedBuilding.x, selectedBuilding.y)
-                              // Se è un attacco diretto, è la Struttura Nemica (currentAssign.buildingId)
                               let targetX, targetY;
                               if (currentAssign.type === 'rally') {
                                 targetX = selectedBuilding.x;
@@ -253,7 +244,7 @@ export default function MapDetails({
                                   <div className="flex justify-between items-center">
                                     <span className="font-bold">
                                       {mem?.name || mem?.tag} 
-                                      {!isDeployed && <span className="text-indigo-400 ml-1 font-normal opacity-80">(Alveare)</span>}
+                                      {!isDeployed && <span className="text-indigo-400 ml-1 font-normal opacity-80">({t('map.hive')})</span>}
                                       {memSpeedups > 0 && <span className="text-amber-400 ml-1">⚡x{memSpeedups}</span>}
                                     </span>
                                     <button onClick={() => updateMarchAssignment(marchIdx, 'members', assignedMembers.filter(m => String(typeof m === 'object' ? m.id : m) !== String(memId)))} className="text-red-400 hover:text-red-300">✕</button>
@@ -267,9 +258,9 @@ export default function MapDetails({
                                       
                                       <div className="flex gap-2 items-center">
                                         {isTooSlow ? (
-                                          <span className="text-red-400 flex items-center gap-1 font-bold">⚠️ In ritardo</span>
+                                          <span className="text-red-400 flex items-center gap-1 font-bold">⚠️ {t('map.late')}</span>
                                         ) : (
-                                          <span className="text-emerald-400 font-bold">✓ In tempo</span>
+                                          <span className="text-emerald-400 font-bold">✓ {t('map.on_time')}</span>
                                         )}
                                         <button 
                                           onClick={() => updateMarchAssignment(marchIdx, 'members', assignedMembers.map(m => String(typeof m === 'object' ? m.id : m) === String(memId) ? { id: memId, speedups: memSpeedups + 1 } : m))} 
@@ -292,7 +283,7 @@ export default function MapDetails({
                           value=""
                           onChange={(e) => e.target.value && updateMarchAssignment(marchIdx, 'members', [...assignedMembers, { id: e.target.value, speedups: 0 }])}
                         >
-                          <option value="" disabled>+ Aggiungi Membro...</option>
+                          <option value="" disabled>{t('map.add_member')}</option>
                           {availablePlayers.filter(p => !assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id))).map(p => (
                               <option key={p.id} value={p.id}>[{p.tag}] {p.name}</option>
                           ))}
@@ -304,7 +295,7 @@ export default function MapDetails({
                 
                 {getAvailableMarches && getAvailableMarches(selectedBuilding.id) === 0 && (
                   <div className="text-center text-rose-400 font-bold text-xs py-3 bg-rose-950/20 border border-rose-900/50 rounded-lg">
-                    ⚠️ Nessuna marcia disponibile per questo giocatore.
+                    {t('map.no_marches_available')}
                   </div>
                 )}
               </div>
@@ -315,7 +306,7 @@ export default function MapDetails({
                   onClick={() => handleConfirmDispatch(selectedBuilding.id)}
                   disabled={!marchAssignments || Object.values(marchAssignments).filter(v => v.buildingId !== '').length === 0}
                 >
-                  ✔ REGISTRA ORDINI
+                  {t('map.register_orders')}
                 </button>
               </div>
             </div>
@@ -325,25 +316,25 @@ export default function MapDetails({
             <div className="flex flex-col bg-slate-950 shrink-0 animate-fade-in">
               <div className="p-4 border-b border-slate-800 bg-rose-950/10">
                 <h2 className="text-sm font-black text-rose-400 uppercase tracking-wider flex items-center gap-2">
-                  <span>🎯</span> QG Avversari
+                  <span>🎯</span> {t('map.enemy_hq')}
                 </h2>
                 <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                  Gestisci le roccaforti nemiche. Compila Regno e Sigla per salvare in Cloud.
+                  {t('map.enemy_hq_desc')}
                 </p>
               </div>
               <div className="p-3 border-b border-slate-800 bg-indigo-950/20">
-                <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1.5">Identità Alleanza</h3>
+                <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1.5">{t('map.alliance_identity')}</h3>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
-                    placeholder="Regno (es. 1007)" 
+                    placeholder={t('map.kingdom_placeholder')} 
                     value={allianceMeta.kingdom} 
                     onChange={e => setAllianceMeta({...allianceMeta, kingdom: e.target.value})} 
                     className="bg-slate-900 border border-slate-700 text-white text-[11px] px-2 py-1.5 rounded focus:outline-none focus:border-indigo-500 w-full transition-colors" 
                   />
                   <input 
                     type="text" 
-                    placeholder="Sigla (es. DTD)" 
+                    placeholder={t('map.tag_placeholder')} 
                     value={allianceMeta.tag} 
                     onChange={e => setAllianceMeta({...allianceMeta, tag: e.target.value.toUpperCase()})} 
                     className="bg-slate-900 border border-slate-700 text-white text-[11px] px-2 py-1.5 rounded focus:outline-none focus:border-indigo-500 w-full transition-colors uppercase" 
@@ -351,16 +342,16 @@ export default function MapDetails({
                 </div>
               </div>
               <form onSubmit={handleSubmit} className="p-4 border-b border-slate-800/50 flex flex-col gap-2 bg-slate-900/50">
-                <input type="text" placeholder="Nome Alleanza Nemica" value={newHQ.name} onChange={e => setNewHQ({...newHQ, name: e.target.value})} className="bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded focus:outline-none focus:border-rose-500 font-bold transition-colors" required />
+                <input type="text" placeholder={t('map.enemy_alliance_name')} value={newHQ.name} onChange={e => setNewHQ({...newHQ, name: e.target.value})} className="bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded focus:outline-none focus:border-rose-500 font-bold transition-colors" required />
                 <div className="flex gap-2">
                   <input type="number" placeholder="X" value={newHQ.x} onChange={e => setNewHQ({...newHQ, x: e.target.value})} className="bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded focus:outline-none focus:border-rose-500 w-full font-mono text-center transition-colors" required />
                   <input type="number" placeholder="Y" value={newHQ.y} onChange={e => setNewHQ({...newHQ, y: e.target.value})} className="bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded focus:outline-none focus:border-rose-500 w-full font-mono text-center transition-colors" required />
                 </div>
-                <button type="submit" className="bg-rose-700 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-wider py-2.5 rounded shadow-lg transition-colors mt-2">Aggiungi QG</button>
+                <button type="submit" className="bg-rose-700 hover:bg-rose-600 text-white text-xs font-black uppercase tracking-wider py-2.5 rounded shadow-lg transition-colors mt-2">{t('map.add_hq')}</button>
               </form>
               <div className="p-4 flex flex-col gap-2 mb-4">
                 {enemyHQs.length === 0 ? (
-                  <div className="text-[10px] text-slate-600 text-center italic mt-2">Nessun QG avversario tracciato.</div>
+                  <div className="text-[10px] text-slate-600 text-center italic mt-2">{t('map.no_enemy_hq')}</div>
                 ) : (
                   enemyHQs.map(hq => (
                     <div key={hq.id} className="bg-slate-900 border border-rose-900/30 rounded-lg p-2.5 flex justify-between items-center group shadow-sm hover:border-rose-700/50 transition-colors">

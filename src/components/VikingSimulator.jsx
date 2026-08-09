@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
-// Matrice fissa e hardcodata del Cap Nemici (Punto Zero a 23.245)[cite: 1]
 const COMPOSIZIONE_ORDE_VICHINGHE = {
   1: { tot: 23245 }, 2: { tot: 42307 }, 3: { tot: 65087 }, 4: { tot: 98484 },
   5: { tot: 146838 }, 6: { tot: 199295 }, 7: { tot: 283369 }, 8: { tot: 367985 },
@@ -10,10 +10,11 @@ const COMPOSIZIONE_ORDE_VICHINGHE = {
 };
 
 export default function VikingSimulator({ eventi }) {
+  const { t } = useTranslation(); // 🌍 Hook traduzione
+  
   const [selectedEventId, setSelectedEventId] = useState('');
   const [selectedWaveIndex, setSelectedWaveIndex] = useState(0);
 
-  // Pesi iniziali (saranno ottimizzati dall'Hill Climbing)[cite: 1]
   const [pesiTier, setPesiTier] = useState({ 'TG5': 1.0, 'TG4': 0.8, 'TG3': 0.6, 'TG2': 0.4, 'TG1': 0.2 });
   const [pesiClasse, setPesiClasse] = useState({ 'fant': 1.0, 'cav': 1.0, 'arc': 1.0 });
 
@@ -30,7 +31,6 @@ export default function VikingSimulator({ eventi }) {
     return eventi?.find(e => e.id === selectedEventId) || null;
   }, [eventi, selectedEventId]);
 
-  // FUNZIONE PREDITTIVA CENTRALE[cite: 1]
   const calcolaSimulazione = useCallback((ondata, pTier, pClasse) => {
     const livelloOndata = Number(ondata.livello);
     
@@ -43,7 +43,6 @@ export default function VikingSimulator({ eventi }) {
 
     let kRealeTotale = 0;
     
-    // 1. Inizializzazione Giocatori passando i dettagli truppa originali[cite: 1]
     const giocatoriStats = ondata.giocatori.map(g => {
       const kReale = (g.truppeUccise?.fant || 0) + (g.truppeUccise?.cav || 0) + (g.truppeUccise?.arc || 0);
       kRealeTotale += kReale;
@@ -58,15 +57,14 @@ export default function VikingSimulator({ eventi }) {
     });
 
     let nemiciRimanenti = maxNemiciDisponibili;
-    let faseEsaurimento = 'Nessuna (Nemici Sopravvissuti)';
+    let faseEsaurimento = t('viking_simulator.none_survivors');
 
     const fasiAttacco = [
-      { id: 'fant', label: 'Fanteria', peso: pClasse['fant'] },
-      { id: 'cav', label: 'Cavalleria', peso: pClasse['cav'] },
-      { id: 'arc', label: 'Arcieri', peso: pClasse['arc'] }
+      { id: 'fant', label: t('viking_simulator.infantry'), peso: pClasse['fant'] },
+      { id: 'cav', label: t('viking_simulator.cavalry'), peso: pClasse['cav'] },
+      { id: 'arc', label: t('viking_simulator.archers'), peso: pClasse['arc'] }
     ];
 
-    // 2. Calcolo Potenziale Esatto basato sui Dettagli Truppa[cite: 1]
     fasiAttacco.forEach(fase => {
       if (nemiciRimanenti <= 0) return;
 
@@ -89,7 +87,6 @@ export default function VikingSimulator({ eventi }) {
         potenzialeFaseTotale += potenzialeGiocatoreFase;
       });
 
-      // 3. Distribuzione Uccisioni e Spillover[cite: 1]
       if (potenzialeFaseTotale > 0) {
         if (potenzialeFaseTotale <= nemiciRimanenti) {
           giocatoriStats.forEach(g => { g.k_previsto_raw += g[`potenziale_${fase.id}`]; });
@@ -100,7 +97,7 @@ export default function VikingSimulator({ eventi }) {
             g.k_previsto_raw += (quota * nemiciRimanenti);
           });
           nemiciRimanenti = 0;
-          if (faseEsaurimento === 'Nessuna (Nemici Sopravvissuti)') {
+          if (faseEsaurimento === t('viking_simulator.none_survivors')) {
             faseEsaurimento = fase.label;
           }
         }
@@ -130,7 +127,7 @@ export default function VikingSimulator({ eventi }) {
       delta_obiettivo: deltaTotale,
       giocatori: dettagliGiocatori
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!eventoCorrente || !eventoCorrente.ondate || !eventoCorrente.ondate[selectedWaveIndex]) {
@@ -143,11 +140,9 @@ export default function VikingSimulator({ eventi }) {
   }, [eventoCorrente, selectedWaveIndex, pesiTier, pesiClasse, calcolaSimulazione]);
 
 
-  // FUNZIONE PREDITTIVA VS REALTÀ: TERMOMETRO DELLE ONDATE
   const proiezioneTermometro = useMemo(() => {
     if (!eventoCorrente || !eventoCorrente.ondate || !eventoCorrente.ondate[selectedWaveIndex]) return null;
     
-    // Calcolo del potenziale "Base" (Ondata Selezionata) usato come ripiego per proiettare ondate future
     const ondataBase = eventoCorrente.ondate[selectedWaveIndex];
     let potFantBase = 0, potCavBase = 0, potArcBase = 0;
 
@@ -169,19 +164,16 @@ export default function VikingSimulator({ eventi }) {
       });
     });
 
-    // Proiezione contro la matrice reale
     const proiezioni = Object.entries(COMPOSIZIONE_ORDE_VICHINGHE).map(([livelloStr, dati]) => {
       const livello = Number(livelloStr);
       const cap = dati.tot;
       
-      // Cerchiamo i dati reali per questa ondata nel JSON caricato[cite: 1]
       const ondataReale = eventoCorrente.ondate.find(o => Number(o.livello) === livello);
       
       let kRealiFant = '-', kRealiCav = '-', kRealiArc = '-';
       let potFant = potFantBase, potCav = potCavBase, potArc = potArcBase;
       let datiRealiDisponibili = false;
 
-      // Se esistono dati reali, calcoliamo il potenziale esatto di QUELLA ondata e recuperiamo le kill storiche
       if (ondataReale) {
         datiRealiDisponibili = true;
         let realiF = 0, realiC = 0, realiA = 0;
@@ -243,7 +235,6 @@ export default function VikingSimulator({ eventi }) {
     return { proiezioni };
   }, [eventoCorrente, selectedWaveIndex, pesiTier, pesiClasse]);
 
-  // ALGORITMO AUTO-CALIBRAZIONE (Hill Climbing)[cite: 1]
   const autoCalibra = () => {
     if (!eventoCorrente || !eventoCorrente.ondate || !eventoCorrente.ondate[selectedWaveIndex]) return;
     const ondata = eventoCorrente.ondate[selectedWaveIndex];
@@ -302,18 +293,17 @@ export default function VikingSimulator({ eventi }) {
   return (
     <div style={{ padding: '20px', backgroundColor: '#121212', minHeight: '100vh', color: '#fff' }}>
       
-      {/* HEADER CON TOOLTIP[cite: 1] */}
       <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', borderLeft: '4px solid #00BCD4', marginBottom: '20px', position: 'relative' }}>
         <div 
           onMouseEnter={() => setShowTooltip(true)} 
           onMouseLeave={() => setShowTooltip(false)}
           style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help' }}
         >
-          <h2 style={{ color: '#B2EBF2', margin: 0 }}>Motore Sequenziale a Coda (Cap Ondata)</h2>
+          <h2 style={{ color: '#B2EBF2', margin: 0 }}>{t('viking_simulator.tooltip_title')}</h2>
           <span style={{ marginLeft: '10px', backgroundColor: '#00BCD4', color: '#000', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>?</span>
         </div>
         <p style={{ color: '#aaa', fontSize: '14px', marginTop: '10px', marginBottom: 0 }}>
-          Il simulatore processa gli attacchi per classe. Se l'ondata si esaurisce prima che una classe attacchi, le truppe rimanenti faranno 0 kill.
+          {t('viking_simulator.tooltip_desc')}
         </p>
 
         {showTooltip && (
@@ -322,12 +312,12 @@ export default function VikingSimulator({ eventi }) {
             border: '1px solid #00BCD4', borderRadius: '8px', padding: '20px', width: '500px',
             boxShadow: '0 8px 24px rgba(0,0,0,0.8)', color: '#fff', fontSize: '14px', lineHeight: '1.5'
           }}>
-            <h4 style={{ color: '#00BCD4', margin: '0 0 10px 0' }}>Come funziona il Simulatore?</h4>
-            <p>Questo motore replica l'algoritmo di combattimento reale del gioco basandosi su tre regole auree:</p>
+            <h4 style={{ color: '#00BCD4', margin: '0 0 10px 0' }}>{t('viking_simulator.how_it_works')}</h4>
+            <p>{t('viking_simulator.how_desc')}</p>
             <ol style={{ paddingLeft: '20px', margin: '10px 0' }}>
-              <li style={{ marginBottom: '8px' }}><strong>Pool a Somma Zero:</strong> Non possono essere uccisi più nemici di quelli effettivamente spawnati nell'ondata.</li>
-              <li style={{ marginBottom: '8px' }}><strong>Coda di Classe:</strong> Gli attacchi non sono simultanei, ma avvengono in ordine: Fanteria &rarr; Cavalleria &rarr; Arcieri.</li>
-              <li><strong>Spillover:</strong> Se il "Cap" nemici viene raggiunto durante il turno di una classe (es. Fanteria), le classi successive non avranno più bersagli disponibili, registrando <strong>0 kill</strong> (fenomeno Host zero-kill).</li>
+              <li style={{ marginBottom: '8px' }}><strong>{t('viking_simulator.rule_1')}</strong> {t('viking_simulator.rule_1_desc')}</li>
+              <li style={{ marginBottom: '8px' }}><strong>{t('viking_simulator.rule_2')}</strong> {t('viking_simulator.rule_2_desc')}</li>
+              <li><strong>{t('viking_simulator.rule_3')}</strong> {t('viking_simulator.rule_3_desc')}</li>
             </ol>
           </div>
         )}
@@ -335,7 +325,7 @@ export default function VikingSimulator({ eventi }) {
 
       <div style={{ display: 'flex', gap: '20px', marginBottom: '25px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ color: '#aaa', fontSize: '12px', fontWeight: 'bold' }}>SELEZIONA EVENTO</label>
+          <label style={{ color: '#aaa', fontSize: '12px', fontWeight: 'bold' }}>{t('viking_simulator.select_event')}</label>
           <select value={selectedEventId} onChange={handleEventChange} style={selectStyle}>
             {eventi?.map(ev => (
               <option key={ev.id} value={ev.id}>{ev.nomeEvento ? `${ev.dataEvento || ''} - ${ev.nomeEvento}` : ev.id}</option>
@@ -343,10 +333,10 @@ export default function VikingSimulator({ eventi }) {
           </select>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ color: '#aaa', fontSize: '12px', fontWeight: 'bold' }}>SELEZIONA ONDATA</label>
+          <label style={{ color: '#aaa', fontSize: '12px', fontWeight: 'bold' }}>{t('viking_simulator.select_wave')}</label>
           <select value={selectedWaveIndex} onChange={handleWaveChange} style={{...selectStyle, borderColor: '#FF9800', minWidth: '180px'}} disabled={!eventoCorrente}>
             {eventoCorrente?.ondate?.map((ondata, idx) => (
-              <option key={idx} value={idx}>Ondata Lvl. {ondata.livello}</option>
+              <option key={idx} value={idx}>{t('viking_simulator.wave_lvl', { lvl: ondata.livello })}</option>
             ))}
           </select>
         </div>
@@ -359,14 +349,13 @@ export default function VikingSimulator({ eventi }) {
             height: '42px', boxShadow: '0 2px 8px rgba(233, 30, 99, 0.4)'
           }}
         >
-          ⚙️ Auto-Calibra Pesi
+          {t('viking_simulator.btn_autocalibrate')}
         </button>
       </div>
 
-      {/* PANNELLI DI CALIBRAZIONE */}
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '25px' }}>
         <div style={{ flex: 1, backgroundColor: '#1e1e2f', padding: '15px 20px', borderRadius: '8px', border: '1px solid #444' }}>
-          <h4 style={{ margin: '0 0 10px 0', color: '#FFB300' }}>Calibrazione Tier (P_t)</h4>
+          <h4 style={{ margin: '0 0 10px 0', color: '#FFB300' }}>{t('viking_simulator.calib_tier')}</h4>
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
             {['TG5', 'TG4', 'TG3', 'TG2', 'TG1'].map(tier => (
               <div key={tier} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#2a2a40', padding: '8px', borderRadius: '6px' }}>
@@ -378,9 +367,9 @@ export default function VikingSimulator({ eventi }) {
         </div>
 
         <div style={{ flex: 1, backgroundColor: '#1e1e2f', padding: '15px 20px', borderRadius: '8px', border: '1px solid #444' }}>
-          <h4 style={{ margin: '0 0 10px 0', color: '#4CAF50' }}>Calibrazione Classi (M_c)</h4>
+          <h4 style={{ margin: '0 0 10px 0', color: '#4CAF50' }}>{t('viking_simulator.calib_class')}</h4>
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-            {[{id: 'fant', l: 'Fanteria'}, {id: 'cav', l: 'Cavalleria'}, {id: 'arc', l: 'Arcieri'}].map(cls => (
+            {[{id: 'fant', l: t('viking_simulator.infantry')}, {id: 'cav', l: t('viking_simulator.cavalry')}, {id: 'arc', l: t('viking_simulator.archers')}].map(cls => (
               <div key={cls.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#2a2a40', padding: '8px', borderRadius: '6px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#b2ebf2' }}>{cls.l}: {pesiClasse[cls.id]}</span>
                 <input type="range" min="0.05" max="10.0" step="0.05" value={pesiClasse[cls.id]} onChange={(e) => setPesiClasse({...pesiClasse, [cls.id]: Number(e.target.value)}) } style={{ width: '80px', cursor: 'pointer', marginTop: '5px' }} />
@@ -390,24 +379,23 @@ export default function VikingSimulator({ eventi }) {
         </div>
       </div>
 
-      {/* RISULTATI PREDITTIVI DELLA SINGOLA ONDATA */}
       {risultatiOndata && (
         <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', marginBottom: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '15px', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
-              <h3 style={{ color: '#4CAF50', margin: 0, marginBottom: '5px' }}>Ondata Lvl. {risultatiOndata.livello}</h3>
+              <h3 style={{ color: '#4CAF50', margin: 0, marginBottom: '5px' }}>{t('viking_simulator.wave_lvl', { lvl: risultatiOndata.livello })}</h3>
               <div style={{ fontSize: '13px', color: '#aaa', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span>Cap Nemici: <strong>{risultatiOndata.max_nemici.toLocaleString()}</strong></span>
-                <span style={{ color: risultatiOndata.fase_esaurimento !== 'Nessuna (Nemici Sopravvissuti)' ? '#ff5252' : '#4CAF50' }}>
-                  Esaurimento Pool in Fase: <strong>{risultatiOndata.fase_esaurimento}</strong>
+                <span>{t('viking_simulator.enemy_cap')} <strong>{risultatiOndata.max_nemici.toLocaleString()}</strong></span>
+                <span style={{ color: risultatiOndata.fase_esaurimento !== t('viking_simulator.none_survivors') ? '#ff5252' : '#4CAF50' }}>
+                  {t('viking_simulator.pool_exhaustion')} <strong>{risultatiOndata.fase_esaurimento}</strong>
                 </span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '20px', fontSize: '14px', flexWrap: 'wrap' }}>
-              <span style={{ color: '#FFB300' }}>Simulato: <strong>{risultatiOndata.k_tot_previsto.toLocaleString()}</strong></span>
-              <span style={{ color: '#4CAF50' }}>Reale: <strong>{risultatiOndata.k_tot_reale.toLocaleString()}</strong></span>
+              <span style={{ color: '#FFB300' }}>{t('viking_simulator.simulated')} <strong>{risultatiOndata.k_tot_previsto.toLocaleString()}</strong></span>
+              <span style={{ color: '#4CAF50' }}>{t('viking_simulator.real')} <strong>{risultatiOndata.k_tot_reale.toLocaleString()}</strong></span>
               <span style={{ color: risultatiOndata.delta_totale < 50 ? '#4CAF50' : '#ff5252' }}>
-                Delta Totale Alleanza: <strong>{risultatiOndata.delta_totale.toLocaleString()}</strong>
+                {t('viking_simulator.alliance_delta')} <strong>{risultatiOndata.delta_totale.toLocaleString()}</strong>
               </span>
             </div>
           </div>
@@ -415,17 +403,17 @@ export default function VikingSimulator({ eventi }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#2a2a40', color: '#fff', textAlign: 'left', fontSize: '14px' }}>
-                <th style={{ padding: '12px' }}>Giocatore (Tier)</th>
-                <th style={{ padding: '12px', color: '#FFB300', textAlign: 'right' }}>Uccisioni Predette</th>
-                <th style={{ padding: '12px', color: '#4CAF50', textAlign: 'right' }}>Uccisioni Reali</th>
-                <th style={{ padding: '12px', textAlign: 'center' }}>Delta Error</th>
+                <th style={{ padding: '12px' }}>{t('viking_simulator.player_tier')}</th>
+                <th style={{ padding: '12px', color: '#FFB300', textAlign: 'right' }}>{t('viking_simulator.predicted_kills')}</th>
+                <th style={{ padding: '12px', color: '#4CAF50', textAlign: 'right' }}>{t('viking_simulator.real_kills')}</th>
+                <th style={{ padding: '12px', textAlign: 'center' }}>{t('viking_simulator.delta_error')}</th>
               </tr>
             </thead>
             <tbody>
               {risultatiOndata.giocatori.map((g, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid #333', fontSize: '14px' }}>
                   <td style={{ padding: '12px' }}>
-                    <strong>{g.nome}</strong> <span style={{ color: '#888', fontSize: '12px' }}>({g.tier})</span>
+                    <strong>{g.nome}</strong> <span style={{ color: '#888', fontSize: '12px' }}>({g.tierProfilo || '-'})</span>
                   </td>
                   <td style={{ padding: '12px', color: '#FFB300', textAlign: 'right' }}>{g.k_previsto.toLocaleString()}</td>
                   <td style={{ padding: '12px', color: '#4CAF50', textAlign: 'right' }}>{g.k_reale.toLocaleString()}</td>
@@ -439,31 +427,29 @@ export default function VikingSimulator({ eventi }) {
         </div>
       )}
 
-      {/* NUOVO PANNELLO: TERMOMETRO DELLE ONDATE (PREVISIONE VS REALTÀ) */}
       {proiezioneTermometro && (
         <div style={{ backgroundColor: '#1e1e2f', padding: '20px', borderRadius: '8px', border: '1px solid #00BCD4' }}>
-          <h3 style={{ color: '#00BCD4', margin: '0 0 5px 0' }}>Termometro delle Ondate (Previsione vs Realtà)</h3>
+          <h3 style={{ color: '#00BCD4', margin: '0 0 5px 0' }}>{t('viking_simulator.thermometer_title')}</h3>
           <p style={{ color: '#aaa', fontSize: '13px', margin: '0 0 15px 0' }}>
-            Questa tabella confronta la previsione matematica del simulatore con le uccisioni reali registrate dall'Alleanza nei dati caricati. 
-            Se un'ondata non è stata giocata, la previsione si basa sulla composizione del rally selezionato in alto.
+            {t('viking_simulator.thermometer_desc')}
           </p>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
             <thead>
               <tr style={{ backgroundColor: '#121212', color: '#ccc', textAlign: 'center', fontSize: '12px' }}>
-                <th rowSpan="2" style={{ padding: '10px', borderBottom: '1px solid #333' }}>Liv.</th>
-                <th rowSpan="2" style={{ padding: '10px', borderBottom: '1px solid #333' }}>Cap Nemici</th>
-                <th colSpan="3" style={{ padding: '5px', borderBottom: '1px solid #555', borderLeft: '1px solid #333', color: '#b2ebf2' }}>PREVISIONE SIMULATORE</th>
-                <th colSpan="3" style={{ padding: '5px', borderBottom: '1px solid #555', borderLeft: '1px solid #333', color: '#4CAF50' }}>DATI REALI ALLEANZA</th>
+                <th rowSpan="2" style={{ padding: '10px', borderBottom: '1px solid #333' }}>{t('viking_simulator.lvl')}</th>
+                <th rowSpan="2" style={{ padding: '10px', borderBottom: '1px solid #333' }}>{t('viking_simulator.enemy_cap')}</th>
+                <th colSpan="3" style={{ padding: '5px', borderBottom: '1px solid #555', borderLeft: '1px solid #333', color: '#b2ebf2' }}>{t('viking_simulator.simulator_prediction')}</th>
+                <th colSpan="3" style={{ padding: '5px', borderBottom: '1px solid #555', borderLeft: '1px solid #333', color: '#4CAF50' }}>{t('viking_simulator.alliance_real_data')}</th>
               </tr>
               <tr style={{ backgroundColor: '#121212', color: '#ccc', textAlign: 'center', fontSize: '11px' }}>
-                <th style={{ padding: '8px', borderBottom: '1px solid #333', borderLeft: '1px solid #333' }}>Fanteria</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#FF9800' }}>Cavalleria</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#E91E63' }}>Arcieri</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #333', borderLeft: '1px solid #333' }}>{t('viking_simulator.infantry')}</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#FF9800' }}>{t('viking_simulator.cavalry')}</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#E91E63' }}>{t('viking_simulator.archers')}</th>
                 
-                <th style={{ padding: '8px', borderBottom: '1px solid #333', borderLeft: '1px solid #333' }}>K. Fanteria</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#FF9800' }}>K. Cavalleria</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#E91E63' }}>K. Arcieri</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #333', borderLeft: '1px solid #333' }}>{t('viking_simulator.k_infantry')}</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#FF9800' }}>{t('viking_simulator.k_cavalry')}</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #333', color: '#E91E63' }}>{t('viking_simulator.k_archers')}</th>
               </tr>
             </thead>
             <tbody>
@@ -472,12 +458,10 @@ export default function VikingSimulator({ eventi }) {
                   <td style={{ padding: '10px', fontWeight: 'bold' }}>{p.livello}</td>
                   <td style={{ padding: '10px' }}>{p.cap.toLocaleString()}</td>
                   
-                  {/* PREVISIONI */}
                   <td style={{ padding: '10px', borderLeft: '1px solid #333', color: p.statoFanteria.includes('Esaurisce') ? '#fff' : '#aaa' }}>{p.statoFanteria}</td>
                   <td style={{ padding: '10px', color: p.statoCavalleria.includes('Attiva') ? '#FF9800' : '#666', fontWeight: p.statoCavalleria.includes('Attiva') ? 'bold' : 'normal' }}>{p.statoCavalleria}</td>
                   <td style={{ padding: '10px', color: p.statoArcieri.includes('Attivi') ? '#E91E63' : '#666', fontWeight: p.statoArcieri.includes('Attivi') ? 'bold' : 'normal' }}>{p.statoArcieri}</td>
                   
-                  {/* DATI REALI */}
                   <td style={{ padding: '10px', borderLeft: '1px solid #333', color: p.kRealiFant !== '-' ? '#fff' : '#444' }}>
                     {p.kRealiFant !== '-' ? p.kRealiFant.toLocaleString() : '-'}
                   </td>

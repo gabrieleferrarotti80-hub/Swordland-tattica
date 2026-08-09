@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore'; 
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
 // Importiamo i sottomoduli
 import VikingAnalisiSingolo from '../components/VikingAnalisiSingolo';
@@ -11,6 +12,7 @@ import VikingInserimento from '../components/VikingInserimento';
 import VikingSimulator from '../components/VikingSimulator';
 
 export default function Viking({ roster }) {
+  const { t } = useTranslation(); // 🌍 Hook di traduzione
   const [eventi, setEventi] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [datiEvento, setDatiEvento] = useState(null);
@@ -76,23 +78,22 @@ export default function Viking({ roster }) {
     setDatiEvento(eventoTrovato || null);
   };
 
-  if (loading) return <div style={{ color: 'white', padding: '20px' }}>Caricamento storico in corso...</div>;
+  if (loading) return <div style={{ color: 'white', padding: '20px' }}>{t('viking.loading_history')}</div>;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#121212', color: '#fff' }}>
       
       {/* SIDEBAR LATERALE */}
       <div style={{ width: '260px', backgroundColor: '#1e1e2f', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', padding: '20px', boxShadow: '2px 0 5px rgba(0,0,0,0.5)' }}>
-        <button onClick={() => navigate('/')} style={{ padding: '8px 15px', backgroundColor: '#333', color: '#fff', border: '1px solid #555', cursor: 'pointer', fontWeight: 'bold', borderRadius: '4px', marginBottom: '20px' }}>⬅ Torna alla Home</button>
-        <h2 style={{ margin: '0 0 30px 0', color: '#4CAF50', textAlign: 'center' }}>Dashboard<br/>Vichinghi</h2>
+        <button onClick={() => navigate('/')} style={{ padding: '8px 15px', backgroundColor: '#333', color: '#fff', border: '1px solid #555', cursor: 'pointer', fontWeight: 'bold', borderRadius: '4px', marginBottom: '20px' }}>{t('viking.back_home')}</button>
+        <h2 style={{ margin: '0 0 30px 0', color: '#4CAF50', textAlign: 'center' }}>{t('viking.dashboard_title')}<br/>{t('viking.dashboard_subtitle')}</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           
-          <button onClick={() => setActiveView('analisi')} style={{ padding: '12px 20px', borderRadius: '6px', backgroundColor: activeView === 'analisi' ? '#4CAF50' : 'transparent', color: '#fff', border: activeView === 'analisi' ? 'none' : '1px solid #4CAF50', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left' }}>📊 Analisi Eventi</button>
+          <button onClick={() => setActiveView('analisi')} style={{ padding: '12px 20px', borderRadius: '6px', backgroundColor: activeView === 'analisi' ? '#4CAF50' : 'transparent', color: '#fff', border: activeView === 'analisi' ? 'none' : '1px solid #4CAF50', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left' }}>{t('viking.btn_analysis')}</button>
           
-          {/* AGGIUNTO: Tasto Simulatore/Backtest */}
-          <button onClick={() => setActiveView('simulatore')} style={{ padding: '12px 20px', borderRadius: '6px', backgroundColor: activeView === 'simulatore' ? '#9C27B0' : 'transparent', color: '#fff', border: activeView === 'simulatore' ? 'none' : '1px solid #9C27B0', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left' }}>🧮 Motore Backtest</button>
+          <button onClick={() => setActiveView('simulatore')} style={{ padding: '12px 20px', borderRadius: '6px', backgroundColor: activeView === 'simulatore' ? '#9C27B0' : 'transparent', color: '#fff', border: activeView === 'simulatore' ? 'none' : '1px solid #9C27B0', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left' }}>{t('viking.btn_simulator')}</button>
 
-          <button onClick={() => setActiveView('inserimento')} style={{ padding: '12px 20px', borderRadius: '6px', backgroundColor: activeView === 'inserimento' ? '#2196F3' : 'transparent', color: '#fff', border: activeView === 'inserimento' ? 'none' : '1px solid #2196F3', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left' }}>⚙️ Inserimento Dati</button>
+          <button onClick={() => setActiveView('inserimento')} style={{ padding: '12px 20px', borderRadius: '6px', backgroundColor: activeView === 'inserimento' ? '#2196F3' : 'transparent', color: '#fff', border: activeView === 'inserimento' ? 'none' : '1px solid #2196F3', cursor: 'pointer', fontWeight: 'bold', textAlign: 'left' }}>{t('viking.btn_insert')}</button>
         </div>
       </div>
 
@@ -101,11 +102,11 @@ export default function Viking({ roster }) {
         
        {activeView === 'analisi' && (
           <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-            <h1 style={{ marginTop: 0, marginBottom: '20px' }}>Analisi Dati Vichinghi</h1>
+            <h1 style={{ marginTop: 0, marginBottom: '20px' }}>{t('viking.analysis_title')}</h1>
             
             <div style={{ display: 'flex', gap: '15px', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '15px' }}>
-              <button onClick={() => setAnalisiTab('singolo')} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: analisiTab === 'singolo' ? '#4CAF50' : '#2a2a40', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Analisi Singolo Evento</button>
-              <button onClick={() => setAnalisiTab('confronto')} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: analisiTab === 'confronto' ? '#FF9800' : '#2a2a40', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Confronto Eventi Analizzati</button>
+              <button onClick={() => setAnalisiTab('singolo')} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: analisiTab === 'singolo' ? '#4CAF50' : '#2a2a40', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{t('viking.tab_single')}</button>
+              <button onClick={() => setAnalisiTab('confronto')} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: analisiTab === 'confronto' ? '#FF9800' : '#2a2a40', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{t('viking.tab_compare')}</button>
             </div>
 
            {analisiTab === 'singolo' && (
@@ -125,7 +126,6 @@ export default function Viking({ roster }) {
           </div>
         )}
 
-        {/* AGGIUNTO: Rendering condizionale del Simulatore */}
         {activeView === 'simulatore' && (
           <VikingSimulator 
             eventi={eventi} 
