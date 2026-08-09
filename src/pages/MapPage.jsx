@@ -25,11 +25,10 @@ const INITIAL_BUILDINGS = mapBuildings.map(b => ({
 export default function MapPage({ roster, userRole, allianceCode }) {
   const mainRef = useRef(null);
 
- // --- INTERCETTA IL PULSANTE PREMUTO NELLA HOME ---
   const location = useLocation();
   const initialView = location.state?.initialView || 'global';
 
-  const [activeView, setActiveView] = useState(initialView); // CORRETTO: Ora ascolta la Home!
+  const [activeView, setActiveView] = useState(initialView);
   const [selectedTool, setSelectedTool] = useState('buildings');
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState(null);
@@ -37,15 +36,12 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   const [marchDestination, setMarchDestination] = useState(null);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
 
-  // --- STATI SIMULATORE ---
   const [playerOverrides, setPlayerOverrides] = useState({});
   const [draggedPlayerId, setDraggedPlayerId] = useState(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isSavingSim, setIsSavingSim] = useState(false);
-  // --- METADATI EVENTO (Per la Vista Tattica) ---
   const [tacticalMeta, setTacticalMeta] = useState({ eventName: '', date: '', time: '', targetBuilding: '', notes: '' });
 
-  // --- STATI MODALE DISPACCIO TATTICO ---
   const [popupPlayerId, setPopupPlayerId] = useState(null);
   const [marchAssignments, setMarchAssignments] = useState({});
   const [modalPos, setModalPos] = useState({ x: 300, y: 300 });
@@ -71,24 +67,32 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   };
 
   const [fixedBuildings, setFixedBuildings] = useState(INITIAL_BUILDINGS);
-  const [allianceStructures, setAllianceStructures] = useState([
-    { id: 'alliance-hq', code: 'HQ', name: 'Quartier Generale', type: 'headquarters', x: 500, y: 500 },
-    { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 520, y: 500 },
-    { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 480, y: 500 }
-  ]);
-
+  const [allianceStructures, setAllianceStructures] = useState([]); // Svuotato, lo riempiamo dinamicamente con l'useEffect
   const [allianceMeta, setAllianceMeta] = useState({ kingdom: '', tag: '' });
   const [enemyHQs, setEnemyHQs] = useState([]);
 
   const TILE_SF = 550 / 1200; 
 
+  // --- IMPOSTA LE STRUTTURE DELL'ALLEANZA (Incluso l'alveare DEMO) ---
+  useEffect(() => {
+    if (allianceCode === 'DEMO') {
+      setAllianceStructures([
+        { id: 'alliance-hq', code: 'HQ', name: 'QG Sandbox (Demo)', type: 'headquarters', x: 800, y: 800 },
+        { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 820, y: 800 },
+        { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 780, y: 800 }
+      ]);
+    } else {
+      setAllianceStructures([
+        { id: 'alliance-hq', code: 'HQ', name: 'Quartier Generale', type: 'headquarters', x: 500, y: 500 },
+        { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 520, y: 500 },
+        { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 480, y: 500 }
+      ]);
+    }
+  }, [allianceCode]);
+
   // --- GENERAZIONE GIOCATORI VIRTUALI ---
   const validPlayers = useMemo(() => {
     const arr = Array.isArray(roster) ? roster : (roster?.players || []);
-    
-    // FILTRO PARTECIPANTI: 
-    // Di default l'array è vuoto ([]). In vista Tattica mostriamo SOLO chi ha la spunta.
-    // Nelle altre viste (Globale/Territorio) li passiamo tutti (verranno poi nascosti dai filtri R5/R4 visivi).
     const participants = tacticalMeta?.participants || [];
     const filteredArr = activeView === 'tactical' ? arr.filter(p => participants.includes(p.id)) : arr;
 
@@ -105,7 +109,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
       }));
   }, [roster, playerOverrides, TILE_SF, tacticalMeta?.participants, activeView]);
 
-  // --- MOTORE DELLE MARCE E TIMELINE (Fino a 240 min) ---
+  // --- MOTORE DELLE MARCE E TIMELINE ---
   const [currentTime, setCurrentTime] = useState(0); 
   const [manualCaptures, setManualCaptures] = useState([]);
   const [healingEvents, setHealingEvents] = useState({});
@@ -161,7 +165,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     const fetchMapData = async () => {
       try {
         setIsLoadingCloud(true);
-        // 1. Carica la MAPPA BASE (Quella gestita da te)
         let baseBuildings = [...INITIAL_BUILDINGS];
         const baseSnap = await getDoc(doc(db, "mapSettings", "fixedBuildings"));
         
@@ -175,14 +178,12 @@ export default function MapPage({ roster, userRole, allianceCode }) {
           baseBuildings = [...baseBuildings, ...customB];
         }
 
-        // 2. SOVRASCRITTURA ALLEANZA (Se non sei tu, ma un'alleanza)
-        if (userRole === 'alliance' && allianceCode) {
+        if (userRole === 'alliance' && allianceCode && allianceCode !== 'DEMO') {
           const allianceSnap = await getDoc(doc(db, "allianceMapData", allianceCode));
           if (allianceSnap.exists() && allianceSnap.data().buildings) {
             const allianceData = allianceSnap.data().buildings;
             baseBuildings = baseBuildings.map(baseB => {
               const ab = allianceData.find(a => a.id === baseB.id);
-              // Sovrascrive la mappa base con i dati dell'alleanza (es. chi occupa l'edificio)
               return ab ? { ...baseB, ...ab } : baseB;
             });
           }
@@ -200,14 +201,16 @@ export default function MapPage({ roster, userRole, allianceCode }) {
 
   // --- SALVATAGGIO MAPPA A DUE LIVELLI ---
   const handleSaveMapToCloud = async () => {
+    if (userRole === 'guest' || allianceCode === 'DEMO') {
+      return alert("☁️ Azione non permessa in modalità Sandbox (Demo).");
+    }
+    
     setIsLoadingCloud(true);
     try {
       if (userRole === 'admin') {
-        // Tu salvi la struttura portante globale
         await setDoc(doc(db, "mapSettings", "fixedBuildings"), { buildings: fixedBuildings });
         alert("✅ Mappa Base Globale Aggiornata!");
       } else if (userRole === 'alliance' && allianceCode) {
-        // Le alleanze salvano solo la loro versione (es. occupazioni)
         await setDoc(doc(db, "allianceMapData", allianceCode), { buildings: fixedBuildings });
         alert(`✅ Mappa privata Alleanza [${allianceCode}] salvata!`);
       }
@@ -217,11 +220,10 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     setIsLoadingCloud(false);
   }; 
 
- // --- CARICAMENTO E SALVATAGGIO PIANO TATTICO (Diviso per Alleanza) ---
+ // --- CARICAMENTO E SALVATAGGIO PIANO TATTICO ---
   useEffect(() => {
     const fetchSimulation = async () => {
-      // Se non c'è alleanza (non dovrebbe succedere), non carica nulla per evitare sovrascritture globali
-      if (!allianceCode) return; 
+      if (!allianceCode || allianceCode === 'DEMO') return; 
 
       try {
         const docSnap = await getDoc(doc(db, "simulations", `${allianceCode}_tacticalPlan`));
@@ -230,16 +232,18 @@ export default function MapPage({ roster, userRole, allianceCode }) {
           if (data.overrides) setPlayerOverrides(data.overrides);
           if (data.marches) setMarches(data.marches);
           if (data.tacticalMeta) {
-            // Passiamo anche l'autore ai metadati per mostrarlo nella UI
             setTacticalMeta({ ...data.tacticalMeta, author: data.author }); 
           }
         }
       } catch (error) { console.error("Errore caricamento simulazione:", error); }
     };
     fetchSimulation();
-  }, [setMarches, allianceCode]); // Ricarica se cambi alleanza
+  }, [setMarches, allianceCode]);
 
   const handleSaveSimulation = async () => {
+    if (userRole === 'guest' || allianceCode === 'DEMO') {
+      return alert("☁️ Azione non permessa in modalità Sandbox (Demo).");
+    }
     if (!allianceCode) return alert("Nessuna alleanza selezionata!");
     setIsSavingSim(true);
     try {
@@ -247,7 +251,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         overrides: playerOverrides, 
         marches,
         tacticalMeta,
-        author: userRole === 'admin' ? 'ADMIN' : 'ALLIANCE', // Il timbro!
+        author: userRole === 'admin' ? 'ADMIN' : 'ALLIANCE', 
         timestamp: new Date().toISOString()
       });
       alert(`✅ Piano Tattico salvato per l'alleanza [${allianceCode}]!`);
@@ -275,10 +279,16 @@ export default function MapPage({ roster, userRole, allianceCode }) {
       if (activeView === 'global') {
         const castle = fixedBuildings.find(b => b.type?.toLowerCase() === 'castle' || b.name?.toLowerCase().includes('castello'));
         let targetX = 600, targetY = 600;
-        if (castle) {
+        
+        // Se siamo in Demo, puntiamo la telecamera direttamente sull'alveare fittizio!
+        if (allianceCode === 'DEMO') {
+          targetX = 600 + (800 - 800) * TILE_SF;
+          targetY = 1150 - (800 + 800) * TILE_SF;
+        } else if (castle) {
           targetX = 600 + (Number(castle.x) - Number(castle.y)) * TILE_SF;
           targetY = 1150 - (Number(castle.x) + Number(castle.y)) * TILE_SF;
         }
+        
         const baseMapSize = 1000;
         const targetScale = Math.max(rect.width / baseMapSize, rect.height / baseMapSize);
         setPosition({ x: (rect.width / 2) - (targetX * targetScale), y: (rect.height / 2) - (targetY * targetScale) });
@@ -326,7 +336,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     resizeObserver.observe(mapNode); 
     updateCamera(); 
     return () => { resizeObserver.disconnect(); };
-  }, [activeView, selectedBuilding, fixedBuildings, validPlayers, allianceStructures, isRightPanelOpen]);
+  }, [activeView, selectedBuilding, fixedBuildings, validPlayers, allianceStructures, isRightPanelOpen, allianceCode]);
 
   useEffect(() => {
     const mapNode = mainRef.current;
@@ -393,7 +403,10 @@ export default function MapPage({ roster, userRole, allianceCode }) {
       targetY = 1150 - (Number(selectedBuilding.x) + Number(selectedBuilding.y)) * TILE_SF;
     } else {
       const castle = fixedBuildings.find(b => b.type?.toLowerCase() === 'castle' || b.name?.toLowerCase().includes('castello'));
-      if (castle) {
+      if (allianceCode === 'DEMO') {
+        targetX = 600 + (800 - 800) * TILE_SF;
+        targetY = 1150 - (800 + 800) * TILE_SF;
+      } else if (castle) {
         targetX = 600 + (Number(castle.x) - Number(castle.y)) * TILE_SF;
         targetY = 1150 - (Number(castle.x) + Number(castle.y)) * TILE_SF;
       }
@@ -446,20 +459,14 @@ export default function MapPage({ roster, userRole, allianceCode }) {
     }));
   };
 
-  // Conferma degli ordini creati
   const handleConfirmTacticalDispatch = (playerId) => {
     Object.entries(marchAssignments).forEach(([idx, assign]) => {
       if (assign.buildingId) {
-        // Estraiamo solo gli ID puri dai membri
         const cleanMembers = (assign.members || []).map(m => typeof m === 'object' ? m.id : m);
-        // Lanciamo la marcia nel motore (registrandola al "currentTime" attuale)
         handleDispatchMarch(playerId, assign.buildingId, idx, assign.type, cleanMembers, assign.members);
       }
     });
-    // Confermiamo i draft nel motore centrale
     handleConfirmMinute();
-    
-    // Resettiamo il form di selezione
     setMarchAssignments({});
     alert(`✅ Ordini registrati per il minuto ${currentTime}! (Esportali dal pulsante in sidebar sinistra)`);
   };
@@ -481,7 +488,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         marchOrigin={marchOrigin} setMarchOrigin={setMarchOrigin} marchDestination={marchDestination} setMarchDestination={setMarchDestination}
         fixedBuildings={fixedBuildings} handleBuildingChange={()=>{}} handleAddBuilding={()=>{}} handleDeleteBuilding={()=>{}}
         allianceStructures={allianceStructures} handleAllianceStructureChange={()=>{}}
-        handleSaveToCloud={()=>{}} isLoadingCloud={isLoadingCloud} selectedBuilding={selectedBuilding}
+        handleSaveToCloud={handleSaveMapToCloud} isLoadingCloud={isLoadingCloud} selectedBuilding={selectedBuilding}
         userRole={userRole}
         activeView={activeView}
         handleSaveSimulation={handleSaveSimulation}
@@ -489,7 +496,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         openExportModal={() => setIsExportModalOpen(true)}
         tacticalMeta={tacticalMeta}
         setTacticalMeta={setTacticalMeta}
-        setSelectedBuilding={handleSelectBuilding} // <-- AGGIUNTA QUESTA RIGA
+        setSelectedBuilding={handleSelectBuilding}
       />
 
       <main 
@@ -504,9 +511,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         onMouseLeave={handleMouseUp}
       >
         
-       {/* ========================================== */}
-        {/* TIMELINE TATTICA ULTRA-COMPATTA (Solo in Tattica) */}
-        {/* ========================================== */}
         {activeView === 'tactical' && (
           <div className="absolute bottom-6 left-6 z-50 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700/50 shadow-2xl flex items-center gap-3" onMouseDown={e => e.stopPropagation()}>
             <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider">⏱️ Minuto</span>
@@ -574,8 +578,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         activeView={activeView} 
         isOpen={isRightPanelOpen}
         setIsOpen={setIsRightPanelOpen}
-        
-        // --- NUOVI COLLEGAMENTI PER GLI ORDINI E TIMELINE ---
         currentTime={currentTime}
         marchAssignments={marchAssignments}
         setMarchAssignments={setMarchAssignments}
