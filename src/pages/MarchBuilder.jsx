@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { db } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { heroesDB, eventTypes } from '../data/heroes';
 
 const TIERS = ['T11', 'T10', 'T9', 'T8', 'T7', 'T6', 'T5', 'T4', 'T3', 'T2', 'T1'];
@@ -11,6 +13,7 @@ export default function MarchBuilder({ auth }) {
   const { t } = useTranslation();
   
   const [selectedEvent, setSelectedEvent] = useState(eventTypes[0].id);
+  const [isLoading, setIsLoading] = useState(false);
 
   // --- STATI PRINCIPALI ---
   const [totalTroops, setTotalTroops] = useState({
@@ -34,20 +37,16 @@ export default function MarchBuilder({ auth }) {
   // 💡 STATO PER LA GUIDA DELLA DEMO
   const [showDemoGuide, setShowDemoGuide] = useState(false);
 
- // 💡 INIEZIONE DATI DEMO AL CARICAMENTO
+  // 💡 INIEZIONE DATI DEMO AL CARICAMENTO
   useEffect(() => {
-    // 💡 Ora si attiva sia per DEMO che per DEMO2
     if (auth?.code === 'DEMO' || auth?.code === 'DEMO2') {
       setShowDemoGuide(true);
-      // Pre-carica 1 milione di truppe
       setTotalTroops({
         infantry: { ...initialTiers, T11: 50000, T10: 150000, T9: 100000 },
         cavalry: { ...initialTiers, T11: 40000, T10: 200000, T9: 100000 },
         archers: { ...initialTiers, T11: 80000, T10: 180000, T9: 100000 }
       });
-      // Pre-carica Capacità
       setGlobalCapacity({ 0: 50000, 1: 90000, 2: 130000, 3: 175000 });
-      // Pre-carica Marcia 1 con 3 eroi
       setMarches([{ 
         id: 'demo_march_1', 
         hero1: 'h_inf_1', // Forrest
@@ -66,6 +65,30 @@ export default function MarchBuilder({ auth }) {
       </div>
     );
   }
+
+  // --- FUNZIONE DI SALVATAGGIO CLOUD ---
+  const handleSaveToCloud = async () => {
+    setIsLoading(true);
+    try {
+      const docId = `${auth.code}_${auth.playerId}`;
+      await setDoc(doc(db, "playerMarches", docId), {
+        allianceCode: auth.code,
+        playerId: auth.playerId,
+        playerName: auth.playerName,
+        event: selectedEvent,
+        globalCapacity,
+        totalTroops,
+        marches,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+      
+      alert("✅ Formazioni salvate con successo su Firebase!");
+    } catch (error) {
+      console.error("Errore durante il salvataggio:", error);
+      alert("❌ Errore durante il salvataggio in Cloud.");
+    }
+    setIsLoading(false);
+  };
 
   // --- HELPER FUNZIONI ---
   const getSumOfType = (type) => Object.values(totalTroops[type]).reduce((sum, val) => sum + val, 0);
@@ -299,7 +322,7 @@ export default function MarchBuilder({ auth }) {
   return (
     <div className="min-h-screen bg-slate-950 p-4 md:p-8 flex flex-col gap-6 text-slate-200 relative overflow-hidden">
       
-      {/* 💡 MODAL GUIDA DEMO (Sovrapposizione) */}
+      {/* 💡 MODAL GUIDA DEMO */}
       {showDemoGuide && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
           <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-2xl w-full">
@@ -353,7 +376,14 @@ export default function MarchBuilder({ auth }) {
             <select value={selectedEvent} onChange={(e) => setSelectedEvent(e.target.value)} className="w-full bg-slate-950 border border-indigo-500/50 text-indigo-300 text-sm font-bold px-4 py-3 rounded-xl focus:outline-none focus:border-indigo-400 cursor-pointer">
               {eventTypes.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
             </select>
-            <button className="mt-4 w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[0_0_15px_rgba(5,150,105,0.4)]">{t('march_builder.save_cloud_btn')}</button>
+            {/* 💡 PULSANTE CLOUD COLLEGATO A FIREBASE */}
+            <button 
+              onClick={handleSaveToCloud} 
+              disabled={isLoading}
+              className="mt-4 w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-[0_0_15px_rgba(5,150,105,0.4)] disabled:opacity-50"
+            >
+              {isLoading ? "Salvataggio..." : t('march_builder.save_cloud_btn')}
+            </button>
           </div>
 
           <div className="bg-slate-900 border border-slate-700 p-5 rounded-2xl shadow-xl shrink-0">
