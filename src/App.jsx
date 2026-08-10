@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Swordland from './pages/Swordland';
 import Viking from './pages/Viking';
 import MapPage from './pages/MapPage';
+import MarchBuilder from './pages/MarchBuilder'; // Aggiungi l'import in alto
 
 function App() {
   // Lo stato del roster vive qui ed è l'unica cosa condivisa globalmente
@@ -12,14 +13,20 @@ function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // --- NUOVI STATI PER IL LOGIN MULTI-TENANT ---
-  const [userRole, setUserRole] = useState(null); // 'admin' | 'alliance' | null
-  const [allianceCode, setAllianceCode] = useState(''); // Es: 'DTD', 'MASTER'
+  // 💡 UNICO STATO DI AUTENTICAZIONE (Gestisce Permessi, Alleanza e Giocatore)
+  const [auth, setAuth] = useState(() => {
+    const saved = localStorage.getItem('kingshot-auth');
+    return saved ? JSON.parse(saved) : { role: null, code: '', allianceRole: null, playerId: null, playerName: '' };
+  });
 
   // Salvataggio automatico in locale ad ogni modifica
   useEffect(() => { 
     localStorage.setItem('swordland-roster', JSON.stringify(roster)); 
   }, [roster]);
+
+  useEffect(() => { 
+    localStorage.setItem('kingshot-auth', JSON.stringify(auth)); 
+  }, [auth]);
 
   return (
     <Router>
@@ -30,28 +37,38 @@ function App() {
             <Home 
               roster={roster} 
               setRoster={setRoster}
-              userRole={userRole}
-              setUserRole={setUserRole}
-              allianceCode={allianceCode}
-              setAllianceCode={setAllianceCode}
+              auth={auth}
+              setAuth={setAuth}
             />
           } 
         />
         <Route 
-  path="/swordland" 
-  element={<Swordland roster={roster} setRoster={setRoster} allianceCode={allianceCode} />} 
-/>
+          path="/swordland" 
+          element={
+            <Swordland 
+              roster={roster} 
+              setRoster={setRoster} 
+              allianceCode={auth.code} 
+              allianceRole={auth.allianceRole} 
+            />
+          } 
+        />
         <Route path="/viking" element={<Viking roster={roster} />} />
         <Route 
           path="/map" 
           element={
             <MapPage 
               roster={roster}
-              userRole={userRole}
-              allianceCode={allianceCode}
+              userRole={auth.role}
+              allianceCode={auth.code}
+              allianceRole={auth.allianceRole}
             />
           } 
         />
+        <Route 
+  path="/march-builder" 
+  element={<MarchBuilder auth={auth} />} 
+/>
       </Routes>
     </Router>
   );

@@ -35,7 +35,6 @@ const DEMO_STRUCTURES = [
   { id: 'alliance-bear-2', code: 'TRP2', name: 'Trappola per Orsi 2', type: 'beartrap', x: 780, y: 800 }
 ];
 
-// 💡 ROSTER DEMO: Dati fittizi per far sembrare l'app "viva"
 const DEMO_ROSTER = [
   { id: 'd1', name: 'Ragnar', tag: 'DEMO', role: 'R5', power: 120 },
   { id: 'd2', name: 'Lagertha', tag: 'DEMO', role: 'R4', power: 105 },
@@ -50,11 +49,15 @@ const DEMO_OVERRIDES = {
   'd5': { x: 804, y: 800 }
 };
 
-export default function MapPage({ roster, userRole, allianceCode }) {
+// 💡 AGGIUNTA PROP `allianceRole`
+export default function MapPage({ roster, userRole, allianceCode, allianceRole }) {
   const mainRef = useRef(null);
   const location = useLocation();
   const { t } = useTranslation(); 
   
+  // 💡 VARIABILE DI SICUREZZA: Verifica se l'utente è un semplice membro o un ospite
+  const isReadOnly = userRole === 'guest' || (userRole === 'alliance' && allianceRole === 'member');
+
   const initialView = location.state?.initialView || 'global';
 
   const [activeView, setActiveView] = useState(initialView);
@@ -65,7 +68,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   const [marchDestination, setMarchDestination] = useState(null);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
 
-  // 💡 MODAL DI BENVENUTO (Visibile solo in DEMO)
   const [showDemoWelcome, setShowDemoWelcome] = useState(allianceCode === 'DEMO');
 
   const [playerOverrides, setPlayerOverrides] = useState({});
@@ -107,7 +109,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
 
   const TILE_SF = 550 / 1200; 
 
-  // 💡 USA IL ROSTER DEMO SE SIAMO NELLA SANDBOX
   const effectiveRoster = allianceCode === 'DEMO' && (!roster || roster.length === 0) ? DEMO_ROSTER : roster;
 
   useEffect(() => {
@@ -122,20 +123,24 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   }, [allianceCode]);
 
   const handleBuildingChange = (id, field, value) => {
+    if (isReadOnly) return;
     const parsedValue = (field === 'x' || field === 'y') ? (value === '' ? '' : Number(value)) : value;
     setFixedBuildings(prev => prev.map(b => b.id === id ? { ...b, [field]: parsedValue } : b));
   };
 
   const handleAddBuilding = () => {
+    if (isReadOnly) return;
     const newB = { id: `custom-${Date.now()}`, code: 'NEW', name: 'Nuovo Edificio', type: 'others', x: 500, y: 500, occupiedBy: '' };
     setFixedBuildings(prev => [newB, ...prev]);
   };
 
   const handleDeleteBuilding = (id) => {
+    if (isReadOnly) return;
     setFixedBuildings(prev => prev.filter(b => b.id !== id));
   };
 
   const handleAllianceStructureChange = (id, field, value) => {
+    if (isReadOnly) return;
     const numVal = value === '' ? '' : Number(value);
     setAllianceStructures(prev => prev.map(s => s.id === id ? { ...s, [field]: numVal } : s));
   };
@@ -207,6 +212,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   }, [allianceMeta.kingdom, allianceMeta.tag]);
 
   const handleAddHQ = async (newHQ) => {
+    if (isReadOnly) return alert(t('map.read_only_alert', 'Azione riservata agli Ufficiali (R4/R5).'));
     const updatedHQs = [...enemyHQs, { id: `enemy-${Date.now()}`, ...newHQ, type: 'enemyHQ' }];
     setEnemyHQs(updatedHQs);
     if (allianceMeta.kingdom && allianceMeta.tag) {
@@ -215,6 +221,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   };
 
   const handleRemoveHQ = async (id) => {
+    if (isReadOnly) return alert(t('map.read_only_alert', 'Azione riservata agli Ufficiali (R4/R5).'));
     const updatedHQs = enemyHQs.filter(hq => hq.id !== id);
     setEnemyHQs(updatedHQs);
     if (allianceMeta.kingdom && allianceMeta.tag) {
@@ -274,7 +281,12 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   }, [userRole, allianceCode]);
 
   const handleSaveMapToCloud = async () => {
-    if (userRole === 'guest' || (allianceCode === 'DEMO' && userRole !== 'admin' && userRole !== 'consulente')) {
+    // 💡 BLOCCO SALVATAGGIO MAPPA PER I MEMBRI
+    if (isReadOnly) {
+      return alert(t('map.read_only_alert', 'Azione riservata agli Ufficiali (R4/R5).'));
+    }
+
+    if (userRole === 'guest' || (allianceCode === 'DEMO' && userRole !== 'admin' && userRole !== 'consulente' && allianceRole !== 'officer')) {
       return alert(t('map.sandbox_action_denied'));
     }
     
@@ -319,7 +331,12 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   }, [setMarches, allianceCode]);
 
   const handleSaveSimulation = async () => {
-    if (userRole === 'guest' || (allianceCode === 'DEMO' && userRole !== 'admin' && userRole !== 'consulente')) {
+    // 💡 BLOCCO SALVATAGGIO SIMULAZIONE PER I MEMBRI
+    if (isReadOnly) {
+      return alert(t('map.read_only_alert', 'Azione riservata agli Ufficiali (R4/R5).'));
+    }
+
+    if (userRole === 'guest' || (allianceCode === 'DEMO' && userRole !== 'admin' && userRole !== 'consulente' && allianceRole !== 'officer')) {
       return alert(t('map.sandbox_action_denied'));
     }
     if (!allianceCode) return alert(t('map.no_alliance_selected'));
@@ -444,7 +461,7 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   };
   
   const handleMouseMove = (e) => { 
-    if (draggedPlayerId) {
+    if (draggedPlayerId && !isReadOnly) {
       const svgElement = document.getElementById('map-svg');
       if (!svgElement) return;
       const pt = svgElement.createSVGPoint();
@@ -529,6 +546,11 @@ export default function MapPage({ roster, userRole, allianceCode }) {
 
   const handleDrop = (e) => {
     e.preventDefault();
+    // 💡 BLOCCO DROP PER I MEMBRI
+    if (isReadOnly) {
+      return alert(t('map.read_only_alert', 'Azione riservata agli Ufficiali (R4/R5).'));
+    }
+
     const dragData = e.dataTransfer.getData('text/plain');
     if (!dragData) return;
     const svgElement = document.getElementById('map-svg');
@@ -553,6 +575,11 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   };
 
   const handleConfirmTacticalDispatch = (playerId) => {
+    // 💡 BLOCCO DISPATCH ORDINI PER I MEMBRI
+    if (isReadOnly) {
+      return alert(t('map.read_only_alert', 'Azione riservata agli Ufficiali (R4/R5).'));
+    }
+
     Object.entries(marchAssignments).forEach(([idx, assign]) => {
       if (assign.buildingId) {
         const cleanMembers = (assign.members || []).map(m => typeof m === 'object' ? m.id : m);
@@ -576,7 +603,6 @@ export default function MapPage({ roster, userRole, allianceCode }) {
   return (
     <div className="h-screen w-screen bg-slate-950 flex text-slate-100 overflow-hidden select-none relative">
       
-      {/* 💡 MODAL DI BENVENUTO DEMO */}
       {showDemoWelcome && (
         <div className="absolute inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-cyan-500/50 rounded-2xl shadow-2xl max-w-2xl w-full p-6 flex flex-col gap-4 animate-fade-in">
@@ -605,7 +631,9 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         </div>
       )}
 
+      {/* 💡 PASSAGGIO DELLA PROP isReadOnly */}
       <MapSidebar 
+        isReadOnly={isReadOnly}
         roster={effectiveRoster} selectedTool={selectedTool} setSelectedTool={setSelectedTool}
         filters={filters} toggleFilter={toggleFilter} toggleAllFilters={toggleAllFilters} areAllFiltersActive={areAllFiltersActive}
         showLabels={showLabels} setShowLabels={setShowLabels}
@@ -705,7 +733,9 @@ export default function MapPage({ roster, userRole, allianceCode }) {
         </div>
       </main>
       
+      {/* 💡 PASSAGGIO DELLA PROP isReadOnly */}
       <MapDetails 
+        isReadOnly={isReadOnly}
         selectedBuilding={selectedBuilding} 
         onClose={() => setIsRightPanelOpen(false)}
         enemyHQs={enemyHQs}

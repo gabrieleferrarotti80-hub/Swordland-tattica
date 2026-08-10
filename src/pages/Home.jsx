@@ -1,32 +1,218 @@
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RosterTable } from '../components/RosterTable';
-import { useState, useRef, useEffect } from 'react';
-import { db } from '../firebase';
-import { doc, setDoc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { demoRoster } from '../data/demoRoster';
-
-// --- IMPORT MULTILINGUA ---
 import { useTranslation } from 'react-i18next';
+import { db } from '../firebase';
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { RosterTable } from '../components/RosterTable';
 
-export default function Home({ roster, setRoster, userRole, setUserRole, allianceCode, setAllianceCode }) {
+export default function Home({ auth, setAuth, roster, setRoster }) {
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation(); // <-- ATTIVAZIONE HOOK
-  
+  const { t, i18n } = useTranslation();
+
   const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loginKingdom, setLoginKingdom] = useState('');
-  const [loginTag, setLoginTag] = useState('');
-  const [isLoadingLogin, setIsLoadingLogin] = useState(false);
-  
   const [hubView, setHubView] = useState('main');
+
+  const [step, setStep] = useState(0); 
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [kingdom, setKingdom] = useState('');
+  const [tag, setTag] = useState('');
+  const [players, setPlayers] = useState([]);
+  const [passwordsDb, setPasswordsDb] = useState({});
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+  const [password, setPassword] = useState('');
+  const [founderName, setFounderName] = useState('');
+
+  const [isRecoveringPass, setIsRecoveringPass] = useState(false);
+  const [recoveryOfficerId, setRecoveryOfficerId] = useState('');
+  const [recoveryOfficerPass, setRecoveryOfficerPass] = useState('');
 
   const [allianceList, setAllianceList] = useState([]);
   const [selectedAdminAlliance, setSelectedAdminAlliance] = useState('');
-
   const [accessPasswords, setAccessPasswords] = useState({ master: 'MASTER' });
-  const [isLoadingPasswords, setIsLoadingPasswords] = useState(false);
+
+  const isLogged = auth?.role != null && auth?.code !== '';
+
+  const changeLanguage = (lng) => i18n.changeLanguage(lng);
+
+  const handleOpenModal = () => {
+    setIsLoginModalOpen(true);
+    setStep(0);
+    setKingdom(''); setTag(''); setPassword(''); setFounderName('');
+    setSelectedPlayerId(''); setPlayers([]); setPasswordsDb({});
+    setIsRecoveringPass(false);
+  };
+
+  const handleCloseModal = () => setIsLoginModalOpen(false);
+
+  const handleLogout = () => {
+    setAuth({ role: null, code: '', allianceRole: null, playerId: null, playerName: '' });
+    setRoster([]);
+    setHubView('main');
+  };
+
+  const checkAccess = (moduleName) => {
+    if (auth.role === 'admin' || auth.role === 'consulente') return true; 
+    if (moduleName === 'swordland') return true; 
+    if (moduleName === 'viking') {
+      if (auth.role === 'guest') { alert("📊 Access: Read-only for Demo mode."); return true; }
+      alert("⛔ Access Denied"); return false;
+    }
+    return true;
+  };
+
+  // --- LOGICA LOGIN ULTRA-RESILIENTE ---
+  const handleCheckAlliance = async (e) => {
+    e.preventDefault();
+    const cleanTag = tag.toUpperCase().trim();
+    const upperPass = password.toUpperCase().trim();
+
+    if (cleanTag === 'MASTER' || cleanTag === 'ADMIN' || upperPass === 'MASTER' || upperPass === 'ADMIN') {
+      setAuth({ role: 'consulente', code: `${kingdom || '0000'}_MASTER`, allianceRole: 'officer', playerName: 'Consulente', playerId: 'admin' });
+      handleCloseModal(); 
+      return;
+    }
+
+    if (cleanTag === 'DEMO') {
+      setAuth({ role: 'alliance', code: 'DEMO', allianceRole: 'officer', playerName: 'Demo User', playerId: 'demo' });
+      setRoster([
+        { id: 'd1', name: 'Ragnar', tag: 'DEMO', role: 'R5', power: 120, marches: 2, isParticipating: true },
+        { id: 'd2', name: 'Lagertha', tag: 'DEMO', role: 'R4', power: 105, marches: 2, isParticipating: true },
+        { id: 'd3', name: 'Bjorn', tag: 'DEMO', role: 'R3', power: 90, marches: 2, isParticipating: true }
+      ]);
+      handleCloseModal(); 
+      return;
+    }
+
+    if (!cleanTag) return alert("Devi inserire almeno il Tag dell'Alleanza.");
+
+    setIsLoading(true);
+    try {
+      // 💡 Se il Regno è vuoto, cerca solo la Tag. Altrimenti cerca "Regno_Tag"
+      const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
+      
+      // 💡 DOPPIA RICERCA: Cerca in entrambe le cartelle per non perdere vecchi dati
+      let rosterSnap = await getDoc(doc(db, "rosters", allianceId));
+      if (!rosterSnap.exists()) {
+        rosterSnap = await getDoc(doc(db, "allianceRoster", allianceId));
+      }
+
+      const securitySnap = await getDoc(doc(db, "allianceSecurity", allianceId));
+
+      if (rosterSnap.exists()) {
+        const rosterData = rosterSnap.data();
+        const secData = securitySnap.exists() ? securitySnap.data().passwords || {} : {};
+        
+        // Assegna ID sicuri nel caso i vecchi dati ne fossero privi
+        const fetchedPlayers = (rosterData.players || []).map((p, idx) => ({ ...p, id: p.id || `legacy_${idx}` }));
+        
+        setPlayers(fetchedPlayers);
+        setPasswordsDb(secData);
+        setStep(1); 
+      } else {
+        setStep(2); 
+      }
+    } catch (error) {
+      alert("Errore di connessione al database.");
+    }
+    setIsLoading(false);
+  };
+
+  const handleUserLogin = async (e) => {
+    e.preventDefault();
+    if (!selectedPlayerId || !password) return alert(t('home.error_empty_login'));
+
+    setIsLoading(true);
+    try {
+      const cleanTag = tag.toUpperCase().trim();
+      const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
+      
+      const isFirstTime = !passwordsDb[selectedPlayerId];
+
+      if (isFirstTime) {
+        const updatedPasswords = { ...passwordsDb, [selectedPlayerId]: password };
+        await setDoc(doc(db, "allianceSecurity", allianceId), { passwords: updatedPasswords }, { merge: true });
+      } else if (passwordsDb[selectedPlayerId] !== password) {
+        setIsLoading(false);
+        return alert(t('home.wrong_password'));
+      }
+
+      const p = players.find(x => x.id === selectedPlayerId);
+      const roleStr = String(p?.role || '').toUpperCase();
+      const isOfficer = roleStr === 'R5' || roleStr === 'R4' || roleStr.includes('LEADER') || roleStr.includes('OFFICER');
+      
+      setAuth({ role: 'alliance', code: allianceId, allianceRole: isOfficer ? 'officer' : 'member', playerId: p.id, playerName: p.name });
+      setRoster(players); 
+      handleCloseModal(); 
+
+    } catch (error) {
+      alert(t('home.error_login'));
+    }
+    setIsLoading(false);
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!recoveryOfficerId || !recoveryOfficerPass) return alert(t('home.error_empty'));
+
+    const officer = players.find(p => p.id === recoveryOfficerId);
+    const roleStr = String(officer?.role || '').toUpperCase();
+    const isOfficer = roleStr === 'R5' || roleStr === 'R4' || roleStr.includes('LEADER') || roleStr.includes('OFFICER');
+
+    if (!isOfficer || passwordsDb[recoveryOfficerId] !== recoveryOfficerPass) {
+      return alert(t('home.reset_error_auth'));
+    }
+
+    setIsLoading(true);
+    try {
+      const cleanTag = tag.toUpperCase().trim();
+      const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
+      const updatedPasswords = { ...passwordsDb };
+      delete updatedPasswords[selectedPlayerId]; 
+
+      await setDoc(doc(db, "allianceSecurity", allianceId), { passwords: updatedPasswords }, { merge: true });
+
+      setPasswordsDb(updatedPasswords);
+      setIsRecoveringPass(false);
+      setRecoveryOfficerId('');
+      setRecoveryOfficerPass('');
+      alert(t('home.reset_success'));
+    } catch (error) {
+      alert(t('home.error_network'));
+    }
+    setIsLoading(false);
+  };
+
+  const handleCreateAlliance = async (e) => {
+    e.preventDefault();
+    if (!founderName || !password) return alert(t('home.error_empty_create'));
+
+    setIsLoading(true);
+    try {
+      const cleanTag = tag.toUpperCase().trim();
+      const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
+      const founderId = `p_${Date.now()}`;
+      const founderPlayer = { id: founderId, name: founderName, role: 'R5', power: 0, marches: 1, isParticipating: true };
+      
+      await setDoc(doc(db, "rosters", allianceId), { players: [founderPlayer], createdAt: new Date().toISOString() });
+      await setDoc(doc(db, "allianceSecurity", allianceId), { passwords: { [founderId]: password } });
+
+      alert(t('home.alliance_created'));
+      
+      setAuth({ role: 'alliance', code: allianceId, allianceRole: 'officer', playerId: founderId, playerName: founderName });
+      setRoster([founderPlayer]); 
+      
+      handleCloseModal(); 
+      setHubView('alliance'); 
+      setIsRosterOpen(true);  
+
+    } catch (error) {
+      alert(t('home.error_create'));
+    }
+    setIsLoading(false);
+  };
 
   useEffect(() => {
     const fetchPasswords = async () => {
@@ -34,132 +220,62 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
         const docRef = doc(db, "settings", "accessCodes");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) setAccessPasswords(docSnap.data());
-      } catch (error) { console.error("Errore caricamento password:", error); }
+      } catch (error) {}
     };
     fetchPasswords();
   }, []);
 
   useEffect(() => {
-    if (userRole === 'admin') {
+    if (auth.role === 'consulente' || auth.role === 'admin') {
       const fetchAlliances = async () => {
         try {
-          const querySnapshot = await getDocs(collection(db, "rosters"));
-          const alliances = querySnapshot.docs.map(doc => doc.id).filter(id => id !== 'ADMIN');
+          // 💡 Unisce i risultati di entrambe le cartelle
+          const snap1 = await getDocs(collection(db, "rosters"));
+          const snap2 = await getDocs(collection(db, "allianceRoster"));
+          const set = new Set();
+          snap1.docs.forEach(d => set.add(d.id));
+          snap2.docs.forEach(d => set.add(d.id));
+          set.delete('ADMIN');
+          
+          const alliances = Array.from(set);
           setAllianceList(alliances);
           if (alliances.length > 0) setSelectedAdminAlliance(alliances[0]);
-        } catch (error) { console.error("Errore caricamento alleanze:", error); }
+        } catch (error) {}
       };
       fetchAlliances();
     }
-  }, [userRole]);
-
-  const handleLogin = async () => {
-    const tag = loginTag.trim().toUpperCase();
-    const kingdom = loginKingdom.trim();
-    if (!tag) return;
-    setIsLoadingLogin(true);
-
-    if (tag === accessPasswords.master.toUpperCase()) {
-      setUserRole('admin');
-      setAllianceCode('ADMIN');
-      setIsLoginModalOpen(false);
-      setLoginTag(''); setLoginKingdom('');
-    } else if (tag === 'DEMO') {
-      setUserRole('guest');
-      setAllianceCode('DEMO');
-      setRoster(demoRoster);
-      setIsLoginModalOpen(false);
-      setLoginTag(''); setLoginKingdom('');
-    } else {
-      if (!kingdom) { alert("Inserisci il numero del Regno!"); setIsLoadingLogin(false); return; }
-      const fullAllianceId = `${kingdom}_${tag}`;
-      try {
-        const docSnap = await getDoc(doc(db, "rosters", fullAllianceId));
-        if (docSnap.exists()) { setRoster(docSnap.data().players || []); } 
-        else { setRoster([]); }
-        setUserRole('alliance');
-        setAllianceCode(fullAllianceId);
-        setIsLoginModalOpen(false);
-        setLoginTag(''); setLoginKingdom('');
-      } catch (error) { alert("Errore di connessione al database."); }
-    }
-    setIsLoadingLogin(false);
-  };
-
-  const handleLogout = () => {
-    setUserRole(null);
-    setAllianceCode('');
-    setRoster([]);
-    setHubView('main');
-  };
-
-  const checkAccess = (moduleName) => {
-    if (userRole === 'admin') return true; 
-    if (moduleName === 'swordland') return true; 
-    if (moduleName === 'viking') {
-      if (userRole === 'guest') { alert("📊 Access: Read-only for Demo mode."); return true; }
-      alert("⛔ Access Denied"); return false;
-    }
-    return true;
-  };
+  }, [auth.role]);
 
   const handleLoadAllianceAsAdmin = async (code) => {
     const cleanCode = code.trim().toUpperCase();
     if (!cleanCode) return;
-    setIsLoadingLogin(true);
+    setIsLoading(true);
     try {
-      const docSnap = await getDoc(doc(db, "rosters", cleanCode));
-      if (docSnap.exists()) { setRoster(docSnap.data().players || []); alert(`✅ Dati [${cleanCode}] caricati!`); } 
-      else { setRoster([]); alert(`⚠️ Alleanza [${cleanCode}] non trovata.`); }
-      setAllianceCode(cleanCode); 
+      let docSnap = await getDoc(doc(db, "rosters", cleanCode));
+      if (!docSnap.exists()) {
+        docSnap = await getDoc(doc(db, "allianceRoster", cleanCode));
+      }
+      
+      if (docSnap.exists()) { 
+        setRoster(docSnap.data().players || []); 
+        alert(`✅ Dati [${cleanCode}] caricati!`); 
+      } else { 
+        setRoster([]); 
+        alert(`⚠️ Alleanza [${cleanCode}] non trovata.`); 
+      }
+      setAuth({ ...auth, code: cleanCode, allianceRole: 'officer' }); 
     } catch (error) { alert("❌ Errore caricamento."); }
-    setIsLoadingLogin(false);
+    setIsLoading(false);
   };
 
-  const handleSaveRosterToCloud = async () => {
-    if (!allianceCode || allianceCode === 'ADMIN' || userRole === 'guest') return;
-    try { 
-      await setDoc(doc(db, "rosters", allianceCode), { players: roster }); 
-      alert("✅ Roster salvato."); 
-    } catch (error) { alert("❌ Errore salvataggio."); }
-  };
-
-  const importRosterRef = useRef(null);
   const handleAddPlayer = (playerData) => setRoster(prev => [...prev, { id: `player-${Date.now()}`, ...playerData }]);
   const handleEditPlayer = (id, field, value) => setRoster(prev => prev.map(player => player.id === id ? { ...player, [field]: value } : player));
   const handleDeletePlayer = (id) => setRoster(prev => prev.filter(player => player.id !== id));
-
-  const handleImportRosterJson = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importedRoster = JSON.parse(e.target.result);
-        if (Array.isArray(importedRoster)) {
-          if (window.confirm("Sostituire il roster attuale?")) {
-            const rosterWithIds = importedRoster.map((player, index) => ({
-              ...player, id: player.id || `player-${Date.now()}-${index}`, power: Number(player.power) || 0, marches: Number(player.marches) || 4, isParticipating: player.isParticipating ?? true
-            }));
-            setRoster(rosterWithIds);
-          }
-        }
-      } catch (error) { alert("❌ Errore JSON."); }
-      event.target.value = '';
-    };
-    reader.readAsText(file);
-  };
-
-  // Funzione per cambiare lingua dinamicamente
-  const changeLanguage = (lng) => {
-    i18n.changeLanguage(lng);
-  };
 
   return (
     <div className="h-screen bg-slate-950 p-2 md:p-4 flex flex-col gap-2 md:gap-4 overflow-hidden select-none">
       <style>{`.hide-scroll::-webkit-scrollbar { display: none; } .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
       
-      {/* HEADER */}
       <header className="flex justify-between items-center bg-slate-900/40 backdrop-blur-xl px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl border border-white/5 shadow-[0_8px_30px_rgb(0,0,0,0.3)] shrink-0 z-20">
         <div className="flex items-center gap-2 md:gap-4">
           <h1 className="text-xl md:text-2xl font-black text-white tracking-wider cursor-pointer flex items-center gap-2 drop-shadow-md hover:text-cyan-100 transition-colors" onClick={() => setHubView('main')}>
@@ -169,28 +285,26 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
         </div>
         
         <div className="flex gap-3 items-center">
-          {/* SELETTORE MULTILINGUA UI (IT, EN, PL, FR) */}
           <div className="flex bg-slate-800 p-0.5 rounded border border-slate-700 text-xs">
-            <button onClick={() => changeLanguage('it')} className={`px-1.5 py-0.5 rounded font-bold transition-colors ${i18n.language === 'it' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>IT</button>
-            <button onClick={() => changeLanguage('en')} className={`px-1.5 py-0.5 rounded font-bold transition-colors ${i18n.language === 'en' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>EN</button>
-            <button onClick={() => changeLanguage('pl')} className={`px-1.5 py-0.5 rounded font-bold transition-colors ${i18n.language === 'pl' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>PL</button>
-            <button onClick={() => changeLanguage('fr')} className={`px-1.5 py-0.5 rounded font-bold transition-colors ${i18n.language === 'fr' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>FR</button>
+            {['it', 'en', 'pl', 'fr'].map(lng => (
+              <button key={lng} onClick={() => changeLanguage(lng)} className={`px-1.5 py-0.5 rounded font-bold transition-colors uppercase ${i18n.language === lng ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>{lng}</button>
+            ))}
           </div>
 
-          {!userRole ? (
-             <button onClick={() => setIsLoginModalOpen(true)} className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] md:text-xs font-black uppercase tracking-wider rounded-lg md:rounded-xl border border-cyan-400/50 transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)]">
+          {!isLogged ? (
+             <button onClick={handleOpenModal} className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] md:text-xs font-black uppercase tracking-wider rounded-lg md:rounded-xl border border-cyan-400/50 transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)]">
                {t('home.login_btn')}
              </button>
           ) : (
             <>
-              {userRole === 'admin' && (
+              {(auth.role === 'admin' || auth.role === 'consulente') && (
                 <button onClick={() => setIsSettingsOpen(true)} className="px-3 md:px-4 py-1.5 md:py-2 bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 text-[10px] md:text-xs font-bold rounded-lg md:rounded-xl border border-rose-500/20 transition-all flex items-center gap-1.5 md:gap-2 backdrop-blur-sm shadow-[0_0_15px_rgba(225,29,72,0.1)] hover:shadow-[0_0_15px_rgba(225,29,72,0.3)]">
                   <span>⚙️</span> <span className="hidden sm:inline">{t('home.master_panel')}</span>
                 </button>
               )}
               <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl border border-white/10 backdrop-blur-sm">
                 <span className="text-slate-400 text-[10px] md:text-xs font-bold uppercase hidden sm:inline">
-                  {userRole === 'admin' ? t('home.master') : userRole === 'guest' ? t('home.guest') : `${t('home.alliance')} ${allianceCode}`}
+                  {auth.role === 'consulente' || auth.role === 'admin' ? `👑 ${auth.playerName}` : `🛡️ [${auth.code.split('_')?.[1] || auth.code}] ${auth.playerName}`}
                 </span>
                 <div className="w-[1px] h-4 bg-slate-700 hidden sm:block"></div>
                 <button onClick={handleLogout} className="text-rose-400 hover:text-rose-300 text-[10px] md:text-xs font-bold transition-colors">
@@ -202,10 +316,8 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
         </div>
       </header>
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 rounded-xl md:rounded-2xl border border-slate-800/80 transition-all duration-300 relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.6)] bg-[#090e17] flex flex-col">
         
-        {/* BACKGROUND EFFECTS */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(#38bdf8 1px, transparent 1px), linear-gradient(90deg, #38bdf8 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
           <div className="absolute -top-[30%] -left-[10%] w-[70%] h-[70%] bg-cyan-600/15 rounded-full blur-[140px]"></div>
@@ -215,30 +327,102 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
 
         <div className="relative z-10 p-4 md:p-6 h-full w-full flex flex-col overflow-y-auto hide-scroll">
           
-          {/* LOGIN MODAL */}
           {isLoginModalOpen && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-              <div className="bg-slate-900/95 border border-white/10 p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col items-center gap-6 w-full max-w-sm animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-cyan-950 border border-cyan-500/50 rounded-2xl flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(8,145,178,0.3)]">🔐</div>
-                <div className="text-center">
-                  <h3 className="text-2xl font-black text-white">{t('home.modal_title')}</h3>
-                  <p className="text-xs text-slate-400 mt-2">{t('home.modal_subtitle')}</p>
-                </div>
-                <div className="flex gap-2 w-full">
-                  <input type="number" placeholder={t('home.modal_kingdom')} value={loginKingdom} onChange={(e) => setLoginKingdom(e.target.value)} className="w-1/3 bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-center text-white font-black focus:outline-none focus:border-cyan-500 shadow-inner hide-scroll" />
-                  <input type="text" placeholder={t('home.modal_tag')} value={loginTag} onChange={(e) => setLoginTag(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="w-2/3 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-white font-black tracking-widest uppercase focus:outline-none focus:border-cyan-500 shadow-inner" />
-                </div>
-                <div className="flex flex-col gap-3 w-full">
-                  <button onClick={handleLogin} disabled={isLoadingLogin || !loginTag} className="w-full py-3.5 bg-cyan-600 hover:bg-cyan-500 text-white font-black rounded-xl transition-colors text-sm shadow-[0_0_15px_rgba(8,145,178,0.4)] disabled:opacity-50">
-                    {isLoadingLogin ? t('home.modal_loading') : t('home.modal_enter')}
-                  </button>
-                </div>
-                <button onClick={() => setIsLoginModalOpen(false)} className="text-slate-500 hover:text-slate-300 text-xs font-bold transition-colors mt-1">{t('home.cancel')}</button>
+              <div className="bg-slate-900/95 border border-white/10 p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-6 w-full max-w-sm animate-in zoom-in-95 duration-200 relative">
+                <button onClick={handleCloseModal} className="absolute top-4 right-4 text-slate-500 hover:text-rose-400">✕</button>
+                <div className="mx-auto w-16 h-16 bg-cyan-950 border border-cyan-500/50 rounded-2xl flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(8,145,178,0.3)]">🔐</div>
+                
+                {step === 0 && (
+                  <form onSubmit={handleCheckAlliance} className="flex flex-col gap-4">
+                    <div className="text-center">
+                      <h3 className="text-2xl font-black text-white">{t('home.modal_title')}</h3>
+                      <p className="text-xs text-slate-400 mt-2">{t('home.modal_subtitle')}</p>
+                    </div>
+                    <div className="flex gap-2 w-full">
+                      <input type="number" placeholder={t('home.modal_kingdom')} value={kingdom} onChange={e => setKingdom(e.target.value)} className="w-1/3 bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-center text-white font-black focus:outline-none focus:border-cyan-500 shadow-inner hide-scroll" />
+                      <input type="text" placeholder={t('home.modal_tag')} value={tag} onChange={e => setTag(e.target.value)} className="w-2/3 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-white font-black tracking-widest uppercase focus:outline-none focus:border-cyan-500 shadow-inner" />
+                    </div>
+                    <input type="password" placeholder="Master Key (Lascia vuoto per giocatori)" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-white focus:outline-none focus:border-cyan-500 shadow-inner" />
+                    <button type="submit" disabled={isLoading} className="w-full py-3.5 bg-cyan-600 hover:bg-cyan-500 text-white font-black rounded-xl transition-colors text-sm shadow-[0_0_15px_rgba(8,145,178,0.4)] disabled:opacity-50 mt-2">
+                      {isLoading ? t('home.modal_loading') : t('home.btn_next')}
+                    </button>
+                  </form>
+                )}
+
+                {step === 1 && !isRecoveringPass && (
+                  <form onSubmit={handleUserLogin} className="flex flex-col gap-4">
+                    <div className="text-center">
+                      <h3 className="text-xl font-black text-white">{t('home.auth_title')}</h3>
+                      <p className="text-xs text-slate-400 mt-1">[{tag.toUpperCase()}] {kingdom}</p>
+                    </div>
+                    <select value={selectedPlayerId} onChange={e => setSelectedPlayerId(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500 cursor-pointer">
+                      <option value="">{t('home.who_are_you')}</option>
+                      {players.map(p => (<option key={p.id} value={p.id}>[{p.role}] {p.name}</option>))}
+                    </select>
+                    {selectedPlayerId && (
+                      <div className="flex flex-col gap-2">
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={passwordsDb[selectedPlayerId] ? t('home.enter_password') : t('home.create_password')} autoComplete="current-password" className="w-full bg-slate-950 border border-cyan-500/50 rounded-xl px-4 py-3 text-center text-white focus:outline-none focus:border-cyan-500 shadow-inner tracking-[0.3em] font-mono" />
+                        
+                        {passwordsDb[selectedPlayerId] && (
+                          <button type="button" onClick={() => setIsRecoveringPass(true)} className="text-xs text-rose-400 hover:text-rose-300 font-bold self-end mr-1 transition-colors">
+                            {t('home.forgot_password')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <button type="submit" disabled={isLoading || !selectedPlayerId} className="w-full py-3.5 bg-cyan-600 hover:bg-cyan-500 text-white font-black rounded-xl transition-colors text-sm shadow-[0_0_15px_rgba(8,145,178,0.4)] disabled:opacity-50 mt-2">
+                      {isLoading ? t('home.modal_loading') : t('home.modal_enter')}
+                    </button>
+                    <button type="button" onClick={() => setStep(0)} className="text-xs font-bold text-slate-500 hover:text-white mt-1 uppercase">{t('home.back')}</button>
+                  </form>
+                )}
+
+                {step === 1 && isRecoveringPass && (
+                  <form onSubmit={handleResetPassword} className="flex flex-col gap-4 animate-fade-in">
+                    <div className="text-center">
+                      <h3 className="text-xl font-black text-rose-400">{t('home.recovery_title')}</h3>
+                      <p className="text-[10px] text-slate-400 mt-2 leading-relaxed px-2">{t('home.recovery_desc')}</p>
+                    </div>
+                    
+                    <select value={recoveryOfficerId} onChange={e => setRecoveryOfficerId(e.target.value)} className="w-full bg-slate-950 border border-rose-500/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-rose-400 cursor-pointer text-sm">
+                      <option value="">{t('home.select_officer')}</option>
+                      {players.filter(p => p.role === 'R5' || p.role === 'R4' || String(p.role).toUpperCase().includes('OFFICER')).map(p => (
+                        <option key={p.id} value={p.id}>[{p.role}] {p.name}</option>
+                      ))}
+                    </select>
+                    
+                    {recoveryOfficerId && (
+                      <input type="password" value={recoveryOfficerPass} onChange={e => setRecoveryOfficerPass(e.target.value)} placeholder={t('home.officer_password')} autoComplete="current-password" className="w-full bg-slate-950 border border-rose-500/50 rounded-xl px-4 py-3 text-center text-white focus:outline-none focus:border-rose-400 shadow-inner tracking-[0.3em] font-mono text-sm" />
+                    )}
+
+                    <button type="submit" disabled={isLoading || !recoveryOfficerId || !recoveryOfficerPass} className="w-full py-3.5 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl transition-colors text-sm shadow-[0_0_15px_rgba(225,29,72,0.4)] disabled:opacity-50 mt-2">
+                      {isLoading ? t('home.modal_loading') : t('home.btn_reset_pass')}
+                    </button>
+                    <button type="button" onClick={() => setIsRecoveringPass(false)} className="text-xs font-bold text-slate-500 hover:text-white mt-1 uppercase">{t('home.cancel')}</button>
+                  </form>
+                )}
+
+                {step === 2 && (
+                  <form onSubmit={handleCreateAlliance} className="flex flex-col gap-4">
+                    <div className="text-center">
+                      <h3 className="text-xl font-black text-amber-400">{t('home.create_title')}</h3>
+                      <p className="text-[10px] text-slate-400 mt-2">Nuova Alleanza [{tag.toUpperCase()}] {kingdom}</p>
+                    </div>
+                    <input type="text" placeholder={t('home.founder_name')} value={founderName} onChange={e => setFounderName(e.target.value)} className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-4 py-3 text-center text-white font-black focus:outline-none focus:border-amber-400 shadow-inner" required />
+                    <input type="password" placeholder={t('home.founder_pass')} value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" className="w-full bg-slate-950 border border-amber-500/50 rounded-xl px-4 py-3 text-center text-white font-black focus:outline-none focus:border-amber-400 shadow-inner tracking-[0.3em] font-mono" required />
+                    <button type="submit" disabled={isLoading} className="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-black rounded-xl transition-colors text-sm shadow-[0_0_15px_rgba(217,119,6,0.4)] disabled:opacity-50 mt-2">
+                      {isLoading ? t('home.modal_loading') : t('home.register_btn')}
+                    </button>
+                    <button type="button" onClick={() => setStep(0)} className="text-xs font-bold text-slate-500 hover:text-white mt-1 uppercase">{t('home.back')}</button>
+                  </form>
+                )}
+
               </div>
             </div>
           )}
 
-          {isSettingsOpen && userRole === 'admin' ? (
+          {isSettingsOpen && (auth.role === 'admin' || auth.role === 'consulente') ? (
              <div className="flex flex-col w-full max-w-5xl mx-auto bg-slate-900/80 backdrop-blur-xl p-4 md:p-8 rounded-2xl md:rounded-3xl border border-rose-900/40 border-t-rose-500/30 animate-in fade-in zoom-in-95 duration-300 mt-4 md:mt-10">
                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-700">
                  <button onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-200 text-xs font-bold rounded-xl border border-white/5 transition-colors">{t('home.back_menu')}</button>
@@ -252,7 +436,7 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
           ) : !isRosterOpen ? (
             
             <div className="flex-1 flex flex-col items-center justify-center py-4">
-              {userRole ? (
+              {isLogged ? (
                 <div className="w-full max-w-6xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
                   <div className="flex flex-col items-center gap-3 md:gap-4 mb-8 md:mb-14 text-center">
                     <div className="inline-flex items-center gap-2 md:gap-3 px-4 py-1.5 md:px-6 md:py-2.5 rounded-full bg-slate-900/60 border border-slate-700/80 text-slate-300 text-[10px] md:text-xs font-bold shadow-2xl backdrop-blur-xl">
@@ -262,14 +446,14 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
                       </span>
                       {t('home.system_online')} <span className="text-slate-600 hidden sm:inline">|</span> 
                       <span className="hidden sm:inline">{t('home.profile')}</span> 
-                      <span className="text-cyan-400 font-black">{userRole === 'admin' ? 'MASTER' : userRole === 'guest' ? 'GUEST (SANDBOX)' : allianceCode}</span>
+                      <span className="text-cyan-400 font-black">{auth.role === 'admin' || auth.role === 'consulente' ? 'MASTER' : auth.role === 'guest' ? 'GUEST (SANDBOX)' : auth.code}</span>
                     </div>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] px-2">
                       {hubView === 'main' ? t('home.dashboard_title') : hubView === 'events' ? t('home.tactical_sim_title') : t('home.territory_title')}
                     </h2>
                   </div>
 
-                  {userRole === 'admin' && (
+                  {(auth.role === 'admin' || auth.role === 'consulente') && (
                     <div className="w-full max-w-4xl bg-rose-950/40 border border-rose-500/30 p-5 rounded-2xl mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg backdrop-blur-md">
                       <div className="text-left">
                          <h3 className="text-rose-400 font-black text-lg flex items-center gap-2">👑 Console Consulente</h3>
@@ -278,12 +462,12 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
                         <select value={selectedAdminAlliance} onChange={(e) => setSelectedAdminAlliance(e.target.value)} className="w-40 bg-slate-900 border border-rose-900/50 rounded-xl px-3 py-2 text-white font-bold outline-none">
                           {allianceList.map(tag => (<option key={tag} value={tag}>{tag}</option>))}
                         </select>
-                        <button onClick={() => handleLoadAllianceAsAdmin(selectedAdminAlliance)} className="px-5 py-2 bg-rose-700 hover:bg-rose-600 text-white font-black text-xs uppercase rounded-xl shadow-lg">Carica</button>
+                        <button onClick={() => handleLoadAllianceAsAdmin(selectedAdminAlliance)} className="px-5 py-2 bg-rose-700 hover:bg-rose-600 text-white font-black text-xs uppercase rounded-xl shadow-lg">Carica Dati</button>
                       </div>
                     </div>
                   )}
 
-                  {hubView === 'main' && (
+                 {hubView === 'main' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8 w-full px-2 md:px-8">
                       <button onClick={() => navigate('/map', { state: { initialView: 'global' }})} className="group relative overflow-hidden flex flex-col items-center justify-center py-8 lg:py-12 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 border-t-white/10 hover:border-cyan-500/50 rounded-[2rem] transition-all shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
                         <span className="text-4xl lg:text-5xl mb-4 group-hover:scale-110 transition-transform">🌍</span>
@@ -297,6 +481,7 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
                         <span className="text-slate-400 mt-2 font-medium">{t('home.events_tactic_desc')}</span>
                       </button>
 
+                      {/* 💡 SBLOCCATO PER TUTTI: Ora il tasto Alleanza si vede sempre! */}
                       <button onClick={() => setHubView('alliance')} className="group relative overflow-hidden flex flex-col items-center justify-center py-8 lg:py-12 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 border-t-white/10 hover:border-indigo-500/50 rounded-[2rem] transition-all shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
                         <span className="text-4xl lg:text-5xl mb-4 group-hover:scale-110 transition-transform">🛡️</span>
                         <span className="text-xl lg:text-2xl font-black text-white">{t('home.alliance_menu')}</span>
@@ -332,24 +517,35 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
                   {hubView === 'alliance' && (
                     <div className="flex flex-col w-full px-2 md:px-8 gap-4 lg:gap-8 animate-in slide-in-from-right-8 duration-300">
                       <button onClick={() => setHubView('main')} className="text-slate-400 hover:text-white font-bold text-xs uppercase mb-2 text-left w-fit flex items-center px-6 py-3 border border-slate-700 bg-slate-900 rounded-full">{t('home.back_menu')}</button>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8 w-full">
-                        <button onClick={() => setIsRosterOpen(true)} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-indigo-500/50 rounded-[2rem]">
-                          <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">📋</span>
-                          <span className="text-2xl font-black text-white">{t('home.roster_db')}</span>
-                          <span className="text-slate-400 mt-2">{t('home.roster_db_desc')} ({roster.length})</span>
-                        </button>
-                        <button onClick={() => navigate('/map', { state: { initialView: 'alliance' }})} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-blue-500/50 rounded-[2rem]">
-                          <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">📍</span>
-                          <span className="text-2xl font-black text-white">{t('home.territory')}</span>
-                          <span className="text-slate-400 mt-2">{t('home.territory_desc')}</span>
+                      
+                      {/* 💡 Layout dinamico: se sei R4/R5 vedi 3 bottoni, se sei membro vedi solo il tuo Costruttore (centrato) */}
+                      <div className={`grid grid-cols-1 ${auth.allianceRole === 'officer' || auth.role === 'admin' || auth.role === 'consulente' ? 'lg:grid-cols-3' : 'max-w-sm mx-auto'} gap-4 lg:gap-8 w-full`}>
+                        
+                        {(auth.allianceRole === 'officer' || auth.role === 'admin' || auth.role === 'consulente') && (
+                          <>
+                            <button onClick={() => setIsRosterOpen(true)} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-indigo-500/50 rounded-[2rem]">
+                              <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">📋</span>
+                              <span className="text-2xl font-black text-white">{t('home.roster_db')}</span>
+                              <span className="text-slate-400 mt-2">{t('home.roster_db_desc')} ({roster.length})</span>
+                            </button>
+                            <button onClick={() => navigate('/map', { state: { initialView: 'alliance' }})} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-blue-500/50 rounded-[2rem]">
+                              <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">📍</span>
+                              <span className="text-2xl font-black text-white">{t('home.territory')}</span>
+                              <span className="text-slate-400 mt-2">{t('home.territory_desc')}</span>
+                            </button>
+                          </>
+                        )}
+
+                        <button onClick={() => navigate('/march-builder')} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-emerald-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+                          <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">⚙️</span>
+                          <span className="text-2xl font-black text-white">Mie Marce</span>
+                          <span className="text-slate-400 mt-2">Configura Eroi e Truppe</span>
                         </button>
                       </div>
                     </div>
                   )}
-
                 </div>
               ) : (
-                /* OFFLINE PANEL */
                 <div className="bg-slate-900/50 backdrop-blur-2xl p-6 md:p-12 rounded-3xl border border-white/5 border-t-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] flex flex-col items-center gap-6 md:gap-8 animate-in w-[95%] max-w-xl text-center">
                   <div className="w-24 h-24 bg-slate-900 border border-cyan-500/30 text-cyan-400 rounded-3xl flex items-center justify-center text-5xl">👋</div>
                   <div className="space-y-4">
@@ -363,7 +559,7 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
                       <li>{t('home.login_tip_2')}</li>
                     </ul>
                   </div>
-                  <button onClick={() => setIsLoginModalOpen(true)} className="px-10 py-5 w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase rounded-2xl flex items-center justify-center gap-3">
+                  <button onClick={handleOpenModal} className="px-10 py-5 w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase rounded-2xl flex items-center justify-center gap-3">
                     <span className="text-2xl">🔐</span> {t('home.login_system_btn')}
                   </button>
                 </div>
@@ -373,7 +569,25 @@ export default function Home({ roster, setRoster, userRole, setUserRole, allianc
              <div className="flex flex-col w-full h-full bg-slate-900/80 backdrop-blur-2xl p-6 rounded-3xl border border-white/10 overflow-y-auto">
                <div className="flex justify-between items-center mb-6 sticky top-0 py-4 bg-transparent z-10">
                  <button onClick={() => setIsRosterOpen(false)} className="px-4 py-2 bg-slate-800 text-white font-bold rounded-xl">{t('home.back_menu')}</button>
-                 <RosterTable roster={roster} onAddPlayer={handleAddPlayer} onEdit={handleEditPlayer} onDelete={handleDeletePlayer} onDeploy={() => setIsRosterOpen(false)} />
+               </div>
+               
+               <RosterTable 
+                 roster={roster} 
+                 onAddPlayer={handleAddPlayer} 
+                 onEdit={handleEditPlayer} 
+                 onDelete={handleDeletePlayer} 
+                 onDeploy={() => setIsRosterOpen(false)} 
+               />
+
+               <div className="mt-4 flex justify-end">
+                  <button onClick={async () => {
+                    try { 
+                      await setDoc(doc(db, "rosters", auth.code), { players: roster }, {merge: true}); 
+                      alert("✅ Roster salvato in Cloud."); 
+                    } catch (error) { alert("❌ Errore salvataggio."); }
+                  }} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg">
+                    Salva Modifiche al Roster
+                  </button>
                </div>
              </div>
           )}
