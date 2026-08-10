@@ -34,9 +34,10 @@ export default function MarchBuilder({ auth }) {
   // 💡 STATO PER LA GUIDA DELLA DEMO
   const [showDemoGuide, setShowDemoGuide] = useState(false);
 
-  // 💡 INIEZIONE DATI DEMO AL CARICAMENTO
+ // 💡 INIEZIONE DATI DEMO AL CARICAMENTO
   useEffect(() => {
-    if (auth?.code === 'DEMO') {
+    // 💡 Ora si attiva sia per DEMO che per DEMO2
+    if (auth?.code === 'DEMO' || auth?.code === 'DEMO2') {
       setShowDemoGuide(true);
       // Pre-carica 1 milione di truppe
       setTotalTroops({
@@ -49,9 +50,9 @@ export default function MarchBuilder({ auth }) {
       // Pre-carica Marcia 1 con 3 eroi
       setMarches([{ 
         id: 'demo_march_1', 
-        hero1: 'h_inf_1', // Ragnar (Fanteria)
-        hero2: 'h_cav_1', // Lagertha (Cavalleria)
-        hero3: 'h_arc_1', // Sigurd (Arcieri)
+        hero1: 'h_inf_1', // Forrest
+        hero2: 'h_cav_1', // Edwin
+        hero3: 'h_arc_1', // Olive
         troopConfig: { mode: 'percent', manual: { inf: 0, cav: 0, arc: 0 }, percent: { inf: 50, cav: 30, arc: 20 } } 
       }]);
     }

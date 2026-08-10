@@ -53,20 +53,28 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     setHubView('main');
   };
 
+  // 💡 GESTIONE ACCESSI AGGIORNATA PER DEMO 1 e DEMO 2
   const checkAccess = (moduleName) => {
     if (auth.role === 'admin' || auth.role === 'consulente') return true; 
     if (moduleName === 'swordland') return true; 
     if (moduleName === 'viking') {
-      if (auth.role === 'guest') { alert("📊 Access: Read-only for Demo mode."); return true; }
-      alert("⛔ Access Denied"); return false;
+      if (auth.code === 'DEMO') { 
+        alert("⛔ Accesso negato: Il Centro Vichinghi non è accessibile nella Demo Tattica. Esci e accedi usando il Tag 'DEMO2'."); 
+        return false; 
+      }
+      if (auth.code === 'DEMO2') { 
+        alert("📊 Centro Viking: Accesso consentito in modalità Sola Lettura."); 
+        return true; 
+      }
+      return true; // Per le Alleanze reali
     }
     return true;
   };
-
-  // --- LOGICA LOGIN ULTRA-RESILIENTE ---
+// --- LOGICA LOGIN ULTRA-RESILIENTE ---
   const handleCheckAlliance = async (e) => {
     e.preventDefault();
-    const cleanTag = tag.toUpperCase().trim();
+    // 💡 Rimuove automaticamente tutti gli spazi, così "DEMO 2" diventa "DEMO2"
+    const cleanTag = tag.toUpperCase().replace(/\s+/g, '');
     const upperPass = password.toUpperCase().trim();
 
     if (cleanTag === 'MASTER' || cleanTag === 'ADMIN' || upperPass === 'MASTER' || upperPass === 'ADMIN') {
@@ -75,12 +83,20 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
       return;
     }
 
-    if (cleanTag === 'DEMO') {
-      setAuth({ role: 'alliance', code: 'DEMO', allianceRole: 'officer', playerName: 'Demo User', playerId: 'demo' });
+    // 💡 INTERCETTA SIA 'DEMO' CHE 'DEMO2'
+    if (cleanTag === 'DEMO' || cleanTag === 'DEMO2') {
+      const isDemo2 = cleanTag === 'DEMO2';
+      setAuth({ 
+        role: 'guest', // Impostiamo "guest" così nella barra in alto apparirà "GUEST (SANDBOX)"
+        code: cleanTag, 
+        allianceRole: 'officer', // Manteniamo i permessi per farti vedere i bottoni
+        playerName: isDemo2 ? 'Analista Demo' : 'Tattico Demo', 
+        playerId: cleanTag.toLowerCase() 
+      });
       setRoster([
-        { id: 'd1', name: 'Ragnar', tag: 'DEMO', role: 'R5', power: 120, marches: 2, isParticipating: true },
-        { id: 'd2', name: 'Lagertha', tag: 'DEMO', role: 'R4', power: 105, marches: 2, isParticipating: true },
-        { id: 'd3', name: 'Bjorn', tag: 'DEMO', role: 'R3', power: 90, marches: 2, isParticipating: true }
+        { id: 'd1', name: 'Ragnar', tag: cleanTag, role: 'R5', power: 120, marches: 2, isParticipating: true },
+        { id: 'd2', name: 'Lagertha', tag: cleanTag, role: 'R4', power: 105, marches: 2, isParticipating: true },
+        { id: 'd3', name: 'Bjorn', tag: cleanTag, role: 'R3', power: 90, marches: 2, isParticipating: true }
       ]);
       handleCloseModal(); 
       return;
@@ -90,10 +106,8 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
 
     setIsLoading(true);
     try {
-      // 💡 Se il Regno è vuoto, cerca solo la Tag. Altrimenti cerca "Regno_Tag"
       const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
       
-      // 💡 DOPPIA RICERCA: Cerca in entrambe le cartelle per non perdere vecchi dati
       let rosterSnap = await getDoc(doc(db, "rosters", allianceId));
       if (!rosterSnap.exists()) {
         rosterSnap = await getDoc(doc(db, "allianceRoster", allianceId));
@@ -105,7 +119,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
         const rosterData = rosterSnap.data();
         const secData = securitySnap.exists() ? securitySnap.data().passwords || {} : {};
         
-        // Assegna ID sicuri nel caso i vecchi dati ne fossero privi
         const fetchedPlayers = (rosterData.players || []).map((p, idx) => ({ ...p, id: p.id || `legacy_${idx}` }));
         
         setPlayers(fetchedPlayers);
@@ -229,7 +242,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     if (auth.role === 'consulente' || auth.role === 'admin') {
       const fetchAlliances = async () => {
         try {
-          // 💡 Unisce i risultati di entrambe le cartelle
           const snap1 = await getDocs(collection(db, "rosters"));
           const snap2 = await getDocs(collection(db, "allianceRoster"));
           const set = new Set();
@@ -467,7 +479,7 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                     </div>
                   )}
 
-                 {hubView === 'main' && (
+                  {hubView === 'main' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8 w-full px-2 md:px-8">
                       <button onClick={() => navigate('/map', { state: { initialView: 'global' }})} className="group relative overflow-hidden flex flex-col items-center justify-center py-8 lg:py-12 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 border-t-white/10 hover:border-cyan-500/50 rounded-[2rem] transition-all shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
                         <span className="text-4xl lg:text-5xl mb-4 group-hover:scale-110 transition-transform">🌍</span>
@@ -481,7 +493,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                         <span className="text-slate-400 mt-2 font-medium">{t('home.events_tactic_desc')}</span>
                       </button>
 
-                      {/* 💡 SBLOCCATO PER TUTTI: Ora il tasto Alleanza si vede sempre! */}
                       <button onClick={() => setHubView('alliance')} className="group relative overflow-hidden flex flex-col items-center justify-center py-8 lg:py-12 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 border-t-white/10 hover:border-indigo-500/50 rounded-[2rem] transition-all shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
                         <span className="text-4xl lg:text-5xl mb-4 group-hover:scale-110 transition-transform">🛡️</span>
                         <span className="text-xl lg:text-2xl font-black text-white">{t('home.alliance_menu')}</span>
@@ -518,7 +529,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                     <div className="flex flex-col w-full px-2 md:px-8 gap-4 lg:gap-8 animate-in slide-in-from-right-8 duration-300">
                       <button onClick={() => setHubView('main')} className="text-slate-400 hover:text-white font-bold text-xs uppercase mb-2 text-left w-fit flex items-center px-6 py-3 border border-slate-700 bg-slate-900 rounded-full">{t('home.back_menu')}</button>
                       
-                      {/* 💡 Layout dinamico: se sei R4/R5 vedi 3 bottoni, se sei membro vedi solo il tuo Costruttore (centrato) */}
                       <div className={`grid grid-cols-1 ${auth.allianceRole === 'officer' || auth.role === 'admin' || auth.role === 'consulente' ? 'lg:grid-cols-3' : 'max-w-sm mx-auto'} gap-4 lg:gap-8 w-full`}>
                         
                         {(auth.allianceRole === 'officer' || auth.role === 'admin' || auth.role === 'consulente') && (
@@ -544,6 +554,7 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                       </div>
                     </div>
                   )}
+
                 </div>
               ) : (
                 <div className="bg-slate-900/50 backdrop-blur-2xl p-6 md:p-12 rounded-3xl border border-white/5 border-t-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] flex flex-col items-center gap-6 md:gap-8 animate-in w-[95%] max-w-xl text-center">
@@ -557,6 +568,8 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                     <ul className="text-xs text-slate-300 space-y-1 pl-2 mt-2">
                       <li>{t('home.login_tip_1')}</li>
                       <li>{t('home.login_tip_2')}</li>
+                      {/* 💡 AGGIUNTO RIFERIMENTO DEMO2 */}
+                      <li>• Modalità Demo: Usa Tag DEMO (Tattica) o DEMO2 (Sola Lettura) per testare liberamente.</li>
                     </ul>
                   </div>
                   <button onClick={handleOpenModal} className="px-10 py-5 w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase rounded-2xl flex items-center justify-center gap-3">
