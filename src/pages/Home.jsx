@@ -651,10 +651,10 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                         )}
 
                         <button onClick={() => navigate('/march-builder')} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-emerald-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-                          <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">⚙️</span>
-                          <span className="text-2xl font-black text-white">Mie Marce</span>
-                          <span className="text-slate-400 mt-2">Configura Eroi e Truppe</span>
-                        </button>
+  <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">⚙️</span>
+  <span className="text-2xl font-black text-white">{t('home.my_marches_title')}</span>
+  <span className="text-slate-400 mt-2">{t('home.my_marches_desc')}</span>
+</button>
                       </div>
                     </div>
                   )}
