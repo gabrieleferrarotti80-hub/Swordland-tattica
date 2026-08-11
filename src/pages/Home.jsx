@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { db } from '../firebase';
@@ -33,6 +33,8 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
   const [selectedAdminAlliance, setSelectedAdminAlliance] = useState('');
   const [accessPasswords, setAccessPasswords] = useState({ master: 'MASTER' });
 
+  const [sysAnnouncement, setSysAnnouncement] = useState(null);
+
   const isLogged = auth?.role != null && auth?.code !== '';
 
   const changeLanguage = (lng) => i18n.changeLanguage(lng);
@@ -53,7 +55,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     setHubView('main');
   };
 
-  // 💡 GESTIONE ACCESSI AGGIORNATA PER DEMO 1 e DEMO 2
   const checkAccess = (moduleName) => {
     if (auth.role === 'admin' || auth.role === 'consulente') return true; 
     if (moduleName === 'swordland') return true; 
@@ -66,30 +67,24 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
         alert("📊 Centro Viking: Accesso consentito in modalità Sola Lettura."); 
         return true; 
       }
-      return true; // Per le Alleanze reali
+      return true; 
     }
     return true;
   };
-// --- LOGICA LOGIN ULTRA-RESILIENTE ---
+
+  // --- LOGICA LOGIN ULTRA-RESILIENTE E CONTROLLO MASTER ---
   const handleCheckAlliance = async (e) => {
     e.preventDefault();
-    // 💡 Rimuove automaticamente tutti gli spazi, così "DEMO 2" diventa "DEMO2"
     const cleanTag = tag.toUpperCase().replace(/\s+/g, '');
     const upperPass = password.toUpperCase().trim();
 
-    if (cleanTag === 'MASTER' || cleanTag === 'ADMIN' || upperPass === 'MASTER' || upperPass === 'ADMIN') {
-      setAuth({ role: 'consulente', code: `${kingdom || '0000'}_MASTER`, allianceRole: 'officer', playerName: 'Consulente', playerId: 'admin' });
-      handleCloseModal(); 
-      return;
-    }
-
-    // 💡 INTERCETTA SIA 'DEMO' CHE 'DEMO2'
+    // INTERCETTA DEMO E DEMO2
     if (cleanTag === 'DEMO' || cleanTag === 'DEMO2') {
       const isDemo2 = cleanTag === 'DEMO2';
       setAuth({ 
-        role: 'guest', // Impostiamo "guest" così nella barra in alto apparirà "GUEST (SANDBOX)"
+        role: 'guest', 
         code: cleanTag, 
-        allianceRole: 'officer', // Manteniamo i permessi per farti vedere i bottoni
+        allianceRole: 'officer', 
         playerName: isDemo2 ? 'Analista Demo' : 'Tattico Demo', 
         playerId: cleanTag.toLowerCase() 
       });
@@ -102,7 +97,31 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
       return;
     }
 
-    if (!cleanTag) return alert("Devi inserire almeno il Tag dell'Alleanza.");
+    // CONTROLLO MASTER KEY (Nello STEP 0)
+    const masterDbPass = accessPasswords?.master ? String(accessPasswords.master).toUpperCase() : 'MASTER';
+    const isMasterInput = (upperPass !== '' && upperPass === masterDbPass) || upperPass === 'MASTER' || upperPass === 'ADMIN' || cleanTag === 'MASTER' || cleanTag === 'ADMIN';
+
+    if (isMasterInput) {
+      if (!cleanTag || cleanTag === 'MASTER' || cleanTag === 'ADMIN') {
+        setAuth({ role: 'consulente', code: '0000_MASTER', allianceRole: 'officer', playerName: 'Consulente', playerId: 'admin' });
+        handleCloseModal();
+        return;
+      } else {
+        const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
+        setIsLoading(true);
+        try {
+          let rosterSnap = await getDoc(doc(db, "rosters", allianceId));
+          if (!rosterSnap.exists()) rosterSnap = await getDoc(doc(db, "allianceRoster", allianceId));
+          if (rosterSnap.exists()) setRoster(rosterSnap.data().players || []);
+        } catch(e) {}
+        setAuth({ role: 'consulente', code: allianceId, allianceRole: 'officer', playerName: 'Consulente', playerId: 'admin' });
+        handleCloseModal();
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    if (!cleanTag) return alert("Devi inserire la Sigla dell'Alleanza.");
 
     setIsLoading(true);
     try {
@@ -137,11 +156,23 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     e.preventDefault();
     if (!selectedPlayerId || !password) return alert(t('home.error_empty_login'));
 
+    const upperPass = password.toUpperCase().trim();
+    const cleanTag = tag.toUpperCase().trim();
+    const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
+
+    // CONTROLLO MASTER KEY (Nello STEP 1)
+    const masterDbPass = accessPasswords?.master ? String(accessPasswords.master).toUpperCase() : 'MASTER';
+    const isMasterInput = (upperPass !== '' && upperPass === masterDbPass) || upperPass === 'MASTER' || upperPass === 'ADMIN';
+
+    if (isMasterInput) {
+      setAuth({ role: 'consulente', code: allianceId, allianceRole: 'officer', playerName: 'Consulente', playerId: 'admin' });
+      setRoster(players); 
+      handleCloseModal();
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const cleanTag = tag.toUpperCase().trim();
-      const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
-      
       const isFirstTime = !passwordsDb[selectedPlayerId];
 
       if (isFirstTime) {
@@ -200,12 +231,17 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
 
   const handleCreateAlliance = async (e) => {
     e.preventDefault();
+    
+    if (!kingdom || String(kingdom).trim() === '') {
+      return alert("⚠️ REGNO MANCANTE: Torna indietro al passo precedente e inserisci il Regno per fondare una nuova Alleanza.");
+    }
+    
     if (!founderName || !password) return alert(t('home.error_empty_create'));
 
     setIsLoading(true);
     try {
       const cleanTag = tag.toUpperCase().trim();
-      const allianceId = kingdom ? `${kingdom}_${cleanTag}` : cleanTag;
+      const allianceId = `${kingdom}_${cleanTag}`;
       const founderId = `p_${Date.now()}`;
       const founderPlayer = { id: founderId, name: founderName, role: 'R5', power: 0, marches: 1, isParticipating: true };
       
@@ -232,7 +268,9 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
       try {
         const docRef = doc(db, "settings", "accessCodes");
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setAccessPasswords(docSnap.data());
+        if (docSnap.exists()) {
+          setAccessPasswords(docSnap.data());
+        }
       } catch (error) {}
     };
     fetchPasswords();
@@ -258,6 +296,32 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     }
   }, [auth.role]);
 
+  // LOGICA RICEZIONE PATCH NOTES
+  useEffect(() => {
+    const fetchAnnouncement = async () => {
+      try {
+        const snap = await getDoc(doc(db, "system", "announcement"));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.active) {
+            const dismissed = localStorage.getItem('dismissed_patch');
+            if (dismissed !== data.version) {
+              setSysAnnouncement(data);
+            }
+          }
+        }
+      } catch(e) {}
+    };
+    fetchAnnouncement();
+  }, []);
+
+  const dismissAnnouncement = () => {
+    if(sysAnnouncement) {
+      localStorage.setItem('dismissed_patch', sysAnnouncement.version);
+      setSysAnnouncement(null);
+    }
+  };
+
   const handleLoadAllianceAsAdmin = async (code) => {
     const cleanCode = code.trim().toUpperCase();
     if (!cleanCode) return;
@@ -278,6 +342,15 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
       setAuth({ ...auth, code: cleanCode, allianceRole: 'officer' }); 
     } catch (error) { alert("❌ Errore caricamento."); }
     setIsLoading(false);
+  };
+
+  const handleSaveMasterKey = async () => {
+    try {
+      await setDoc(doc(db, "settings", "accessCodes"), { master: accessPasswords.master }, { merge: true });
+      alert("✅ Master Key salvata con successo!");
+    } catch (error) {
+      alert("❌ Errore durante il salvataggio.");
+    }
   };
 
   const handleAddPlayer = (playerData) => setRoster(prev => [...prev, { id: `player-${Date.now()}`, ...playerData }]);
@@ -330,6 +403,24 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
 
       <main className="flex-1 rounded-xl md:rounded-2xl border border-slate-800/80 transition-all duration-300 relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.6)] bg-[#090e17] flex flex-col">
         
+        {/* POP-UP PATCH NOTES */}
+        {sysAnnouncement && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-slate-900 border border-indigo-500/50 p-6 md:p-8 rounded-3xl shadow-[0_0_40px_rgba(79,70,229,0.3)] max-w-lg w-full relative">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                <h3 className="text-xl font-black text-white flex items-center gap-2"><span>📢</span> Aggiornamento Sistema</h3>
+                <span className="bg-indigo-600 text-white text-[10px] font-black px-2 py-1 rounded">{sysAnnouncement.version}</span>
+              </div>
+              <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[40vh] overflow-y-auto custom-scrollbar pr-2 mb-6">
+                {sysAnnouncement.text}
+              </div>
+              <button onClick={dismissAnnouncement} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)]">
+                Ricevuto, Chiudi
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(#38bdf8 1px, transparent 1px), linear-gradient(90deg, #38bdf8 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
           <div className="absolute -top-[30%] -left-[10%] w-[70%] h-[70%] bg-cyan-600/15 rounded-full blur-[140px]"></div>
@@ -440,9 +531,13 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                  <button onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-200 text-xs font-bold rounded-xl border border-white/5 transition-colors">{t('home.back_menu')}</button>
                  <h2 className="text-xl font-bold text-rose-400">⚙️ {t('home.master_panel')}</h2>
                </div>
-               <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-700/50 shadow-inner w-1/2">
-                 <label className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Master Key</label>
-                 <input type="text" value={accessPasswords.master} onChange={(e) => setAccessPasswords(prev => ({ ...prev, master: e.target.value }))} className="bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-sm text-white font-bold focus:outline-none w-full mt-2"/>
+               
+               <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-700/50 shadow-inner w-1/2 flex flex-col gap-3">
+                 <label className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Master Key (Password di sistema)</label>
+                 <input type="text" value={accessPasswords.master} onChange={(e) => setAccessPasswords(prev => ({ ...prev, master: e.target.value }))} className="bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-sm text-white font-bold focus:outline-none w-full"/>
+                 <button onClick={handleSaveMasterKey} className="px-4 py-3 bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-xs uppercase rounded-xl transition-all shadow-[0_0_10px_rgba(8,145,178,0.4)]">
+                   Salva nuova Key
+                 </button>
                </div>
              </div>
           ) : !isRosterOpen ? (
@@ -466,15 +561,24 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                   </div>
 
                   {(auth.role === 'admin' || auth.role === 'consulente') && (
-                    <div className="w-full max-w-4xl bg-rose-950/40 border border-rose-500/30 p-5 rounded-2xl mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg backdrop-blur-md">
-                      <div className="text-left">
-                         <h3 className="text-rose-400 font-black text-lg flex items-center gap-2">👑 Console Consulente</h3>
+                    <div className="w-full max-w-4xl bg-rose-950/40 border border-rose-500/30 p-5 rounded-2xl mb-8 flex flex-col gap-4 shadow-lg backdrop-blur-md">
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="text-left w-full">
+                           <h3 className="text-rose-400 font-black text-lg flex items-center gap-2">👑 Console Consulente</h3>
+                           <p className="text-slate-400 text-xs mt-1">Scegli un'alleanza dal DB e caricala nel sistema per visionarla.</p>
+                        </div>
+                        <div className="flex w-full sm:w-auto gap-2 shrink-0">
+                          <select value={selectedAdminAlliance} onChange={(e) => setSelectedAdminAlliance(e.target.value)} className="w-40 bg-slate-900 border border-rose-900/50 rounded-xl px-3 py-2 text-white font-bold outline-none cursor-pointer">
+                            {allianceList.map(tag => (<option key={tag} value={tag}>{tag}</option>))}
+                          </select>
+                          <button onClick={() => handleLoadAllianceAsAdmin(selectedAdminAlliance)} className="px-5 py-2 bg-rose-700 hover:bg-rose-600 text-white font-black text-xs uppercase rounded-xl shadow-lg transition-all">Carica Dati</button>
+                        </div>
                       </div>
-                      <div className="flex w-full sm:w-auto gap-2">
-                        <select value={selectedAdminAlliance} onChange={(e) => setSelectedAdminAlliance(e.target.value)} className="w-40 bg-slate-900 border border-rose-900/50 rounded-xl px-3 py-2 text-white font-bold outline-none">
-                          {allianceList.map(tag => (<option key={tag} value={tag}>{tag}</option>))}
-                        </select>
-                        <button onClick={() => handleLoadAllianceAsAdmin(selectedAdminAlliance)} className="px-5 py-2 bg-rose-700 hover:bg-rose-600 text-white font-black text-xs uppercase rounded-xl shadow-lg">Carica Dati</button>
+
+                      <div className="border-t border-rose-900/50 pt-4 flex justify-end">
+                        <button onClick={() => navigate('/admin')} className="px-6 py-2 bg-slate-900 hover:bg-indigo-900 text-indigo-400 font-black text-xs uppercase tracking-widest rounded-xl border border-indigo-500/30 transition-all flex items-center gap-2 shadow-lg">
+                          <span>🛠️</span> Apri God Room (Pannello DB)
+                        </button>
                       </div>
                     </div>
                   )}
@@ -568,7 +672,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                     <ul className="text-xs text-slate-300 space-y-1 pl-2 mt-2">
                       <li>{t('home.login_tip_1')}</li>
                       <li>{t('home.login_tip_2')}</li>
-                      {/* 💡 AGGIUNTO RIFERIMENTO DEMO2 */}
                       <li>• Modalità Demo: Usa Tag DEMO (Tattica) o DEMO2 (Sola Lettura) per testare liberamente.</li>
                     </ul>
                   </div>

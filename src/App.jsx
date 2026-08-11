@@ -5,6 +5,7 @@ import Swordland from './pages/Swordland';
 import Viking from './pages/Viking';
 import MapPage from './pages/MapPage';
 import MarchBuilder from './pages/MarchBuilder'; // Aggiungi l'import in alto
+import AdminPanel from './pages/AdminPanel';
 
 function App() {
   // Lo stato del roster vive qui ed è l'unica cosa condivisa globalmente
@@ -41,6 +42,8 @@ function App() {
               setAuth={setAuth}
             />
           } 
+           />
+          <Route path="/admin" element={<AdminPanel auth={auth} />} 
         />
         <Route 
           path="/swordland" 
