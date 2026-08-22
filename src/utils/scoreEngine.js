@@ -3,22 +3,28 @@
 export const calculateDynamicScores = (currentTime, activeDeployment, marches, manualCaptures, buildings, teamBase) => {
   let globalScores = { blue: 0, red: 0 };
   let buildingStats = {};
+  let allLoot = [];
+  
+  const enemyTeam = teamBase === 'blue' ? 'red' : 'blue';
 
-  // 1. Inizializzazione
+  const pseudoRandom = (seed) => {
+    let x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+
   buildings.forEach(b => {
     buildingStats[String(b.id)] = {
-      currentOwner: 'neutral',
-      captureTime: b.unlockTime || 0,
-      currentGracePeriod: 3.0,
-      totalPoints: { blue: 0, red: 0 },
-      firstCaptureAwarded: false
+      owner: 'neutral',          
+      capturingTeam: null,       
+      captureStart: -1,          
+      captureProgress: 0,        
+      sessionPoints: 0,          
+      firstCaptureAwarded: false,
+      totalPoints: { blue: 0, red: 0 } 
     };
   });
 
-  // 2. Simulazione scorrere del tempo (Minuto per Minuto)
   for (let min = 0; min <= currentTime; min++) {
-    
-    // Mappiamo le presenze fisiche in questo minuto
     let presence = {};
     buildings.forEach(b => presence[String(b.id)] = { blue: 0, red: 0 });
 
@@ -26,9 +32,7 @@ export const calculateDynamicScores = (currentTime, activeDeployment, marches, m
       if (!entity.positions) return;
       const mins = Object.keys(entity.positions).map(Number).sort((a, b) => a - b);
       let lastPos = null;
-      for (const m of mins) {
-        if (m <= min) lastPos = entity.positions[m];
-      }
+      for (const m of mins) { if (m <= min) lastPos = entity.positions[m]; }
       
       if (lastPos && !lastPos.removed && lastPos.targetBuildingId && (!lastPos.isMarching || lastPos.arrivalTime <= min)) {
         if (presence[String(lastPos.targetBuildingId)]) {
@@ -40,87 +44,148 @@ export const calculateDynamicScores = (currentTime, activeDeployment, marches, m
     activeDeployment.forEach(checkEntityPresence);
     marches.forEach(checkEntityPresence);
 
-    // Verifichiamo i cambi di fazione per ogni edificio
     buildings.forEach(b => {
       const bId = String(b.id);
       const state = buildingStats[bId];
       const pres = presence[bId];
 
-      let newOwner = state.currentOwner;
+      if (min < (b.unlockTime || 0)) return;
 
-      // Priorità 1: Catture/Ritirate manuali registrate al minuto attuale
       const mCap = manualCaptures.find(c => c.time === min && String(c.buildingId) === bId);
-      
       if (mCap) {
-        newOwner = mCap.team;
-      } else {
-        // Priorità 2: Valutazione Presenze Fisiche
-        if (pres.blue > 0 && pres.red === 0) newOwner = 'blue';
-        else if (pres.red > 0 && pres.blue === 0) newOwner = 'red';
-        else if (pres.blue > 0 && pres.red > 0) newOwner = 'contested';
-        // Priorità 3: Auto-Conquista del sistema (dopo 3 min dallo sblocco se vuoto)
-        else if (min === (b.unlockTime || 0) + 3 && state.currentOwner === 'neutral') {
-          newOwner = 'red';
-        }
-      }
-
-      // Se cambia il proprietario logico
-      if (state.currentOwner !== newOwner) {
-        
-        // Calcolo punti per il vecchio proprietario
-        if (state.currentOwner === 'blue' || state.currentOwner === 'red') {
-          const timeHeld = min - state.captureTime;
-          const productiveTime = Math.max(0, timeHeld - state.currentGracePeriod);
-          const sessionPoints = productiveTime * (b.pointsPerMin || 0);
-
-          if (newOwner === 'contested' || newOwner === 'neutral') {
-             // Diventa conteso o viene abbandonato: i punti vengono consolidati
-             state.totalPoints[state.currentOwner] += sessionPoints;
-          } else if (newOwner === 'blue' || newOwner === 'red') {
-             // Cattura nemica: Furto del 50% dei punti maturati nella sessione
-             const stolenPoints = sessionPoints * 0.5;
-             const keptPoints = sessionPoints - stolenPoints;
-             state.totalPoints[state.currentOwner] += keptPoints;
-             state.totalPoints[newOwner] += stolenPoints;
-          }
-        }
-
-        // Assegnazione Bonus Prima Occupazione (solo la prima volta in assoluto)
-        if (!state.firstCaptureAwarded && (newOwner === 'blue' || newOwner === 'red')) {
-          state.totalPoints[newOwner] += (b.firstControl || 0);
+        state.owner = mCap.team;
+        state.capturingTeam = null;
+        state.captureStart = -1;
+        state.captureProgress = 0;
+        state.sessionPoints = 0;
+        if (!state.firstCaptureAwarded && (mCap.team === 'blue' || mCap.team === 'red')) {
+          state.totalPoints[mCap.team] += (b.firstControl || 0);
+          globalScores[mCap.team] += (b.firstControl || 0);
           state.firstCaptureAwarded = true;
         }
+        return; 
+      }
 
-        // Aggiorna lo stato per il nuovo ciclo
-        state.currentOwner = newOwner;
-        state.captureTime = min;
+      let physicalControl = 'none';
+      if (pres.blue > 0 && pres.red === 0) physicalControl = 'blue';
+      else if (pres.red > 0 && pres.blue === 0) physicalControl = 'red';
+      else if (pres.blue > 0 && pres.red > 0) physicalControl = 'contested';
 
-        // Calcolo Dinamico del Grace Period
-        if (newOwner === 'blue' || newOwner === 'red') {
-          const stablesId = buildings.find(build => build.name.toLowerCase().includes('stables'))?.id;
-          const btOwner = (stablesId && buildingStats[String(stablesId)]) ? buildingStats[String(stablesId)].currentOwner : 'neutral';
-          // Se la squadra possiede le Scuderie, il grace period è dimezzato (1.5)
-          state.currentGracePeriod = (btOwner === newOwner) ? 1.5 : 3.0;
-        }
+      let effectiveControl = physicalControl === 'none' ? enemyTeam : physicalControl;
+
+      if (effectiveControl === 'contested') {
+         state.capturingTeam = null;
+         state.captureStart = -1;
+         state.captureProgress = 0;
+
+      } else if (effectiveControl === state.owner) {
+         state.capturingTeam = null;
+         state.captureStart = -1;
+         state.captureProgress = 0;
+         state.sessionPoints += (b.pointsPerMin || 0);
+         globalScores[state.owner] += (b.pointsPerMin || 0);
+
+      } else {
+         if (state.capturingTeam !== effectiveControl) {
+             state.capturingTeam = effectiveControl;
+             state.captureStart = min;
+             state.captureProgress = 0;
+         } else {
+             state.captureProgress = min - state.captureStart; 
+         }
+
+         const bellTowerId = buildings.find(build => build.name?.toLowerCase().includes('bell tower'))?.id;
+         const hasBuff = (bellTowerId && buildingStats[String(bellTowerId)].owner === state.capturingTeam);
+         const reqMins = hasBuff ? 1.5 : 3.0; 
+
+         if (state.captureProgress >= reqMins) {
+             
+             if (state.owner !== 'neutral') {
+                const stolenPoints = Math.floor(state.sessionPoints / 2);
+                globalScores[state.owner] -= stolenPoints; 
+                
+                state.totalPoints[state.owner] += (state.sessionPoints - stolenPoints);
+                
+                // 💡 NUOVA LOGICA: Esattamente 5 Diamanti
+                if (stolenPoints > 0) {
+                    const numDrops = Math.min(5, stolenPoints); // Evita bug se i punti rubati sono < 5
+                    const baseValue = Math.floor(stolenPoints / numDrops);
+                    let remainder = stolenPoints % numDrops;
+
+                    for (let dropIdx = 0; dropIdx < numDrops; dropIdx++) {
+                        // Distribuisce il resto sui primi diamanti
+                        const dropValue = baseValue + (remainder > 0 ? 1 : 0);
+                        remainder--;
+                        
+                        const seed = min + b.x + dropIdx * 10;
+                        const angle = pseudoRandom(seed) * Math.PI * 2;
+                        const radius = 15 + pseudoRandom(seed + 1) * 25; 
+                        
+                        const lx = Math.max(0, Math.min(240, b.x + Math.cos(angle) * radius));
+                        const ly = Math.max(0, Math.min(240, b.y + Math.sin(angle) * radius));
+
+                        const safeName = b.name || 'UNK';
+                        const shortCode = safeName.substring(0, 3).toUpperCase();
+                        const shortName = `${shortCode}-${dropIdx + 1}`;
+                        const fullName = `Bottino ${safeName} #${dropIdx + 1}`;
+
+                        allLoot.push({
+                          id: `loot_${bId}_${min}_${dropIdx}`,
+                          name: fullName,           
+                          shortName: shortName,     
+                          x: lx, y: ly, value: dropValue, spawnTime: min,
+                          gatheredBy: null, gatheredAt: null
+                        });
+                    }
+                }
+             }
+
+             state.owner = state.capturingTeam;
+             state.sessionPoints = 0;
+             state.capturingTeam = null;
+             state.captureStart = -1;
+             state.captureProgress = 0;
+
+             if (!state.firstCaptureAwarded) {
+                 state.totalPoints[state.owner] += (b.firstControl || 0);
+                 globalScores[state.owner] += (b.firstControl || 0);
+                 state.firstCaptureAwarded = true;
+             }
+         }
       }
     });
-  } // Fine ciclo temporale minuto per minuto
 
-  // 3. Consolidamento Finale per la GUI (Punti generati dal captureTime fino al currentTime attuale)
+    const checkGathering = (entity) => {
+      if (!entity.positions) return;
+      Object.values(entity.positions).forEach(pos => {
+         if (pos.targetBuildingId && String(pos.targetBuildingId).startsWith('loot_')) {
+           const arrTime = pos.arrivalTime !== undefined ? pos.arrivalTime : pos.startTime;
+           if (arrTime > min - 1 && arrTime <= min) {
+             const targetLoot = allLoot.find(l => l.id === String(pos.targetBuildingId));
+             if (targetLoot && !targetLoot.gatheredBy && targetLoot.spawnTime <= arrTime) {
+               targetLoot.gatheredBy = teamBase; 
+               targetLoot.gatheredAt = arrTime;
+               globalScores[teamBase] += targetLoot.value; 
+             }
+           }
+         }
+      });
+    };
+
+    activeDeployment.forEach(checkGathering);
+    marches.forEach(checkGathering);
+  } 
+
   buildings.forEach(b => {
     const state = buildingStats[String(b.id)];
-    if (state.currentOwner === 'blue' || state.currentOwner === 'red') {
-      const timeHeld = currentTime - state.captureTime;
-      const productiveTime = Math.max(0, timeHeld - state.currentGracePeriod);
-      const currentSessionPoints = productiveTime * (b.pointsPerMin || 0);
-      
-      state.totalPoints[state.currentOwner] += currentSessionPoints;
+    if (state.owner !== 'neutral') {
+       state.totalPoints[state.owner] += state.sessionPoints; 
     }
-    
-    // Somma al tabellone globale
-    globalScores.blue += state.totalPoints.blue;
-    globalScores.red += state.totalPoints.red;
   });
 
-  return globalScores;
+  return {
+    scores: globalScores,
+    lootDrops: allLoot.filter(l => !l.gatheredBy),
+    buildingStates: buildingStats 
+  };
 };

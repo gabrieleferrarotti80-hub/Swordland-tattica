@@ -1,7 +1,38 @@
 export const mapBuildings = [
   // --- Castello del regno ---
   { id: "castle-1", name: "Castello del regno", type: "Castle", level: null, x: 597, y: 597, occupant: "" },
-
+ {
+    id: "turret-north",
+    name: "Torretta Nord",
+    type: "turret",
+    x: 605, // 597 + 14
+    y: 605, // 597 + 14
+    occupant: ""
+  },
+  {
+    id: "turret-south",
+    name: "Torretta Sud",
+    type: "turret",
+    x: 589, // 597 - 14
+    y: 589, // 597 - 14
+    occupant: ""
+  },
+  {
+    id: "turret-east",
+    name: "Torretta Est",
+    type: "turret",
+    x: 605, // 597 + 14
+    y: 589, // 597 - 14
+    occupant: ""
+  },
+  {
+    id: "turret-west",
+    name: "Torretta Ovest",
+    type: "turret",
+    x: 589, // 597 - 14
+    y: 605, // 597 + 14
+    occupant: ""
+  },
   // --- Fortezze ---
   { id: "fort-1", name: "Fortezza 1", type: "Fortress", level: null, x: 597, y: 800, occupant: "" },
   { id: "fort-2", name: "Fortezza 2", type: "Fortress", level: null, x: 400, y: 597, occupant: "" },

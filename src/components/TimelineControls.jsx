@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
+import { useTranslation } from 'react-i18next';
 
 const ChevronUp = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
@@ -19,7 +19,7 @@ export const TimelineControls = ({
   handleConfirmMinute,
   handleCancelMinute
 }) => {
-  const { t } = useTranslation(); // 🌍 Hook di traduzione
+  const { t } = useTranslation(); 
 
   return (
     <div className="flex flex-col items-center py-4 px-3 h-full justify-between gap-2">
@@ -29,7 +29,7 @@ export const TimelineControls = ({
         <div className="text-3xl xl:text-4xl font-black text-cyan-400 font-mono tracking-tighter drop-shadow-[0_0_12px_rgba(34,211,238,0.4)] leading-none">
           {currentTime.toString().padStart(2, '0')}'
         </div>
-        <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mt-1">{t('swordland.timeline.minute')}</div>
+        <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mt-1">{t('swordland.timeline.minute', 'MINUTO')}</div>
       </div>
 
       {/* 2. SLIDER VERTICALE */}
@@ -47,18 +47,13 @@ export const TimelineControls = ({
           min="0" 
           max="60" 
           step="1" 
-          orient="vertical"
+          style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
           value={currentTime} 
           onChange={(e) => handleTimeChange(Number(e.target.value))} 
           disabled={hasDrafts} 
-          className={`h-full w-1.5 bg-slate-800 rounded-full outline-none transition-all ${
-            hasDrafts ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'
+          className={`h-full w-2 bg-slate-800 rounded-lg outline-none transition-all ${
+            hasDrafts ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-700'
           }`} 
-          style={{ 
-            WebkitAppearance: 'slider-vertical',
-            appearance: 'slider-vertical',
-            accentColor: '#06b6d4'
-          }} 
         />
 
         <button 
@@ -78,13 +73,13 @@ export const TimelineControls = ({
               onClick={handleConfirmMinute}
               className="w-full bg-emerald-500/20 hover:bg-emerald-500 border border-emerald-500/50 text-emerald-400 hover:text-white font-bold py-2 rounded-xl text-[10px] transition-all uppercase tracking-wider"
             >
-              {t('swordland.timeline.save')}
+              {t('swordland.timeline.save', 'SALVA')}
             </button>
             <button 
               onClick={handleCancelMinute}
               className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 font-bold py-2 rounded-xl text-[10px] transition-all uppercase tracking-wider"
             >
-              {t('swordland.timeline.cancel')}
+              {t('swordland.timeline.cancel', 'ANNULLA')}
             </button>
           </div>
         ) : (
@@ -104,15 +99,15 @@ export const TimelineControls = ({
               )}
             </button>
 
-            <select 
+           <select 
               value={playbackSpeed} 
               onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
               disabled={isPlaying}
               className="bg-slate-900/80 border border-slate-700/80 text-[10px] text-cyan-400 font-bold rounded-xl px-1 py-1.5 outline-none w-full text-center disabled:opacity-50 cursor-pointer hover:bg-slate-800 transition-colors"
             >
-              <option value={1}>{t('swordland.timeline.speed_1x')}</option>
-              <option value={5}>{t('swordland.timeline.speed_5x')}</option>
-              <option value={15}>{t('swordland.timeline.speed_15x')}</option>
+              <option value={0.5}>{t('swordland.timeline.speed_05x', '0.5x (Lento)')}</option>
+              <option value={1}>{t('swordland.timeline.speed_1x', '1x (Normale)')}</option>
+              <option value={5}>{t('swordland.timeline.speed_5x', '5x (Veloce)')}</option>
             </select>
           </div>
         )}

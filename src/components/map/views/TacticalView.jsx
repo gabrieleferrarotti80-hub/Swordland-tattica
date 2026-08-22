@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// IMPORT CORRETTO:
 import { getTacticalShapePts, GRID_SIZES } from '../utils/mapUtilsGen';
 
 const getPlayerRank = (player) => {
@@ -12,21 +11,10 @@ const getPlayerRank = (player) => {
 
 export default function TacticalView(props) {
   const { 
-    fixedBuildings, 
-    allianceStructures, 
-    validPlayers, 
-    inverseScale, 
-    TILE_SF, 
-    filters,
-    selectedBuilding,
-    setSelectedBuilding,
-    marchOrigin,
-    setMarchOrigin,
-    marchDestination,
-    setMarchDestination,
-    selectedTool,
-    showLabels,
-    setDraggedPlayerId
+    fixedBuildings, allianceStructures, validPlayers, inverseScale, TILE_SF, filters,
+    selectedBuilding, setSelectedBuilding, marchOrigin, setMarchOrigin,
+    marchDestination, setMarchDestination, selectedTool, showLabels, setDraggedPlayerId,
+    setPopupPlayerId
   } = props;
 
   const [gridCenter, setGridCenter] = useState(null);
@@ -34,17 +22,16 @@ export default function TacticalView(props) {
   useEffect(() => {
     if (selectedBuilding && !selectedBuilding.isPlayer) {
       setGridCenter(selectedBuilding);
+    } else {
+      setGridCenter(null);
     }
   }, [selectedBuilding]);
 
- // --- INGRANDIMENTO DINAMICO ---
-  // Se 'selectedBuilding' è null (nessun bersaglio scelto), moltiplichiamo le dimensioni per 3.5.
-  // Non appena viene cliccato qualcosa, il moltiplicatore torna a 1 (dimensione reale 1:1).
   const sizeMultiplier = selectedBuilding ? 1 : 3.5;
   const playerMultiplier = selectedBuilding ? 1 : 2.5;
 
-  // Usa le dimensioni matematiche applicando il moltiplicatore dinamico
   const shapeCastle = getTacticalShapePts(GRID_SIZES.CASTLE, TILE_SF * sizeMultiplier);
+  const shapeTurret = getTacticalShapePts({ w: 3, h: 3 }, TILE_SF * sizeMultiplier);
   const shapeMajor  = getTacticalShapePts(GRID_SIZES.MAJOR, TILE_SF * sizeMultiplier);
   const shapeMinor  = getTacticalShapePts(GRID_SIZES.MINOR, TILE_SF * sizeMultiplier);
   const shapePlayer = getTacticalShapePts(GRID_SIZES.PLAYER, TILE_SF * playerMultiplier);
@@ -75,13 +62,7 @@ export default function TacticalView(props) {
 
         return (
           <g transform={`translate(${cx}, ${cy})`} className="animate-fade-in pointer-events-none">
-            <polygon 
-              points={borderPts} 
-              fill="rgba(34, 211, 238, 0.04)" 
-              stroke="rgba(34, 211, 238, 0.5)" 
-              strokeWidth={2 * inverseScale} 
-              strokeDasharray={`${4 * inverseScale}, ${4 * inverseScale}`} 
-            />
+            <polygon points={borderPts} fill="rgba(34, 211, 238, 0.04)" stroke="rgba(34, 211, 238, 0.5)" strokeWidth={2 * inverseScale} strokeDasharray={`${4 * inverseScale}, ${4 * inverseScale}`} />
             {gridLines}
           </g>
         );
@@ -92,6 +73,7 @@ export default function TacticalView(props) {
         const bName = building.name.toLowerCase();
 
         const isCastle = bType === 'castle' || bName.includes('castello');
+        const isTurret = bType === 'turret' || bName.includes('torretta');
         const isSantuario = bType === 'sanctuary' || bName.includes('santuario');
         const isFortezza = bType === 'fortress' || bName.includes('fortezza');
         const isBuilder = bType === 'builders guild' || bName.includes('builder');
@@ -102,9 +84,10 @@ export default function TacticalView(props) {
         const isArsenal = bType === 'arsenal' || bName.includes('arsenal');
         const isDrill = bType === 'drill camp' || bName.includes('drill');
         const isFrontier = bType === 'frontier lodge' || bName.includes('frontier');
-        const isOther = !isCastle && !isSantuario && !isFortezza && !isBuilder && !isForager && !isHarvest && !isScholar && !isArmory && !isArsenal && !isDrill && !isFrontier;
+        const isOther = !isCastle && !isTurret && !isSantuario && !isFortezza && !isBuilder && !isForager && !isHarvest && !isScholar && !isArmory && !isArsenal && !isDrill && !isFrontier;
 
         if (isCastle && !filters.castle) return null;
+        if (isTurret && !filters.castle) return null; 
         if (isSantuario && !filters.santuari) return null;
         if (isFortezza && !filters.fortezze) return null;
         if (isBuilder && !filters.builders) return null;
@@ -119,11 +102,13 @@ export default function TacticalView(props) {
 
         let buildingShape = shapeMinor;
         if (isCastle) buildingShape = shapeCastle;
+        else if (isTurret) buildingShape = shapeTurret;
         else if (isSantuario || isFortezza) buildingShape = shapeMajor;
 
         let fillColor = "rgba(148, 163, 184, 0.4)"; 
         let strokeColor = "#94a3b8";
         if (isCastle) { fillColor = "rgba(250, 204, 21, 0.5)"; strokeColor = "#facc15"; }
+        else if (isTurret) { fillColor = "rgba(239, 68, 68, 0.6)"; strokeColor = "#ef4444"; } 
         else if (isSantuario || isFortezza) { fillColor = "rgba(168, 85, 247, 0.5)"; strokeColor = "#a855f7"; }
         else if (isBuilder) { fillColor = "rgba(251, 146, 60, 0.4)"; strokeColor = "#fb923c"; }
         else if (isForager) { fillColor = "rgba(16, 185, 129, 0.4)"; strokeColor = "#10b981"; }
@@ -162,18 +147,10 @@ export default function TacticalView(props) {
               }
             }}
           >
-            <polygon
-              points={buildingShape}
-              fill={fillColor}
-              stroke={strokeColor}
-              strokeWidth={currentStrokeWidth * inverseScale}
-              className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`}
-            />
-
+            <polygon points={buildingShape} fill={fillColor} stroke={strokeColor} strokeWidth={currentStrokeWidth * inverseScale} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
             <g transform={`scale(${inverseScale})`} className="pointer-events-none z-50">
-              {isOrigin && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🛫</text>}
-              {isDestination && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🎯</text>}
-
+              {isOrigin && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">岫</text>}
+              {isDestination && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">識</text>}
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="20" y="-12" width="140" height="28" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
                 <text x="26" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{building.code}] {building.name}</text>
@@ -205,20 +182,14 @@ export default function TacticalView(props) {
                 if (!marchOrigin) setMarchOrigin(struct);
                 else if (!marchDestination) setMarchDestination(struct);
                 else { setMarchOrigin(struct); setMarchDestination(null); }
-              } else {
-                setSelectedBuilding(struct);
-              }
+              } else { setSelectedBuilding(struct); }
             }}
           >
             <g transform={`scale(${inverseScale})`} className="drop-shadow-xl">
               <path d="M0 -16 Q -8 -16 -8 -8 Q -8 0 0 8 Q 8 0 8 -8 Q 8 -16 0 -16 Z" fill="#4f46e5" stroke={isSelected ? "#ffffff" : "#3730a3"} strokeWidth="1" className="transition-colors" />
               <circle cx="0" cy="-8" r="2.5" fill="#ffffff" />
             </g>
-
             <g transform={`scale(${inverseScale})`} className="pointer-events-none z-50">
-              {isOrigin && <text x="-12" y="20" fill="#ffffff" fontSize="12" fontWeight="black">🛫</text>}
-              {isDestination && <text x="-12" y="20" fill="#ffffff" fontSize="12" fontWeight="black">🎯</text>}
-
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="12" y="-12" width="150" height="28" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="rgba(79, 70, 229, 0.8)" strokeWidth="1" className="shadow-lg" />
                 <text x="18" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{struct.code}] {struct.name}</text>
@@ -240,7 +211,6 @@ export default function TacticalView(props) {
         const isDestination = marchDestination?.id === player.id;
 
         let polyFill = "rgba(59, 130, 246, 0.7)", polyStroke = "#3b82f6", polyStrokeW = 2;
-        
         if (rank === 'R5') { polyFill = "rgba(250, 204, 21, 0.8)"; polyStroke = "#fef08a"; polyStrokeW = 3; } 
         else if (rank === 'R4') { polyFill = "rgba(168, 85, 247, 0.7)"; polyStroke = "#a855f7"; }
         
@@ -253,45 +223,23 @@ export default function TacticalView(props) {
             key={player.id} 
             className="cursor-pointer group animate-fade-in" 
             transform={`translate(${player.svgX}, ${player.svgY})`} 
-            
-            onMouseDown={(e) => {
-              e.stopPropagation(); 
-              if(setDraggedPlayerId) setDraggedPlayerId(player.id);
-            }}
-
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              // Se l'utente fa doppio click su un giocatore in Vista Tattica, si apre il Dispatch
-              if (setPopupPlayerId) setPopupPlayerId(player.id);
-            }}
-
+            onMouseDown={(e) => { e.stopPropagation(); if(setDraggedPlayerId) setDraggedPlayerId(player.id); }}
+            onDoubleClick={(e) => { e.stopPropagation(); if (setPopupPlayerId) setPopupPlayerId(player.id); }}
             onClick={(e) => { 
               e.stopPropagation(); 
-              const target = { ...player, isPlayer: true, code: player.tag || 'PLY', type: `Membro Alleanza`, x: player.numX, y: player.numY }; 
+              const target = { ...player, isPlayer: true, code: player.originalTag || player.tag || 'PLY', type: `Membro Alleanza`, x: player.numX, y: player.numY }; 
               if (selectedTool === 'distance') { 
                 if (!marchOrigin) setMarchOrigin(target); 
                 else if (!marchDestination) setMarchDestination(target); 
                 else { setMarchOrigin(target); setMarchDestination(null); } 
-              } else { 
-                setSelectedBuilding(target); 
-              } 
+              } else { setSelectedBuilding(target); } 
             }}
           >
-            <polygon 
-              points={shapePlayer} 
-              fill={polyFill} 
-              stroke={polyStroke} 
-              strokeWidth={polyStrokeW * inverseScale} 
-              className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} 
-            />
-            
+            <polygon points={shapePlayer} fill={polyFill} stroke={polyStroke} strokeWidth={polyStrokeW * inverseScale} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
             <g transform={`scale(${inverseScale})`} className="pointer-events-none">
-              {isOrigin && <text x="-10" y="20" fill="#ffffff" fontSize="12" fontWeight="black">🛫</text>}
-              {isDestination && <text x="-10" y="20" fill="#ffffff" fontSize="12" fontWeight="black">🎯</text>}
-              
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="15" y="-12" width="130" height="32" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
-                <text x="21" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{player.tag || 'PLY'}] {player.name}</text>
+                <text x="21" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{player.originalTag || player.tag || 'PLY'}] {player.name}</text>
                 <text x="21" y="14" fill={rank === 'R5' ? '#facc15' : rank === 'R4' ? '#c084fc' : '#60a5fa'} fontSize="9" fontWeight="bold">({player.numX}, {player.numY}) | {player.role || player.rank}</text>
               </g>
             </g>

@@ -9,7 +9,7 @@ export const initialBuildings = [
     x: 117, 
     y: 117,
     icon: '/Swordshrine.png',
-    scale: 1.6,
+    scale: 1.8,
     travelTimeBlue: 235, // 03:55 (Al centro, uguale per entrambi)
     travelTimeRed: 235
   },
@@ -23,7 +23,7 @@ export const initialBuildings = [
     x: 169, 
     y: 169,
     icon: '/Mercenary.png',
-    scale: 1,
+    scale: 1.2,
     travelTimeBlue: 271, // Speculare di Reformation
     travelTimeRed: 272   // 04:32
   },

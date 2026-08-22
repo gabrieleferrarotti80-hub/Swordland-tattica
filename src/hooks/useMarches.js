@@ -3,40 +3,18 @@ import { useState, useEffect } from 'react';
 const getBasePositionApp = (idStr, teamBase) => {
   let hash = 0;
   for (let i = 0; i < idStr.length; i++) { hash = idStr.charCodeAt(i) + ((hash << 5) - hash); }
-  
   let r1 = Math.abs((Math.sin(hash) * 10000) % 1);
   let r2 = Math.abs((Math.cos(hash) * 10000) % 1);
-  
-  // Confina i punti all'interno del triangolo (Coordinate Baricentriche)
-  if (r1 + r2 > 1) {
-    r1 = 1 - r1;
-    r2 = 1 - r2;
-  }
+  if (r1 + r2 > 1) { r1 = 1 - r1; r2 = 1 - r2; }
 
   if (teamBase === 'blue') {
-    // Vertici Blu: (0, 200), (38, 200), (39, 239)
-    const x = 0 + r1 * (38 - 0) + r2 * (39 - 0);
-    const y = 200 + r1 * (200 - 200) + r2 * (239 - 200);
-    return { x, y };
+    return { x: 0 + r1 * 38 + r2 * 39, y: 200 + r2 * 39 };
   } else {
-    // Vertici Rosso: (200, 0), (200, 38), (239, 39)
-    const x = 200 + r1 * (200 - 200) + r2 * (239 - 200);
-    const y = 0 + r1 * (38 - 0) + r2 * (39 - 0);
-    return { x, y };
+    return { x: 200 + r2 * 39, y: 0 + r1 * 38 + r2 * 39 };
   }
 };
 
-export const useMarches = ({
-  roster, 
-  activeDeployment, 
-  setActiveDeployment, 
-  buildings, 
-  setBuildings, 
-  teamBase, 
-  currentTime, 
-  setManualCaptures, 
-  setHealingEvents
-}) => {
+export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buildings, setBuildings, teamBase, currentTime, setManualCaptures, setHealingEvents }) => {
   const [marches, setMarches] = useState(() => {
     const saved = localStorage.getItem('swordland-marches');
     return saved ? JSON.parse(saved) : [];
@@ -44,9 +22,7 @@ export const useMarches = ({
   
   const [draftPositions, setDraftPositions] = useState({});
 
-  useEffect(() => {
-    localStorage.setItem('swordland-marches', JSON.stringify(marches));
-  }, [marches]);
+  useEffect(() => { localStorage.setItem('swordland-marches', JSON.stringify(marches)); }, [marches]);
 
   const getCurrentPosition = (entity) => {
     const draftPos = draftPositions[entity.id];
@@ -59,91 +35,16 @@ export const useMarches = ({
     return lastKnownPos;
   };
 
- // NUOVA FUNZIONE AGGIORNATA: Recupera la posizione della Città
   const getCityPosition = (playerId) => {
     const p = activeDeployment.find(x => String(x.id) === String(playerId));
     let lastStatic = null;
-    
     if (p && p.positions) {
       const mins = Object.keys(p.positions).map(Number).sort((a,b) => a-b);
       for(const m of mins) { if (m <= currentTime) lastStatic = p.positions[m]; }
     }
+    if (lastStatic && !lastStatic.removed && lastStatic.x !== undefined) return { x: lastStatic.x, y: lastStatic.y };
     
-    if (lastStatic && !lastStatic.removed && lastStatic.x !== undefined) {
-       return { x: lastStatic.x, y: lastStatic.y };
-    }
-    
-    // INVECE DI RITORNARE IL PUNTO RANDOMICO, RITORNIAMO IL VERTICE ESATTO DELLA BASE
-    const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
-    return REFERENCE_POINTS[teamBase];
-  };
-
-  const getExactPlayerPosition = (playerId) => {
-    let latestStaticPos = null;
-
-    const player = activeDeployment.find(p => String(p.id) === String(playerId));
-    if (player && player.positions) {
-      const mins = Object.keys(player.positions).map(Number).sort((a,b) => a-b);
-      for (const min of mins) {
-        if (min <= currentTime) {
-          latestStaticPos = player.positions[min];
-        }
-      }
-    }
-
-    let latestMarchPos = null;
-    let latestMarchTime = -1;
-
-    marches.forEach(m => {
-      const isLeader = String(m.leader) === String(playerId);
-      const isMember = m.members && m.members.map(String).includes(String(playerId));
-      
-      if (isLeader || isMember) {
-        if (m.positions) {
-          const mins = Object.keys(m.positions).map(Number).sort((a,b) => a-b);
-          for (const min of mins) {
-            if (min <= currentTime) {
-              if (min > latestMarchTime || (min === latestMarchTime && latestMarchPos && latestMarchPos.removed && !m.positions[min].removed)) {
-                latestMarchTime = min;
-                latestMarchPos = m.positions[min];
-              }
-            }
-          }
-        }
-      }
-    });
-
-    let activePos = null;
-    let dataSource = "";
-    if (latestMarchPos && !latestMarchPos.removed) {
-      activePos = latestMarchPos;
-      dataSource = "Marcia Attiva";
-    } else {
-      activePos = latestStaticPos;
-      dataSource = "Segnalino Statico";
-    }
-
-    if (!activePos || activePos.removed) {
-      const basePos = getBasePositionApp(String(playerId), teamBase);
-      return basePos;
-    }
-
-    if (activePos.isMarching && activePos.startTime !== undefined && activePos.arrivalTime !== undefined) {
-      if (currentTime >= activePos.arrivalTime) {
-        return { x: activePos.targetX, y: activePos.targetY };
-      }
-      if (currentTime <= activePos.startTime) {
-        return { x: activePos.startX, y: activePos.startY };
-      }
-      const progress = (currentTime - activePos.startTime) / (activePos.arrivalTime - activePos.startTime);
-      const progX = activePos.startX + (activePos.targetX - activePos.startX) * progress;
-      const progY = activePos.startY + (activePos.targetY - activePos.startY) * progress;
-      return { x: progX, y: progY };
-    }
-
-    const finalX = activePos.x !== undefined ? activePos.x : activePos.targetX;
-    const finalY = activePos.y !== undefined ? activePos.y : activePos.targetY;
-    return { x: finalX, y: finalY };
+    return getBasePositionApp(playerId, teamBase);
   };
 
   const getAvailableMarches = (playerId) => {
@@ -155,92 +56,120 @@ export const useMarches = ({
     let used = 0;
 
     marches.forEach(m => {
+      if (m.marchType === 'rally_join') return; 
+
       const isLeader = String(m.leader) === String(playerId);
       const isMember = m.members && m.members.map(String).includes(String(playerId));
 
       if (isLeader || isMember) {
         if (!m.positions || Object.keys(m.positions).length === 0) { used++; return; }
         const minutes = Object.keys(m.positions).map(Number).sort((a, b) => a - b);
-        const startTime = minutes[0];
-        let isDestroyedAtCurrentTime = false;
+        
+        let isActive = false;
+        let isDestroyed = false;
 
-        for (const min of minutes) {
-          if (min <= currentTime) { isDestroyedAtCurrentTime = m.positions[min].removed === true; }
+        for (const min of minutes) { 
+            if (min <= currentTime) { 
+                isActive = true;
+                if (m.positions[min].removed !== undefined) {
+                    isDestroyed = m.positions[min].removed;
+                }
+            } 
         }
-        if (currentTime >= startTime && !isDestroyedAtCurrentTime) { used++; }
+        if (isActive && !isDestroyed) { used++; }
       }
+    });
+
+    Object.values(draftPositions).forEach(draft => {
+       if (!draft.isNewMarch) return;
+       if (draft.marchType === 'rally_join') return; 
+
+       const isLeader = String(draft.leader) === String(playerId);
+       const isMember = draft.members && draft.members.map(String).includes(String(playerId));
+
+       if (isLeader || isMember) {
+           used++;
+       }
     });
 
     return Math.max(0, total - used);
   };
 
-  const handleDispatchMarch = (playerId, targetBuildingId, marchIndex, marchType = 'attacco', members = [], membersData = []) => {
-    console.log(`\n--- INIZIO DISPATCH MARCIA: ${marchType} verso edificio ${targetBuildingId} al min ${currentTime} ---`);
-    
-    // BLOCCO SICUREZZA LEADER: Verifica che il Leader sia effettivamente a casa (disponibile)
+  const handleDispatchMarch = (playerId, targetId, marchIndex, rawMarchType = 'attacco', members = [], membersData = [], externalTarget = null) => {
     const availableForLeader = getAvailableMarches(playerId);
-    if (availableForLeader <= 0) {
-      console.warn(`[TRACE DISPATCH] ERRORE: Il leader ${playerId} sta ancora marciando o è in presidio. Dispatch ANNULLATO.`);
-      return;
+    if (availableForLeader <= 0) return;
+
+    // 💡 INTERCETTA LA DURATA DEL RALLY
+    let marchType = rawMarchType;
+    let rallyTime = 4;
+    if (rawMarchType === 'rally_1') { marchType = 'rally'; rallyTime = 1; }
+    if (rawMarchType === 'rally_4') { marchType = 'rally'; rallyTime = 4; }
+
+    let targetX, targetY, targetName;
+    let targetBuilding = null;
+
+    if (externalTarget) {
+      targetX = externalTarget.x;
+      targetY = externalTarget.y;
+      targetName = externalTarget.name || "Bottino";
+    } else {
+      targetBuilding = buildings.find(b => String(b.id) === String(targetId));
+      if (!targetBuilding) return;
+      targetX = targetBuilding.x;
+      targetY = targetBuilding.y;
+      targetName = targetBuilding.name;
     }
 
-    const targetBuilding = buildings.find(b => String(b.id) === String(targetBuildingId));
-    if (!targetBuilding) return;
-
-    // Usiamo getCityPosition invece di getExactPlayerPosition per forzare la partenza dalla casa vera
     const leaderCoords = getCityPosition(playerId);
     const startX = leaderCoords.x;
     const startY = leaderCoords.y;
 
-    console.log(`[TRACE POSIZIONE] Leader ${playerId} verificato alla Città a x:${startX.toFixed(2)}, y:${startY.toFixed(2)}`);
-
-   // Calibrazione esatta sui vertici delle basi forniti
     const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
-    const dxPlayer = targetBuilding.x - startX;
-    const dyPlayer = targetBuilding.y - startY;
+    const dxPlayer = targetX - startX;
+    const dyPlayer = targetY - startY;
     const playerToTargetDist = Math.sqrt(dxPlayer * dxPlayer + dyPlayer * dyPlayer);
 
     const refPoint = REFERENCE_POINTS[teamBase];
-    const dxRef = targetBuilding.x - refPoint.x;
-    const dyRef = targetBuilding.y - refPoint.y;
+    const dxRef = targetX - refPoint.x;
+    const dyRef = targetY - refPoint.y;
     const refToTargetDist = Math.sqrt(dxRef * dxRef + dyRef * dyRef);
 
-    const tableTimeSec = teamBase === 'blue' ? (targetBuilding.travelTimeBlue || 60) : (targetBuilding.travelTimeRed || 60);
-    const speed = refToTargetDist / Math.max(1, tableTimeSec);
+    const baseTableTime = targetBuilding ? (teamBase === 'blue' ? (targetBuilding.travelTimeBlue || 60) : (targetBuilding.travelTimeRed || 60)) : 60;
+    const speed = refToTargetDist / Math.max(1, baseTableTime);
     const travelTime = (playerToTargetDist / speed) / 60;
 
-    const rallyDelay = marchType === 'rally' ? 4 : 0;
+    const rallyDelay = marchType === 'rally' ? rallyTime : 0;
     const arrivalTime = currentTime + rallyDelay + travelTime;
-    console.log(`[TRACE DISPATCH] LEADER ${playerId} partirà. Distanza: ${playerToTargetDist.toFixed(2)}. Tempo: ${travelTime.toFixed(2)} min. Arrivo previsto: ${arrivalTime.toFixed(2)}`);
     
+    let returnTravelTime = 0;
+    if (marchType === 'raccolta') {
+       returnTravelTime = travelTime; 
+    }
+
     const newDrafts = {};
     const leaderMarchId = `${playerId}-march-${Date.now()}-${marchIndex}`;
     
-    // Creazione Draft Leader
     newDrafts[leaderMarchId] = {
-      isNewMarch: true, leader: playerId, members, // <-- Attenzione, aggiorneremo 'members' filtrando
+      isNewMarch: true, leader: playerId, members,
       startTime: currentTime + rallyDelay, rallyCallTime: currentTime,
-      startX, startY, targetX: targetBuilding.x, targetY: targetBuilding.y, removed: false,
-      isMarching: travelTime > 0, isGarrison: true, targetName: targetBuilding.name,
-      targetBuildingId: targetBuilding.id, arrivalTime, travelTime, marchType
+      rallyTime: marchType === 'rally' ? rallyTime : null, // Salviamo la durata per usarla nel Minute Confirm!
+      startX, startY, targetX, targetY, removed: false,
+      isMarching: travelTime > 0, isGarrison: marchType !== 'raccolta', targetName,
+      targetBuildingId: targetId, arrivalTime, travelTime, marchType,
+      autoReturn: marchType === 'raccolta', 
+      returnTime: marchType === 'raccolta' ? arrivalTime + returnTravelTime : null,
+      returnX: startX, returnY: startY
     };
 
     let validMembers = [];
 
     if (marchType === 'rally' && members.length > 0) {
       members.forEach((memberId, mIdx) => {
-        // BLOCCO SICUREZZA JOINER: Se il membro non è a casa, viene ignorato per questo rally
-        if (getAvailableMarches(memberId) <= 0) {
-          console.warn(`[TRACE DISPATCH] SKIP: Il joiner ${memberId} è occupato altrove e non si unirà al rally.`);
-          return;
-        }
-
+        if (getAvailableMarches(memberId) <= 0) return;
         validMembers.push(memberId);
-
         const memData = membersData.find(m => (typeof m === 'object' ? m.id : m) === memberId) || {};
         const speedupsUsed = typeof memData === 'object' ? (memData.speedups || 0) : 0;
 
-        // Usiamo getCityPosition per forzare la partenza del joiner da casa sua
         const memCoords = getCityPosition(memberId);
         const memStartX = memCoords.x;
         const memStartY = memCoords.y;
@@ -251,11 +180,11 @@ export const useMarches = ({
         
         let memTravelTime = (memToLeaderDist / speed) / 60;
         if (speedupsUsed > 0) memTravelTime = memTravelTime * Math.pow(0.75, speedupsUsed);
-        if (memTravelTime > 4.0 && speedupsUsed > 0) memTravelTime = 3.99; 
+        
+        // 💡 LIMITE VELOCITÀ DINAMICO (se hai scelto il rally da 1 min, l'alleato deve starci dentro!)
+        if (memTravelTime > rallyTime && speedupsUsed > 0) memTravelTime = rallyTime - 0.01; 
 
         const memArrivalTime = currentTime + memTravelTime;
-        console.log(`[TRACE DISPATCH] JOINER ${memberId} partirà da casa sua (x:${memStartX.toFixed(2)}, y:${memStartY.toFixed(2)}). Distanza: ${memToLeaderDist.toFixed(2)}. Tempo: ${memTravelTime.toFixed(2)} min.`);
-
         const memberMarchId = `${memberId}-march-${Date.now()}-join-${mIdx}`;
         
         newDrafts[memberMarchId] = {
@@ -269,29 +198,32 @@ export const useMarches = ({
       });
     }
 
-    // Aggiorniamo l'array del leader inserendo solo i validMembers che ce l'hanno fatta
     newDrafts[leaderMarchId].members = validMembers;
-
     setDraftPositions(prev => ({ ...prev, ...newDrafts }));
   };
 
   const handleConfirmMinute = () => {
-    let newMarchesToAdd = [];
     const applyDraftToEntity = (entity) => {
       const draft = draftPositions[entity.id];
       if (!draft) return entity;
       const newPositions = { ...(entity.positions || {}) };
       
       if (draft.arrivalTime && draft.arrivalTime > currentTime) {
-        if (draft.marchType === 'rally') {
+        if (draft.autoReturn) {
+            newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
+            newPositions[draft.arrivalTime] = { isMarching: true, startTime: draft.arrivalTime, startX: draft.targetX, startY: draft.targetY, targetX: draft.returnX, targetY: draft.returnY, arrivalTime: draft.returnTime, targetBuildingId: null, marchType: 'ritirata' };
+            newPositions[draft.returnTime] = { removed: true };
+        } 
+        else if (draft.marchType === 'rally') {
+            const rTime = draft.rallyTime || 4; // Recupera la durata esatta che hai scelto
             newPositions[currentTime] = { x: draft.startX, y: draft.startY, isGarrison: false, marchType: draft.marchType };
-            newPositions[draft.rallyCallTime + 4] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
+            newPositions[draft.rallyCallTime + rTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
             newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: false, isGarrison: draft.isGarrison, marchType: draft.marchType, targetBuildingId: draft.targetBuildingId };
         } else if (draft.marchType === 'rally_join') {
             newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
             newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: true }; 
         } else {
-            newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
+            newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetX, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
             newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: false, isGarrison: draft.isGarrison, marchType: draft.marchType, targetBuildingId: draft.targetBuildingId };
         }
       } else {
@@ -303,14 +235,22 @@ export const useMarches = ({
     setActiveDeployment(prev => prev.map(applyDraftToEntity));
     
     setMarches(prevMarches => {
+      let newMarchesToAdd = [];
       let updatedMarches = prevMarches.map(applyDraftToEntity);
+      
       Object.entries(draftPositions).forEach(([id, draft]) => {
         if (draft.isNewMarch && !updatedMarches.find(m => String(m.id) === String(id))) {
           const newPositions = {};
           if (draft.arrivalTime && draft.arrivalTime > currentTime) {
-            if (draft.marchType === 'rally') {
+            if (draft.autoReturn) {
+               newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
+               newPositions[draft.arrivalTime] = { isMarching: true, startTime: draft.arrivalTime, startX: draft.targetX, startY: draft.targetY, targetX: draft.returnX, targetY: draft.returnY, arrivalTime: draft.returnTime, targetBuildingId: null, marchType: 'ritirata' };
+               newPositions[draft.returnTime] = { removed: true };
+            } 
+            else if (draft.marchType === 'rally') {
+                const rTime = draft.rallyTime || 4; // Anche qui
                 newPositions[currentTime] = { x: draft.startX, y: draft.startY, isGarrison: false, marchType: draft.marchType };
-                newPositions[draft.rallyCallTime + 4] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
+                newPositions[draft.rallyCallTime + rTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
                 newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: false, isGarrison: draft.isGarrison, marchType: draft.marchType, targetBuildingId: draft.targetBuildingId };
             } else if (draft.marchType === 'rally_join') {
                 newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
@@ -331,10 +271,11 @@ export const useMarches = ({
   };
 
   const handleCancelMinute = () => setDraftPositions({});
+  
   const handleWithdraw = (id) => setDraftPositions(prev => ({ ...prev, [id]: { removed: true } }));
-
+  
   const handleHeal = (playerId) => {
-    if (!window.confirm("Attenzione: confermi di voler mandare in cura questo giocatore? Tutte le sue marce verranno ritirate.")) return;
+    if (!window.confirm("Confermi di voler mandare in cura questo giocatore?")) return;
     setActiveDeployment(prev => prev.map(p => String(p.id) === String(playerId) ? { ...p, positions: { ...(p.positions || {}), [currentTime]: { removed: true } } } : p));
     setMarches(prevMarches => {
       const updatedMarches = [];
@@ -342,236 +283,122 @@ export const useMarches = ({
         const isLeader = String(march.leader) === String(playerId);
         const isMember = march.members && march.members.map(String).includes(String(playerId));
         if (!isLeader && !isMember) { updatedMarches.push(march); continue; }
-        let hasArrived = false;
-        if (march.positions) {
-          const minutes = Object.keys(march.positions).map(Number).sort((a, b) => a - b);
-          let lastPos = null;
-          for (const min of minutes) { if (min <= currentTime) lastPos = march.positions[min]; }
-          if (lastPos && (lastPos.isGarrison || (lastPos.arrivalTime && lastPos.arrivalTime <= currentTime))) hasArrived = true;
-        }
-        if (hasArrived) {
-           if (isLeader) {
-              if (!march.members || march.members.length === 0) continue;
-              let highestPowerMember = null;
-              let maxPower = -1;
-              march.members.forEach(memberId => {
-                const player = activeDeployment.find(p => String(p.id) === String(memberId));
-                if (player && player.power > maxPower) { maxPower = player.power; highestPowerMember = memberId; }
-              });
-              const newLeader = highestPowerMember || march.members[0];
-              updatedMarches.push({ ...march, leader: newLeader, members: march.members.filter(mId => String(mId) !== String(newLeader)) });
-           } else if (isMember) { updatedMarches.push({ ...march, members: march.members.filter(mId => String(mId) !== String(playerId)) }); }
-        } else {
-           if (isLeader) continue; else if (isMember) updatedMarches.push({ ...march, members: march.members.filter(mId => String(mId) !== String(playerId)) });
-        }
+        updatedMarches.push({ ...march, members: march.members.filter(mId => String(mId) !== String(playerId)) });
       }
       return updatedMarches.filter(m => !(String(m.leader) === String(playerId) && m.marchType === 'rally_join'));
     });
-    setDraftPositions(prev => {
-      const newDrafts = { ...prev };
-      Object.keys(newDrafts).forEach(draftId => { if (String(newDrafts[draftId].leader) === String(playerId) || draftId.startsWith(`${playerId}-`)) delete newDrafts[draftId]; });
-      return newDrafts;
-    });
+    setDraftPositions({});
     setHealingEvents(prev => ({ ...prev, [playerId]: currentTime }));
   };
-
-  const handleCancelHeal = (e, playerId) => {
-    e.stopPropagation();
-    setHealingEvents(prev => { const newHeals = { ...prev }; delete newHeals[playerId]; return newHeals; });
-  };
-
+  
+  const handleCancelHeal = (e, playerId) => { e.stopPropagation(); setHealingEvents(prev => { const newHeals = { ...prev }; delete newHeals[playerId]; return newHeals; }); };
+  
   const handleGarrisonAction = (actionType, buildingId, targetPlayerId = null) => {
-    console.log(`\n--- INIZIO GARRISON ACTION: ${actionType} su edificio ${buildingId} al min ${currentTime} ---`);
-    const targetBuilding = buildings.find(b => String(b.id) === String(buildingId));
-    if (!targetBuilding) return;
+    const isDefeat = actionType === 'defeat';
+    const building = buildings.find(b => String(b.id) === String(buildingId));
+    if (!building) return;
 
-    if (actionType === 'defeat') {
-      const enemyTeam = teamBase === 'blue' ? 'red' : 'blue';
-      setBuildings(prev => prev.map(b => String(b.id) === String(buildingId) ? { ...b, controlledBy: enemyTeam } : b));
-      setManualCaptures(prev => [...prev, { time: currentTime, buildingId: String(buildingId), team: enemyTeam }]);
-    } else if (actionType === 'retreat_all') {
-      setBuildings(prev => prev.map(b => String(b.id) === String(buildingId) ? { ...b, controlledBy: 'neutral' } : b));
-      setManualCaptures(prev => [...prev, { time: currentTime, buildingId: String(buildingId), team: 'neutral' }]);
-    }
+    const baseTableTime = teamBase === 'blue' ? (building.travelTimeBlue || 60) : (building.travelTimeRed || 60);
 
-    const calcTravelTime = (x1, y1, x2, y2) => {
-      const dist = Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
-      return Math.max(1, Math.round(dist / 5)); 
+    const processEntityRetreat = (entity, isMarch) => {
+      const pos = getCurrentPosition(entity);
+      if (pos && !pos.removed && !pos.isMarching && String(pos.targetBuildingId) === String(buildingId)) {
+        
+        const entId = isMarch ? String(entity.leader) : String(entity.id);
+        if (targetPlayerId && entId !== String(targetPlayerId)) return entity; 
+
+        const startX = pos.x;
+        const startY = pos.y;
+        
+        let targetBase = getCityPosition(entId);
+        
+        if (Math.abs(targetBase.x - startX) < 0.1 && Math.abs(targetBase.y - startY) < 0.1) {
+            targetBase = getBasePositionApp(entId, teamBase);
+        }
+        
+        const dx = startX - targetBase.x;
+        const dy = startY - targetBase.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
+        const dxRef = startX - REFERENCE_POINTS[teamBase].x;
+        const dyRef = startY - REFERENCE_POINTS[teamBase].y;
+        const refDist = Math.sqrt(dxRef * dxRef + dyRef * dyRef);
+        
+        const speed = refDist / Math.max(1, baseTableTime);
+        const travelTime = (dist / speed) / 60;
+        
+        const returnTime = currentTime + travelTime;
+
+        const newPositions = { ...(entity.positions || {}) };
+        
+        newPositions[currentTime] = { 
+            isMarching: true, 
+            startTime: currentTime, 
+            startX: startX, startY: startY, 
+            targetX: targetBase.x, targetY: targetBase.y, 
+            arrivalTime: returnTime, 
+            targetBuildingId: null, 
+            marchType: 'ritirata' 
+        };
+        
+        if (isMarch) {
+            newPositions[returnTime] = { removed: true };
+        } else {
+            newPositions[returnTime] = { x: targetBase.x, y: targetBase.y, removed: false, isGarrison: false, targetBuildingId: null };
+        }
+
+        return { ...entity, positions: newPositions, marchType: 'ritirata' };
+      }
+      return entity;
     };
 
-    setMarches(prevMarches => {
-      const updatedMarches = [];
-      for (const march of prevMarches) {
-        let lastPos = null;
-        if (march.positions) {
-          const minutes = Object.keys(march.positions).map(Number).sort((a, b) => a - b);
-          for (const min of minutes) { if (min <= currentTime) lastPos = march.positions[min]; }
-        }
-
-        const isAtBuilding = lastPos && !lastPos.removed && String(lastPos.targetBuildingId) === String(buildingId) && (!lastPos.isMarching || lastPos.arrivalTime <= currentTime);
-        if (!isAtBuilding) { updatedMarches.push(march); continue; }
-
-        console.log(`[TRACE RIENTRO] Individuata marcia coinvolta: ${march.id} guidata da ${march.leader}`);
-
-        const cleanedPositions = {};
-        if (march.positions) { Object.keys(march.positions).forEach(k => { if (Number(k) < currentTime) cleanedPositions[k] = march.positions[k]; }); }
-
-        if (actionType === 'retreat_all' || actionType === 'defeat') {
-          // 1. Il leader rientra calcolando la distanza verso la SUA città statica
-          const leaderReturnPos = getCityPosition(march.leader);
-          const tTime = calcTravelTime(targetBuilding.x, targetBuilding.y, leaderReturnPos.x, leaderReturnPos.y);
-          console.log(`[TRACE RIENTRO] Leader marcia ${march.leader} rientra in ${tTime} min verso x:${leaderReturnPos.x.toFixed(2)}, y:${leaderReturnPos.y.toFixed(2)}`);
-          
-          updatedMarches.push({
-            ...march,
-            members: [], // SVUOTA: Il gruppo si scioglie
-            marchType: 'ritirata',
-            positions: {
-              ...cleanedPositions,
-              [currentTime]: { 
-                startX: targetBuilding.x, 
-                startY: targetBuilding.y, 
-                x: targetBuilding.x, 
-                y: targetBuilding.y, 
-                targetX: leaderReturnPos.x, 
-                targetY: leaderReturnPos.y, 
-                isMarching: true, 
-                isGarrison: false, 
-                targetBuildingId: null, 
-                startTime: currentTime, 
-                arrivalTime: currentTime + tTime, 
-                removed: false 
-              },
-              [currentTime + tTime]: { removed: true }
-            }
-          });
-
-          // 2. Ogni membro calcola il viaggio verso la PROPRIA città
-          if (march.members && march.members.length > 0) {
-            march.members.forEach((memberId, idx) => {
-              const memReturnPos = getCityPosition(memberId);
-              const memTime = calcTravelTime(targetBuilding.x, targetBuilding.y, memReturnPos.x, memReturnPos.y);
-              console.log(`[TRACE RIENTRO] Membro ${memberId} rientra da solo in ${memTime} min verso x:${memReturnPos.x.toFixed(2)}, y:${memReturnPos.y.toFixed(2)}`);
-
-              updatedMarches.push({
-                id: `return-${Date.now()}-${memberId}-${idx}`,
-                leader: memberId,
-                members: [],
-                marchType: 'ritirata',
-                positions: {
-                  [currentTime]: {
-                    startX: targetBuilding.x,
-                    startY: targetBuilding.y,
-                    x: targetBuilding.x,
-                    y: targetBuilding.y,
-                    targetX: memReturnPos.x,
-                    targetY: memReturnPos.y,
-                    isMarching: true,
-                    isGarrison: false,
-                    targetBuildingId: null,
-                    startTime: currentTime,
-                    arrivalTime: currentTime + memTime,
-                    removed: false
-                  },
-                  [currentTime + memTime]: { removed: true }
-                }
-              });
-            });
-          }
-
-        } else if (actionType === 'retreat_single' && targetPlayerId) {
-          const isLeader = String(march.leader) === String(targetPlayerId);
-          const isMember = march.members && march.members.map(String).includes(String(targetPlayerId));
-
-          if (isLeader || isMember) {
-            const returnPos = getCityPosition(targetPlayerId);
-            const tTime = calcTravelTime(targetBuilding.x, targetBuilding.y, returnPos.x, returnPos.y);
-            console.log(`[TRACE RIENTRO SINGOLO] Giocatore ${targetPlayerId} rientra in ${tTime} min verso x:${returnPos.x.toFixed(2)}, y:${returnPos.y.toFixed(2)}`);
-            
-            updatedMarches.push({ 
-              id: `return-${Date.now()}-${targetPlayerId}`, leader: targetPlayerId, members: [], marchType: 'ritirata', 
-              positions: { 
-                [currentTime]: { 
-                  startX: targetBuilding.x, 
-                  startY: targetBuilding.y, 
-                  x: targetBuilding.x, 
-                  y: targetBuilding.y, 
-                  targetX: returnPos.x, 
-                  targetY: returnPos.y, 
-                  isMarching: true, 
-                  isGarrison: false, 
-                  targetBuildingId: null, 
-                  startTime: currentTime, 
-                  arrivalTime: currentTime + tTime, 
-                  removed: false 
-                }, 
-                [currentTime + tTime]: { removed: true } 
-              } 
-            });
-          }
-
-          if (isLeader) {
-            if (!march.members || march.members.length === 0) { updatedMarches.push({ ...march, positions: { ...cleanedPositions, [currentTime]: { removed: true } } }); } 
-            else {
-              let newLeader = march.members[0];
-              updatedMarches.push({ ...march, leader: newLeader, members: march.members.filter(mId => String(mId) !== String(newLeader)), positions: { ...march.positions } });
-            }
-          } else if (isMember) { updatedMarches.push({ ...march, members: march.members.filter(mId => String(mId) !== String(targetPlayerId)) }); } 
-          else { updatedMarches.push(march); }
-        }
-      }
-      return updatedMarches;
-    });
+    if (window.confirm(isDefeat ? `Confermi di voler cedere ${building.name}? Le truppe torneranno ai propri segnalini.` : `Confermi di voler RITIRARE le truppe da ${building.name}?`)) {
+       setActiveDeployment(prev => prev.map(p => processEntityRetreat(p, false)));
+       setMarches(prev => prev.map(m => processEntityRetreat(m, true)));
+    }
   };
 
   const handleUpdatePosition = (dragData, newX, newY) => {
-    const [type, id] = dragData.split(':');
-    if (type === 'building') { setBuildings(prev => prev.map(b => String(b.id) === String(id) ? { ...b, x: newX, y: newY } : b)); return; }
-    if (type === 'player') {
-      setActiveDeployment(prev => prev.map(p => String(p.id) === String(id) ? { ...p, positions: { ...(p.positions || {}), [currentTime]: { x: newX, y: newY, removed: false } } } : p));
-      
-      setMarches(prevMarches => {
-        const updatedMarches = [];
-        for (const march of prevMarches) {
-          const isLeader = String(march.leader) === String(id);
-          const isMember = march.members && march.members.map(String).includes(String(id));
-          if (!isLeader && !isMember) { updatedMarches.push(march); continue; }
-          let hasArrived = false;
-          if (march.positions) {
-            const minutes = Object.keys(march.positions).map(Number).sort((a, b) => a - b);
-            let lastPos = null;
-            for (const min of minutes) { if (min <= currentTime) lastPos = march.positions[min]; }
-            if (lastPos && (lastPos.isGarrison || (lastPos.arrivalTime && lastPos.arrivalTime <= currentTime))) hasArrived = true;
-          }
-          if (hasArrived) {
-            if (isLeader) {
-              if (!march.members || march.members.length === 0) continue;
-              let highestPowerMember = null;
-              let maxPower = -1;
-              march.members.forEach(memberId => {
-                const player = activeDeployment.find(p => String(p.id) === String(memberId));
-                if (player && player.power > maxPower) { maxPower = player.power; highestPowerMember = memberId; }
-              });
-              const newLeader = highestPowerMember || march.members[0];
-              updatedMarches.push({ ...march, leader: newLeader, members: march.members.filter(mId => String(mId) !== String(newLeader)) });
-            } else if (isMember) { updatedMarches.push({ ...march, members: march.members.filter(mId => String(mId) !== String(id)) }); }
-          } else {
-            if (isLeader) continue; else if (isMember) updatedMarches.push({ ...march, members: march.members.filter(mId => String(mId) !== String(id)) });
-          }
-        }
-        return updatedMarches.filter(m => !(String(m.leader) === String(id) && m.marchType === 'rally_join'));
-      });
-      setDraftPositions(prev => {
-        const newDrafts = { ...prev };
-        Object.keys(newDrafts).forEach(draftId => { if (String(newDrafts[draftId].leader) === String(id) || draftId.startsWith(`${id}-`)) delete newDrafts[draftId]; });
-        return newDrafts;
-      });
-    }
+     const [type, id] = dragData.split(':');
+     if (type === 'building') { 
+         setBuildings(prev => prev.map(b => String(b.id) === String(id) ? { ...b, x: newX, y: newY } : b)); 
+     }
+     else if (type === 'player') {
+       setActiveDeployment(prev => prev.map(p => {
+           if (String(p.id) === String(id)) {
+               return { 
+                   ...p, 
+                   positions: { 
+                       ...(p.positions || {}), 
+                       [currentTime]: { x: newX, y: newY, removed: false, isGarrison: false, targetBuildingId: null } 
+                   } 
+               };
+           }
+           return p;
+       }));
+
+       setMarches(prev => prev.map(m => {
+           if (String(m.leader) === String(id)) {
+               return { ...m, positions: { ...(m.positions || {}), [currentTime]: { removed: true } } };
+           }
+           if (m.members && m.members.map(String).includes(String(id))) {
+               return { ...m, members: m.members.filter(mId => String(mId) !== String(id)) };
+           }
+           return m;
+       }));
+
+       setDraftPositions(prev => {
+          const newDrafts = { ...prev };
+          Object.keys(newDrafts).forEach(draftId => {
+              if (String(newDrafts[draftId].leader) === String(id)) {
+                  delete newDrafts[draftId];
+              }
+          });
+          return newDrafts;
+       });
+     }
   };
 
-  return {
-    marches, setMarches, draftPositions, setDraftPositions,
-    getCurrentPosition, handleDispatchMarch, handleConfirmMinute, handleCancelMinute,
-    getAvailableMarches, handleHeal, handleCancelHeal, handleGarrisonAction, handleUpdatePosition, handleWithdraw
-  };
+  return { marches, setMarches, draftPositions, setDraftPositions, getCurrentPosition, handleDispatchMarch, handleConfirmMinute, handleCancelMinute, getAvailableMarches, handleHeal, handleCancelHeal, handleGarrisonAction, handleUpdatePosition, handleWithdraw };
 };

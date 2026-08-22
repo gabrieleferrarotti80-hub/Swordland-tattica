@@ -6,6 +6,7 @@ import Viking from './pages/Viking';
 import MapPage from './pages/MapPage';
 import MarchBuilder from './pages/MarchBuilder'; // Aggiungi l'import in alto
 import AdminPanel from './pages/AdminPanel';
+import TriAlliance from './pages/TriAlliance';
 
 function App() {
   // Lo stato del roster vive qui ed è l'unica cosa condivisa globalmente
@@ -53,6 +54,7 @@ function App() {
               setRoster={setRoster} 
               allianceCode={auth.code} 
               allianceRole={auth.allianceRole} 
+              userRole={auth.role} /* 💡 AGGIUNTO QUI! Ora Swordland sa chi sei */
             />
           } 
         />
@@ -68,10 +70,13 @@ function App() {
             />
           } 
         />
+        <Route path="/tri-alliance" element={
+          <TriAlliance auth={auth} roster={roster} />
+        } />
         <Route 
-  path="/march-builder" 
-  element={<MarchBuilder auth={auth} />} 
-/>
+          path="/march-builder" 
+          element={<MarchBuilder auth={auth} />} 
+        />
       </Routes>
     </Router>
   );

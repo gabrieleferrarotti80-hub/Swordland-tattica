@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
+import RosterExcelModal from './roster/RosterExcelModal';
 
 const levelOptions = [
   ...Array.from({ length: 30 }, (_, i) => String(i + 1)),
@@ -48,8 +49,9 @@ const EditableInput = ({ initialValue, onSave, type = "text", className, maxLeng
   );
 };
 
-export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
-  const { t } = useTranslation(); // 🌍 Hook di traduzione
+// 💡 AGGIUNTO: Riceviamo userRole e onClearRoster dalle prop
+export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRoster, userRole }) {
+  const { t } = useTranslation(); 
   
   const [newPlayer, setNewPlayer] = useState({
     tag: '',
@@ -66,6 +68,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('default');
   const [showAddForm, setShowAddForm] = useState(false); 
+  const [isExcelOpen, setIsExcelOpen] = useState(false);
 
   useEffect(() => {
     setNewPlayer(prev => ({
@@ -83,6 +86,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
     }
 
     onAddPlayer({
+      id: `man-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       tag: newPlayer.tag || `G${roster.length + 1}`, 
       name: newPlayer.name,
       role: newPlayer.role,
@@ -111,6 +115,18 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
     if (sortOrder === 'default') setSortOrder('asc');
     else if (sortOrder === 'asc') setSortOrder('desc');
     else setSortOrder('default');
+  };
+
+  // 💡 FUNZIONE PER SVUOTARE IL ROSTER
+  const handleClearRoster = () => {
+    if (window.confirm("⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE TUTTO IL ROSTER?\n\nQuesta operazione cancellerà tutti i giocatori dalla lista attuale. Dovrai poi salvare in Cloud per rendere la modifica definitiva sul database.")) {
+      if (onClearRoster) {
+        onClearRoster();
+      } else {
+        // Fallback di sicurezza: se non gli passi onClearRoster, elimina uno per uno
+        roster.forEach(p => onDelete(p.id));
+      }
+    }
   };
 
   const processedRoster = [...roster]
@@ -158,12 +174,23 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
               </select>
             </div>
 
+           {/* 💡 BOTTONE ELIMINA TUTTO */}
+            {roster.length > 0 && (
+              <button 
+                onClick={handleClearRoster}
+                className="px-3 py-1.5 bg-rose-700 hover:bg-rose-600 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow-[0_0_10px_rgba(225,29,72,0.4)] transition-all flex items-center gap-1.5 border border-rose-500/50"
+                title="Svuota l'intero Roster"
+              >
+                <span className="text-sm">🗑️</span> <span className="hidden sm:inline">Svuota Roster</span>
+              </button>
+            )}
+
             <button 
-              onClick={() => setShowAddForm(!showAddForm)}
-              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl shadow-lg transition-all duration-300 flex-shrink-0 ${showAddForm ? 'bg-red-600 hover:bg-red-500 text-white rotate-45' : 'bg-cyan-600 hover:bg-cyan-500 text-white hover:scale-105'}`}
-              title={showAddForm ? t('roster_table.close_form') : t('roster_table.add_player')}
+              onClick={() => setIsExcelOpen(true)} 
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all flex items-center gap-1.5"
+              title="Importa da Excel"
             >
-              +
+              <span className="text-sm">📊</span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
             </button>
           </div>
         </div>
@@ -334,6 +361,29 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer }) {
           </tbody>
         </table>
       </div>
+
+      <RosterExcelModal 
+        isOpen={isExcelOpen} 
+        onClose={() => setIsExcelOpen(false)} 
+        onImport={(importedPlayers) => {
+          importedPlayers.forEach((player, index) => {
+            onAddPlayer({
+              id: `excel-${Date.now()}-${Math.floor(Math.random() * 10000)}-${index}`,
+              tag: '',
+              name: player.name,
+              role: player.role,
+              level: player.level || '1',
+              power: player.power,
+              marches: player.marches,
+              x: '',
+              y: '',
+              isParticipating: false
+            });
+          });
+          setIsExcelOpen(false);
+        }} 
+        t={t} 
+      />
     </div>
   );
 }

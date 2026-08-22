@@ -1,56 +1,74 @@
 import { db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { initialBuildings } from '../data/buildings';
+
+// Componenti
 import { BuildingTable } from '../components/BuildingTable';
 import { RosterTable } from '../components/RosterTable';
 import { InteractiveMap } from '../components/InteractiveMap';
-import { SidebarNav } from '../components/SidebarNav';
 import { TimelineControls } from '../components/TimelineControls';
 import { DeploymentPanel } from '../components/DeploymentPanel';
+import { ExportModal } from '../components/ExportModal';
+import { DispatchModal } from '../components/DispatchModal'; 
+import EventManagerModal from '../components/map/EventManagerModal'; 
+import { InstructionsModal } from '../components/InstructionsModal';
 import { calculateDynamicScores } from '../utils/scoreEngine';
 import { useMarches } from '../hooks/useMarches';
-import { ExportModal } from '../components/ExportModal';
 
-export default function Swordland({ roster, setRoster, allianceCode }) {
+export default function Swordland({ roster, setRoster, allianceCode, userRole }) {
   const navigate = useNavigate();
   const { t } = useTranslation(); 
   
+  const [isBuildingModalOpen, setIsBuildingModalOpen] = useState(false);
+  const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [activePanel, setActivePanel] = useState(null);
+  const [isEventManagerOpen, setIsEventManagerOpen] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+  
+  const [isPlayerManagerOpen, setIsPlayerManagerOpen] = useState(false);
+  const [playerManagerTab, setPlayerManagerTab] = useState('roster'); 
+
+  const [showManualPanel, setShowManualPanel] = useState(false);
+  const [manualPlayerId, setManualPlayerId] = useState('');
+  const [manualX, setManualX] = useState('');
+  const [manualY, setManualY] = useState('');
+
+  const [popupPlayerId, setPopupPlayerId] = useState(null);
+  const [marchAssignments, setMarchAssignments] = useState({});
+
+  const [currentPlanId, setCurrentPlanId] = useState(null);
+  const [currentPlanName, setCurrentPlanName] = useState('');
+
   const [activeDeployment, setActiveDeployment] = useState([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(5);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [teamBase, setTeamBase] = useState('blue');
   const [healingEvents, setHealingEvents] = useState({});
   const [movementMode, setMovementMode] = useState('march');
-  const [teamScores, setTeamScores] = useState({ blue: 0, red: 0 });
   
-  const [selectedBuildingForEdit, setSelectedBuildingForEdit] = useState('');
-  const [isEditorUnlocked, setIsEditorUnlocked] = useState(false);
-  const [editorPassword, setEditorPassword] = useState('');
+  const [teamScores, setTeamScores] = useState({ blue: 0, red: 0 });
+  const [lootDrops, setLootDrops] = useState([]); 
+  const [buildingStates, setBuildingStates] = useState({});
 
-  // 💡 STATI PER I SUGGERIMENTI E LA DEMO
   const [showDemoWelcome, setShowDemoWelcome] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
+  const [selectedBuildingForEdit, setSelectedBuildingForEdit] = useState('');
 
   const [manualCaptures, setManualCaptures] = useState(() => {
     const saved = localStorage.getItem('swordland-manual-captures');
     return saved ? JSON.parse(saved) : [];
   });
 
-  const fileInputRef = useRef(null);
-
   const [buildings, setBuildings] = useState(() => {
-    const savedBuildings = localStorage.getItem('swordland-buildings');
+    const savedBuildings = localStorage.getItem('swordland-buildings-v3');
     if (!savedBuildings) return initialBuildings;
     const parsedBuildings = JSON.parse(savedBuildings);
     return initialBuildings.map(initialBuilding => {
       const savedBuilding = parsedBuildings.find(b => b.id === initialBuilding.id);
-      return savedBuilding ? { ...savedBuilding, scale: initialBuilding.scale, icon: initialBuilding.icon, hitbox: savedBuilding.hitbox } : initialBuilding;
+      return savedBuilding ? { ...savedBuilding, scale: initialBuilding.scale, icon: initialBuilding.icon, hitbox: savedBuilding.hitbox, x: savedBuilding.x, y: savedBuilding.y } : initialBuilding;
     });
   });
 
@@ -64,25 +82,17 @@ export default function Swordland({ roster, setRoster, allianceCode }) {
     setManualCaptures, setHealingEvents
   });
 
-  // 💡 EFFETTO DEMO ROBUSTO: Apre il pannello schieramento e mostra la guida in automatico!
   useEffect(() => {
     if (allianceCode === 'DEMO') {
       setShowDemoWelcome(true);
-      setActivePanel('deployment'); // Forza l'apertura del menu laterale
-      setShowHelp(true); // Mostra il box dei suggerimenti
-      
       const demoPlayers = [
-        { id: 'd1', name: 'Ragnar', tag: 'DEMO', role: 'R5', power: 120, marches: 2, isParticipating: true, positions: { 0: 'base-blue' } },
-        { id: 'd2', name: 'Lagertha', tag: 'DEMO', role: 'R4', power: 105, marches: 2, isParticipating: true, positions: { 0: 'base-blue' } },
-        { id: 'd3', name: 'Bjorn', tag: 'DEMO', role: 'R3', power: 90, marches: 2, isParticipating: true, positions: { 0: 'base-blue' } }
+        { id: 'd1', name: 'Ragnar', tag: 'DEMO', role: 'R5', power: 120, marches: 2, isParticipating: true, positions: { 0: 'base-blue' }, squad: 'Assalto' },
+        { id: 'd2', name: 'Lagertha', tag: 'DEMO', role: 'R4', power: 105, marches: 2, isParticipating: true, positions: { 0: 'base-blue' }, squad: 'Difesa' },
+        { id: 'd3', name: 'Bjorn', tag: 'DEMO', role: 'R3', power: 90, marches: 2, isParticipating: true, positions: { 0: 'base-blue' }, squad: 'Supporto' }
       ];
-
-      if (!roster || roster.length === 0) {
-        setRoster(demoPlayers);
-      }
+      if (!roster || roster.length === 0) setRoster(demoPlayers);
       setActiveDeployment(demoPlayers);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allianceCode]);
 
   useEffect(() => {
@@ -97,19 +107,19 @@ export default function Swordland({ roster, setRoster, allianceCode }) {
           });
           setBuildings(mergedBuildings);
         }
-      } catch (error) {
-        console.warn(t('swordland.cloud_master_error'), error);
-      }
+      } catch (error) {}
     };
-    
     fetchMasterBuildings();
   }, [t]);
 
-  useEffect(() => { localStorage.setItem('swordland-buildings', JSON.stringify(buildings)); }, [buildings]);
+  useEffect(() => { localStorage.setItem('swordland-buildings-v3', JSON.stringify(buildings)); }, [buildings]);
   useEffect(() => { localStorage.setItem('swordland-manual-captures', JSON.stringify(manualCaptures)); }, [manualCaptures]);
 
   useEffect(() => {
-    setTeamScores(calculateDynamicScores(currentTime, activeDeployment, marches, manualCaptures, buildings, teamBase));
+    const result = calculateDynamicScores(currentTime, activeDeployment, marches, manualCaptures, buildings, teamBase);
+    setTeamScores(result.scores);
+    setLootDrops(result.lootDrops);
+    setBuildingStates(result.buildingStates); 
   }, [currentTime, activeDeployment, marches, manualCaptures, buildings, teamBase]);
 
   useEffect(() => {
@@ -128,137 +138,171 @@ export default function Swordland({ roster, setRoster, allianceCode }) {
 
   const handleEditBuilding = (id, field, value) => setBuildings(buildings.map(b => b.id === id ? { ...b, [field]: value } : b));
   
+  const handleEditHitbox = (id, bound, value) => {
+    setBuildings(prev => prev.map(b => {
+      if (b.id === id) {
+        const currentHitbox = b.hitbox || { xMin: b.x - 2, xMax: b.x + 2, yMin: b.y - 2, yMax: b.y + 2 };
+        return { ...b, hitbox: { ...currentHitbox, [bound]: value } };
+      }
+      return b;
+    }));
+  };
+  
   const handleDeploy = () => {
     const playersToDeploy = roster.filter(p => p.isParticipating).map(p => ({ ...p, role: p.role || '', positions: p.positions || {} }));
     setActiveDeployment(playersToDeploy);
-    setActivePanel('deployment');
+    setIsPlayerManagerOpen(false); 
   };
 
-  const handleEditPlayer = (id, field, value) => {
-    setRoster(roster.map(p => p.id === id ? { ...p, [field]: value } : p));
+  const handleEditPlayer = (id, field, value) => setRoster(roster.map(p => p.id === id ? { ...p, [field]: value } : p));
+
+  const allParticipating = roster.length > 0 && roster.every(p => p.isParticipating);
+  const handleToggleAllParticipating = () => {
+    const newState = !allParticipating;
+    setRoster(roster.map(p => ({ ...p, isParticipating: newState })));
+  };
+
+  const handleAutoAssignSquads = () => {
+    const participating = roster.filter(p => p.isParticipating);
+    if (participating.length === 0) { alert("Seleziona almeno un giocatore da assegnare!"); return; }
+    if (window.confirm("Vuoi dividere automaticamente i giocatori in 3 squadre bilanciate per Potere?")) {
+      const sorted = [...participating].sort((a, b) => (b.power || 0) - (a.power || 0));
+      const squads = ['Assalto', 'Difesa', 'Supporto'];
+      const snakePattern = [0, 1, 2, 2, 1, 0];
+      const newRoster = roster.map(p => {
+        if (!p.isParticipating) return { ...p, squad: '' }; 
+        const idx = sorted.findIndex(s => s.id === p.id);
+        if (idx !== -1) return { ...p, squad: squads[snakePattern[idx % 6]] };
+        return p;
+      });
+      setRoster(newRoster);
+      if (activeDeployment.length > 0) {
+        setActiveDeployment(newRoster.filter(p => p.isParticipating).map(p => ({ ...p, role: p.role || '', positions: p.positions || {} })));
+      }
+    }
+  };
+
+  const openPlayerManager = (tab) => {
+    setPlayerManagerTab(tab);
+    setIsPlayerManagerOpen(true);
+  };
+
+  const handleSquadDrop = (e, targetSquad) => {
+    e.preventDefault();
+    const playerId = e.dataTransfer.getData('text/plain');
+    if (playerId && playerId.startsWith('squad_player:')) {
+      const pId = playerId.replace('squad_player:', '');
+      const newRoster = roster.map(p => p.id === pId ? { ...p, squad: targetSquad } : p);
+      setRoster(newRoster);
+      if (activeDeployment.some(p => p.id === pId)) {
+        setActiveDeployment(newRoster.filter(p => p.isParticipating).map(p => ({ ...p, role: p.role || '', positions: p.positions || {} })));
+      }
+    }
+  };
+
+  const getSquadPower = (sqName) => {
+    return roster
+      .filter(p => p.isParticipating && (sqName === '' ? !['Assalto', 'Difesa', 'Supporto'].includes(p.squad) : p.squad === sqName))
+      .reduce((sum, p) => sum + Number(p.power || 0), 0)
+      .toFixed(1);
+  };
+
+  const handleManualPositioning = () => {
+    if (manualPlayerId && manualX !== '' && manualY !== '') {
+      setIsPlaying(false);
+      handleUpdatePosition(`player:${manualPlayerId}`, parseFloat(manualX), parseFloat(manualY));
+      setManualX('');
+      setManualY('');
+    }
+  };
+
+  const handleConfirmDispatch = (playerId) => { 
+    const assignments = Object.entries(marchAssignments).filter(([_, data]) => data.buildingId !== '');
+    if (assignments.length > 0) {
+      assignments.forEach(([marchIdx, data]) => {
+        const memberIds = (data.members || []).map(m => typeof m === 'object' ? m.id : m);
+        const membersDataWithSpeedups = data.members || [];
+        
+        const targetLoot = lootDrops.find(l => l.id === data.buildingId);
+        
+        if (targetLoot) {
+           handleDispatchMarch(playerId, data.buildingId, parseInt(marchIdx), data.type, memberIds, membersDataWithSpeedups, targetLoot);
+        } else {
+           handleDispatchMarch(playerId, data.buildingId, parseInt(marchIdx), data.type, memberIds, membersDataWithSpeedups, null);
+        }
+      });
+      setPopupPlayerId(null); 
+      setMarchAssignments({});
+    } 
   };
 
   const handleTimeChange = (newTime) => { if (Object.keys(draftPositions).length === 0) { setIsPlaying(false); if (newTime >= 0 && newTime <= 60) setCurrentTime(newTime); } };
   const togglePlay = () => { if (Object.keys(draftPositions).length === 0) { if (!isPlaying && currentTime >= 60) setCurrentTime(0); setIsPlaying(!isPlaying); } };
 
-  const handleExportProject = () => {
-    const projectData = { version: '1.4', teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectData, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `${t('swordland.export_filename')}${new Date().toISOString().slice(0,10)}.json`);
-    document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove();
+  const currentEventData = useMemo(() => ({
+    version: '1.5', teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures
+  }), [teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures]);
+
+  const handleLoadData = (data, planId, planName) => {
+    if (window.confirm(`⚠️ Vuoi caricare il piano "${planName}"? I dati non salvati andranno persi.`)) {
+      if (data.teamBase) setTeamBase(data.teamBase);
+      if (data.buildings) setBuildings(data.buildings);
+      if (data.activeDeployment) setActiveDeployment(data.activeDeployment);
+      if (data.marches) setMarches(data.marches);
+      if (data.healingEvents) setHealingEvents(data.healingEvents);
+      if (data.manualCaptures) setManualCaptures(data.manualCaptures);
+      setCurrentTime(0); setDraftPositions({}); setIsPlaying(false);
+      setCurrentPlanId(planId); setCurrentPlanName(planName); setIsEventManagerOpen(false);
+    }
   };
 
-  const handleImportProject = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const pd = JSON.parse(e.target.result);
-        if (pd.teamBase) setTeamBase(pd.teamBase);
-        if (pd.buildings) setBuildings(pd.buildings);
-        if (pd.activeDeployment) setActiveDeployment(pd.activeDeployment);
-        if (pd.marches) setMarches(pd.marches);
-        if (pd.healingEvents) setHealingEvents(pd.healingEvents);
-        if (pd.manualCaptures) setManualCaptures(pd.manualCaptures);
-        setCurrentTime(0); setDraftPositions({}); setIsPlaying(false); setActivePanel(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        alert(t('swordland.project_loaded'));
-      } catch (error) { alert(t('swordland.invalid_file')); }
-    };
-    reader.readAsText(file);
+  const handleCreateNewPlan = () => {
+    if (window.confirm("⚠️ Vuoi azzerare la lavagna tattica? I dati della mappa master verranno mantenuti.")) {
+      setTeamBase('blue'); 
+      setActiveDeployment([]); 
+      setMarches([]); 
+      setManualCaptures([]);
+      setHealingEvents({}); 
+      setCurrentTime(0); 
+      setDraftPositions({}); 
+      setIsPlaying(false);
+      setCurrentPlanId(null); 
+      setCurrentPlanName(''); 
+      setIsEventManagerOpen(false);
+      
+      setRoster(roster.map(p => ({ ...p, squad: '' })));
+    }
   };
 
   const handleSaveMasterToCloud = async () => {
     if (window.confirm(t('swordland.master_overwrite_warning'))) {
       try {
-        await setDoc(doc(db, "projects", "MASTER_MAP_DATA"), { 
-          buildings: buildings,
-          updatedAt: new Date().toISOString()
-        });
+        await setDoc(doc(db, "projects", "MASTER_MAP_DATA"), { buildings: buildings, updatedAt: new Date().toISOString() });
         alert(t('swordland.master_updated'));
-      } catch (error) {
-        console.error("Errore salvataggio Master:", error);
-        alert(t('swordland.cloud_update_error'));
-      }
+      } catch (error) { alert(t('swordland.cloud_update_error')); }
     }
   };
 
-  const handleSaveToFirebase = async () => {
-    const code = window.prompt(t('swordland.save_prompt'), "");
-    if (!code) return;
-    try {
-      const projectData = { version: '1.4', teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures };
-      await setDoc(doc(db, "projects", code.toUpperCase()), projectData);
-      alert(t('swordland.project_saved', { code: code.toUpperCase() }));
-    } catch (error) { alert(t('swordland.firebase_save_error')); }
-  };
-
-  const handleLoadFromFirebase = async () => {
-    const code = window.prompt(t('swordland.load_prompt'), "");
-    if (!code) return;
-    try {
-      const docSnap = await getDoc(doc(db, "projects", code.toUpperCase()));
-      if (docSnap.exists()) {
-        const pd = docSnap.data();
-        if (pd.teamBase) setTeamBase(pd.teamBase);
-        if (pd.buildings) setBuildings(pd.buildings);
-        if (pd.activeDeployment) setActiveDeployment(pd.activeDeployment);
-        if (pd.marches) setMarches(pd.marches);
-        if (pd.healingEvents) setHealingEvents(pd.healingEvents);
-        if (pd.manualCaptures) setManualCaptures(pd.manualCaptures);
-        setCurrentTime(0); setDraftPositions({}); setIsPlaying(false); setActivePanel(null);
-        alert(t('swordland.project_loaded_code', { code: code.toUpperCase() }));
-      } else alert(t('swordland.no_save_found'));
-    } catch (error) { alert(t('swordland.load_error')); }
-  };
-
-  const handleNewProject = () => {
-    if (window.confirm(t('swordland.new_project_warning'))) {
-      setTeamBase('blue'); setBuildings(initialBuildings); setActiveDeployment([]); setMarches([]); setManualCaptures([]);
-      setHealingEvents({}); setCurrentTime(0); setDraftPositions({}); setIsPlaying(false); setActivePanel(null);
-    }
-  };
-
-  const handleUnlockEditor = () => {
-    if (editorPassword === 'FGgabriele1') {
-      setIsEditorUnlocked(true);
-      setEditorPassword('');
-    } else {
-      alert(t('swordland.wrong_password'));
-      setEditorPassword('');
+  const handleFactoryReset = async () => {
+    if (window.confirm("⚠️ Vuoi forzare il ripristino? Questo sovrascriverà la mappa in Cloud con i dati attuali del tuo file buildings.js locale.")) {
+      setBuildings(initialBuildings);
+      try {
+        await setDoc(doc(db, "projects", "MASTER_MAP_DATA"), { buildings: initialBuildings, updatedAt: new Date().toISOString() });
+        alert("✅ Reset completato! La mappa ora è perfettamente sincronizzata con il file originale.");
+      } catch (error) { alert("❌ Errore nel reset Cloud."); }
     }
   };
 
   const hasDrafts = Object.keys(draftPositions).length > 0;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 relative">
+    <div className="flex h-screen overflow-hidden bg-slate-950 relative font-sans">
       
-      {/* 💡 MODAL DI BENVENUTO DEMO */}
       {showDemoWelcome && (
-        <div className="absolute inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="absolute inset-0 z-[300] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-amber-500/50 rounded-2xl shadow-2xl max-w-2xl w-full p-6 flex flex-col gap-4 animate-fade-in">
             <h2 className="text-2xl font-black text-amber-400">{t('swordland.demo_title', 'Benvenuto in Swordland! ⚔️')}</h2>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              {t('swordland.demo_desc', 'Sei in modalità Sandbox con 3 Vichinghi pronti. Segui questi 3 passaggi per imparare a usare il simulatore:')}
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-              <div className="bg-slate-950 p-4 rounded-xl border border-indigo-900/50 hover:border-indigo-500/50 transition-colors">
-                <h3 className="text-indigo-400 font-bold mb-2">{t('swordland.demo_f1_title', '1. I Menu Segreti')}</h3>
-                <p className="text-xs text-slate-400">{t('swordland.demo_f1_desc', 'Usa le icone a sinistra: 🏢 (Edifici), 👥 (Roster), ⚔️ (Schieramento). Clicca sulle spade ⚔️ per aprire le tue truppe.')}</p>
-              </div>
-              <div className="bg-slate-950 p-4 rounded-xl border border-cyan-900/50 hover:border-cyan-500/50 transition-colors">
-                <h3 className="text-cyan-400 font-bold mb-2">{t('swordland.demo_f2_title', '2. Trascina e Rilascia')}</h3>
-                <p className="text-xs text-slate-400">{t('swordland.demo_f2_desc', 'Nel pannello Schieramento, prendi la card di un vichingo e TRASCINALA su un edificio nella mappa per ordinare la marcia.')}</p>
-              </div>
-              <div className="bg-slate-950 p-4 rounded-xl border border-rose-900/50 hover:border-rose-500/50 transition-colors">
-                <h3 className="text-rose-400 font-bold mb-2">{t('swordland.demo_f3_title', '3. Macchina del Tempo')}</h3>
-                <p className="text-xs text-slate-400">{t('swordland.demo_f3_desc', 'Premi Play o usa la barra in basso a destra per scorrere i minuti. Vedrai le tue truppe viaggiare e i punti salire!')}</p>
-              </div>
-            </div>
+            <p className="text-slate-300 text-sm leading-relaxed">Sei in modalità Sandbox con 3 Vichinghi pronti.</p>
             <button onClick={() => setShowDemoWelcome(false)} className="mt-4 w-full bg-amber-700 hover:bg-amber-600 text-white font-black tracking-widest uppercase py-3 rounded-lg transition-colors">
               {t('swordland.demo_start_btn', 'Inizia la Simulazione')}
             </button>
@@ -266,246 +310,247 @@ export default function Swordland({ roster, setRoster, allianceCode }) {
         </div>
       )}
 
-      <SidebarNav activePanel={activePanel} setActivePanel={setActivePanel} teamBase={teamBase} setTeamBase={setTeamBase} handleExportProject={handleExportProject} handleImportProject={handleImportProject} handleSaveToFirebase={handleSaveToFirebase} handleLoadFromFirebase={handleLoadFromFirebase} fileInputRef={fileInputRef} handleNewProject={handleNewProject} />
+      <EventManagerModal isOpen={isEventManagerOpen} onClose={() => setIsEventManagerOpen(false)} currentData={currentEventData} onLoadData={handleLoadData} onCreateNewPlan={handleCreateNewPlan} allianceCode={allianceCode} currentPlanId={currentPlanId} currentPlanName={currentPlanName} onPlanSaved={(id, name) => { setCurrentPlanId(id); setCurrentPlanName(name); }} dbCollection="swordland_plans" legacyCollection="projects" legacyIds={[allianceCode, allianceCode.split('_')[0]]} />
       
-      {activePanel && (
-        <aside className={`absolute lg:relative left-12 lg:left-0 top-0 bottom-0 my-6 lg:ml-6 app-panel flex flex-col z-50 shrink-0 transition-all duration-300 ease-in-out bg-slate-950/95 lg:bg-transparent shadow-2xl lg:shadow-none border lg:border-none border-slate-700/50 ${activePanel === 'buildings' ? 'w-[85vw] lg:w-[850px]' : activePanel === 'roster' ? 'w-[85vw] lg:w-[680px]' : 'w-[75vw] lg:w-[320px]'}`}>
-          
-          {/* 💡 HEADER CON IL PULSANTE DI AIUTO */}
-          <div className="flex justify-between items-center p-4 border-b border-slate-700/50 shrink-0 bg-slate-800/50 rounded-t-xl">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-bold uppercase tracking-wider flex items-center gap-2">
-                {activePanel === 'buildings' && <span className="text-cyan-400">{t('swordland.buildings')}</span>}
-                {activePanel === 'roster' && <span className="text-cyan-400">{t('swordland.players')}</span>}
-                {activePanel === 'deployment' && <span className="text-amber-400">{t('swordland.singles')}</span>}
-                {activePanel === 'settings' && <span className="text-amber-400">{t('swordland.hitbox_editor')}</span>}
-              </h2>
-              {/* Bottone Help */}
-              <button onClick={() => setShowHelp(!showHelp)} className={`w-6 h-6 flex items-center justify-center rounded-full border transition-colors text-xs font-bold shadow-md ${showHelp ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-700 hover:bg-slate-600 border-slate-500 text-white'}`}>
-                ?
-              </button>
+      {isBuildingModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-800 shrink-0">
+              <h2 className="text-xl font-black text-cyan-400 uppercase tracking-widest">🏰 Gestione Edifici</h2>
+              <button onClick={() => setIsBuildingModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:bg-rose-900 hover:text-rose-400 transition-colors font-bold">✕</button>
             </div>
-            <button onClick={() => { 
-                setActivePanel(null); 
-                setSelectedBuildingForEdit(''); 
-                setIsEditorUnlocked(false); 
-              }} 
-              className="text-slate-400 hover:text-red-400 transition-colors w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-700"
-            >
-              ✕
-            </button>
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar"><BuildingTable buildings={buildings} onEdit={handleEditBuilding} /></div>
           </div>
+        </div>
+      )}
 
-          {/* 💡 BOX SUGGERIMENTI DINAMICI */}
-          {showHelp && activePanel === 'deployment' && (
-            <div className="bg-amber-950/40 border-b border-amber-500/50 p-3 text-xs text-amber-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
-              <strong>💡 {t('swordland.help_deploy_title', 'Guida Schieramento:')}</strong> {t('swordland.help_deploy_desc', 'Trascina la card di un giocatore da questo pannello verso un edificio sulla mappa per ordinare la marcia! Premi la X sulle marce per annullarle.')}
-            </div>
-          )}
-          {showHelp && activePanel === 'buildings' && (
-            <div className="bg-cyan-950/40 border-b border-cyan-500/50 p-3 text-xs text-cyan-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
-              <strong>💡 {t('swordland.help_build_title', 'Guida Edifici:')}</strong> {t('swordland.help_build_desc', 'Visualizza i punti generati da ogni struttura e i tempi esatti che le truppe impiegano a raggiungerli partendo dalle rispettive basi.')}
-            </div>
-          )}
-          {showHelp && activePanel === 'roster' && (
-            <div className="bg-indigo-950/40 border-b border-indigo-500/50 p-3 text-xs text-indigo-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
-              <strong>💡 {t('swordland.help_roster_title', 'Guida Roster:')}</strong> {t('swordland.help_roster_desc', 'Seleziona i giocatori della tua Alleanza che parteciperanno all\'evento spuntando le caselle, poi clicca sul pulsante "Schieramento" in alto a destra.')}
-            </div>
-          )}
-          {showHelp && activePanel === 'settings' && (
-            <div className="bg-red-950/40 border-b border-red-500/50 p-3 text-xs text-red-100 leading-relaxed shrink-0 shadow-inner animate-fade-in">
-              <strong>💡 {t('swordland.help_admin_title', 'Guida Editor:')}</strong> {t('swordland.help_admin_desc', 'Modalità riservata ai Master. Permette di calibrare l\'area di clic (Hitbox) e il centro matematico per il calcolo geometrico delle distanze.')}
-            </div>
-          )}
-
-          <div className="overflow-y-auto flex-1 w-full rounded-b-xl bg-slate-900/50">
-            {activePanel === 'buildings' && <div className="px-6 pb-6 pt-4"><BuildingTable buildings={buildings} onEdit={handleEditBuilding} /></div>}
-            
-            {activePanel === 'roster' && (
-              <div className="flex flex-col h-full">
-               <div className="flex justify-between items-center px-6 pt-4 pb-4 border-b border-slate-700/50 bg-slate-800/20">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('swordland.home_modifications')}</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => navigate('/')} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-bold rounded-lg border border-slate-600 flex items-center shadow-sm">{t('swordland.hub')}</button>
-                    <button onClick={handleDeploy} disabled={roster.filter(p => p.isParticipating).length === 0} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg border border-amber-500 flex items-center shadow-sm ml-2">{t('swordland.deployment')}</button>
-                  </div>
-                </div>
-                <div className="px-6 pb-6 pt-4 overflow-y-auto">
-                  <RosterTable roster={roster} onAddPlayer={() => {}} onEdit={handleEditPlayer} onDelete={() => {}} onDeploy={handleDeploy} />
+      {isPlayerManagerOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-800 shrink-0 bg-slate-950">
+              <div className="flex items-center gap-6">
+                <h2 className="text-xl font-black text-white uppercase tracking-widest hidden md:flex items-center gap-2">
+                  {playerManagerTab === 'roster' ? '👥 Database Roster' : '🛡️ Team Builder'}
+                </h2>
+                <div className="flex bg-slate-800 p-1 rounded-xl shadow-inner border border-slate-700/50">
+                  <button onClick={() => setPlayerManagerTab('roster')} className={`px-4 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${playerManagerTab === 'roster' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>1. Seleziona Giocatori</button>
+                  <button onClick={() => setPlayerManagerTab('squads')} className={`px-4 py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${playerManagerTab === 'squads' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>2. Assegna Squadre</button>
                 </div>
               </div>
-            )}
-
-            {activePanel === 'deployment' && <DeploymentPanel activeDeployment={activeDeployment} getAvailableMarches={getAvailableMarches} healingEvents={healingEvents} currentTime={currentTime} getCurrentPosition={getCurrentPosition} draftPositions={draftPositions} handleWithdraw={handleWithdraw} handleHeal={handleHeal} handleCancelHeal={handleCancelHeal} />}
-
-            {activePanel === 'settings' && (
-              <div className="flex flex-col h-full p-4 gap-4">
-                
-                {!isEditorUnlocked ? (
-                  <div className="bg-slate-800 p-6 rounded-xl border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)] flex flex-col items-center justify-center gap-4 text-center mt-10">
-                    <span className="text-4xl">🔒</span>
-                    <div>
-                      <h3 className="text-red-400 font-bold text-sm uppercase mb-1">{t('swordland.restricted_access')}</h3>
-                      <p className="text-[10px] text-slate-400">{t('swordland.password_desc')}</p>
-                    </div>
-                    <input 
-                      type="password" 
-                      placeholder={t('swordland.password_placeholder')}
-                      value={editorPassword}
-                      onChange={(e) => setEditorPassword(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleUnlockEditor(); }}
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-slate-200 text-center outline-none focus:border-red-500 transition-colors"
-                    />
-                    <button 
-                      onClick={handleUnlockEditor}
-                      className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2 rounded text-xs transition-colors shadow-md uppercase"
-                    >
-                      {t('swordland.unlock_editor')}
+              <div className="flex items-center gap-2 sm:gap-3">
+                {playerManagerTab === 'roster' ? (
+                  <>
+                    <button onClick={handleToggleAllParticipating} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-sm border border-slate-600">
+                      {allParticipating ? '☐ Deseleziona Tutti' : '☑ Seleziona Tutti'}
                     </button>
-                  </div>
+                  </>
                 ) : (
                   <>
-                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                      <label className="block text-xs font-bold text-cyan-400 mb-2">{t('swordland.select_building')}</label>
-                      <select value={selectedBuildingForEdit} onChange={(e) => setSelectedBuildingForEdit(e.target.value)} className="w-full bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm outline-none">
-                        <option value="">{t('swordland.none_selected')}</option>
-                        {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    </div>
-                    
-                    {selectedBuildingForEdit && (() => {
-                       const b = buildings.find(x => x.id === selectedBuildingForEdit);
-                       if (!b) return null;
-                      return (
-                      <div key={b.id} className="bg-slate-800 p-4 rounded-xl border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)] flex flex-col gap-3 relative">
-                        <h3 className="text-amber-400 font-bold text-xs uppercase">{t('swordland.perimeter_coords')}</h3>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.x_min')}</label>
-                            <input type="number" id="hb-xmin" defaultValue={b.hitbox?.xMin || b.x - 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.y_min')}</label>
-                            <input type="number" id="hb-ymin" defaultValue={b.hitbox?.yMin || b.y - 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.x_max')}</label>
-                            <input type="number" id="hb-xmax" defaultValue={b.hitbox?.xMax || b.x + 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 uppercase">{t('swordland.y_max')}</label>
-                            <input type="number" id="hb-ymax" defaultValue={b.hitbox?.yMax || b.y + 2} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
-                          </div>
-                        </div>
-                        
-                        <div className="mt-1">
-                          <label className="text-[10px] text-slate-400 uppercase">{t('swordland.visual_scale')}</label>
-                          <input type="number" step="0.1" id="hb-scale" defaultValue={b.scale || 1} className="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-slate-200" />
-                        </div>
-
-                        <div className="mt-2 pt-3 border-t border-slate-700/50">
-                          <h3 className="text-cyan-400 font-bold text-xs uppercase mb-2">{t('swordland.math_center')}</h3>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-[10px] text-slate-400 uppercase">{t('swordland.center_x')}</label>
-                              <input type="number" id="hb-center-x" defaultValue={b.x} className="w-full bg-slate-900 border border-cyan-700/50 rounded p-1.5 text-cyan-100" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] text-slate-400 uppercase">{t('swordland.center_y')}</label>
-                              <input type="number" id="hb-center-y" defaultValue={b.y} className="w-full bg-slate-900 border border-cyan-700/50 rounded p-1.5 text-cyan-100" />
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <button onClick={() => {
-                          const xMin = parseFloat(document.getElementById('hb-xmin').value);
-                          const yMin = parseFloat(document.getElementById('hb-ymin').value);
-                          const xMax = parseFloat(document.getElementById('hb-xmax').value);
-                          const yMax = parseFloat(document.getElementById('hb-ymax').value);
-                          const scale = parseFloat(document.getElementById('hb-scale').value);
-                          
-                          const centerX = parseFloat(document.getElementById('hb-center-x').value);
-                          const centerY = parseFloat(document.getElementById('hb-center-y').value);
-                          
-                          const updated = buildings.map(bd => 
-                            bd.id === selectedBuildingForEdit 
-                              ? { ...bd, hitbox: { xMin, xMax, yMin, yMax }, scale, x: centerX, y: centerY } 
-                              : bd
-                          );
-                          setBuildings(updated);
-                        }} className="mt-3 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded text-xs transition-colors shadow-md">
-                          {t('swordland.apply_hitbox')}
-                        </button>
-                      </div>
-                       )
-                    })()}
-
-                    <div className="mt-auto pt-4 border-t border-slate-700/50">
-                      <p className="text-[10px] text-slate-400 mb-3 leading-tight">
-                        {t('swordland.save_master_desc')}
-                      </p>
-                      <button 
-                        onClick={handleSaveMasterToCloud} 
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 border border-indigo-400 text-white font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.4)] transition-all"
-                      >
-                        {t('swordland.save_master_btn')}
-                      </button>
-                    </div>
+                    <button onClick={handleAutoAssignSquads} className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/50 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-colors flex items-center gap-2">
+                      ⚖️ Auto-Bilancia
+                    </button>
                   </>
                 )}
+                <div className="w-px h-6 bg-slate-700 mx-1 hidden sm:block"></div>
+                <button onClick={handleDeploy} disabled={roster.filter(p => p.isParticipating).length === 0} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl transition-colors shadow-lg">
+                  🎯 Applica in Mappa
+                </button>
+                <button onClick={() => setIsPlayerManagerOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:bg-rose-900 hover:text-rose-400 transition-colors font-bold sm:ml-2">✕</button>
+              </div>
+            </div>
+            {playerManagerTab === 'roster' ? (
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <RosterTable roster={roster} onAddPlayer={() => {}} onEdit={handleEditPlayer} onDelete={() => {}} onDeploy={handleDeploy} userRole={userRole} />
+              </div>
+            ) : (
+              <div className="flex-1 p-4 grid grid-cols-4 gap-4 overflow-hidden bg-slate-950/50">
+                {[
+                  { id: '', title: 'Da Assegnare', bg: 'bg-slate-800/40', border: 'border-slate-700', text: 'text-slate-400', tag: 'bg-slate-950' },
+                  { id: 'Assalto', title: '⚔️ Assalto', bg: 'bg-rose-950/30', border: 'border-rose-900/50', text: 'text-rose-400', tag: 'bg-rose-950' },
+                  { id: 'Difesa', title: '🛡️ Difesa', bg: 'bg-blue-950/30', border: 'border-blue-900/50', text: 'text-blue-400', tag: 'bg-blue-950' },
+                  { id: 'Supporto', title: '🤝 Supporto', bg: 'bg-emerald-950/30', border: 'border-emerald-900/50', text: 'text-emerald-400', tag: 'bg-emerald-950' }
+                ].map(col => {
+                  const columnPlayers = roster.filter(p => p.isParticipating && (col.id === '' ? !['Assalto', 'Difesa', 'Supporto'].includes(p.squad) : p.squad === col.id));
+                  return (
+                    <div key={col.id} className={`flex flex-col rounded-2xl border ${col.border} ${col.bg} overflow-hidden`} onDrop={e => handleSquadDrop(e, col.id)} onDragOver={e => e.preventDefault()}>
+                      <div className={`p-3 border-b ${col.border} flex justify-between items-center bg-black/20 shrink-0`}>
+                        <span className={`font-black uppercase text-xs tracking-wider ${col.text}`}>{col.title}</span>
+                        <span className="bg-black/40 px-2 py-1 rounded-lg text-[10px] font-mono font-bold text-white">{getSquadPower(col.id)}M</span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2 custom-scrollbar">
+                        {columnPlayers.map(p => (
+                          <div key={p.id} draggable onDragStart={(e) => e.dataTransfer.setData('text/plain', `squad_player:${p.id}`)} className={`p-2 rounded-xl border ${col.border} bg-slate-900/80 hover:bg-slate-800 cursor-grab active:cursor-grabbing flex items-center justify-between shadow-sm transition-colors`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${col.border} ${col.text} ${col.tag} shrink-0`}>{p.originalTag || p.tag || 'PLY'}</span>
+                              <span className="text-xs font-bold text-slate-200 truncate">{p.name}</span>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 shrink-0">{p.power}M</span>
+                          </div>
+                        ))}
+                        {columnPlayers.length === 0 && (<div className="h-full flex items-center justify-center text-slate-600 text-xs font-bold uppercase opacity-50 border-2 border-dashed border-slate-700/50 rounded-xl m-2">Trascina Qui</div>)}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
-        </aside>
+        </div>
       )}
+
+      {isEditorModalOpen && (
+        <div className="fixed inset-y-0 right-0 z-[200] flex flex-col w-full max-w-lg bg-slate-900/95 backdrop-blur-xl border-l border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300">
+         <div className="flex justify-between items-center p-5 border-b border-slate-800 shrink-0 bg-slate-950">
+            <h2 className="text-lg font-black text-red-400 uppercase tracking-widest">⚙️ Master Editor</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={handleFactoryReset} className="bg-red-900/60 hover:bg-red-700 border border-red-700/50 text-red-200 text-[10px] font-black uppercase px-3 py-2 rounded-xl transition-colors flex items-center gap-1 shadow-md" title="Ripristina alle coordinate originali">🔄 Reset</button>
+              <button onClick={handleSaveMasterToCloud} className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase px-3 py-2 rounded-xl transition-colors shadow-lg flex items-center gap-1">☁️ Salva</button>
+              <button onClick={() => setIsEditorModalOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:bg-rose-900 hover:text-rose-400 transition-colors font-bold shrink-0">✕</button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-4">
+            <div className="bg-amber-900/20 border border-amber-700/50 p-3 rounded-xl text-amber-200 text-xs text-center font-bold">Le modifiche si applicano in tempo reale sulla mappa. Quando sei soddisfatto, clicca Salva Cloud.</div>
+            {buildings.map(b => (
+              <div key={b.id} className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700 shadow-inner flex flex-col gap-3">
+                <h3 className="text-cyan-400 font-black uppercase tracking-wider text-sm border-b border-slate-700/50 pb-2 flex items-center gap-2"><span className="text-lg opacity-80">🏰</span> {b.name}</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div><label className="text-[9px] text-slate-400 uppercase font-bold">Scala Visiva</label><input type="number" step="0.1" value={b.scale || 1} onChange={(e) => handleEditBuilding(b.id, 'scale', parseFloat(e.target.value))} className="w-full bg-slate-950 border border-slate-600 rounded-lg p-2 text-sm text-white mt-1 outline-none focus:border-cyan-500 font-mono" /></div>
+                  <div><label className="text-[9px] text-slate-400 uppercase font-bold">Centro X</label><input type="number" value={b.x} onChange={(e) => handleEditBuilding(b.id, 'x', parseFloat(e.target.value))} className="w-full bg-slate-950 border border-cyan-900/50 rounded-lg p-2 text-sm text-cyan-200 mt-1 outline-none focus:border-cyan-500 font-mono" /></div>
+                  <div><label className="text-[9px] text-slate-400 uppercase font-bold">Centro Y</label><input type="number" value={b.y} onChange={(e) => handleEditBuilding(b.id, 'y', parseFloat(e.target.value))} className="w-full bg-slate-950 border border-cyan-900/50 rounded-lg p-2 text-sm text-cyan-200 mt-1 outline-none focus:border-cyan-500 font-mono" /></div>
+                </div>
+                <div className="grid grid-cols-4 gap-2 mt-1">
+                  <div><label className="text-[9px] text-amber-500 uppercase font-bold">HB X Min</label><input type="number" value={b.hitbox?.xMin ?? b.x - 2} onChange={(e) => handleEditHitbox(b.id, 'xMin', parseFloat(e.target.value))} className="w-full bg-slate-950 border border-amber-900/50 rounded-lg p-1.5 text-xs text-white mt-1 outline-none focus:border-amber-500 font-mono" /></div>
+                  <div><label className="text-[9px] text-amber-500 uppercase font-bold">HB X Max</label><input type="number" value={b.hitbox?.xMax ?? b.x + 2} onChange={(e) => handleEditHitbox(b.id, 'xMax', parseFloat(e.target.value))} className="w-full bg-slate-950 border border-amber-900/50 rounded-lg p-1.5 text-xs text-white mt-1 outline-none focus:border-amber-500 font-mono" /></div>
+                  <div><label className="text-[9px] text-amber-500 uppercase font-bold">HB Y Min</label><input type="number" value={b.hitbox?.yMin ?? b.y - 2} onChange={(e) => handleEditHitbox(b.id, 'yMin', parseFloat(e.target.value))} className="w-full bg-slate-950 border border-amber-900/50 rounded-lg p-1.5 text-xs text-white mt-1 outline-none focus:border-amber-500 font-mono" /></div>
+                  <div><label className="text-[9px] text-amber-500 uppercase font-bold">HB Y Max</label><input type="number" value={b.hitbox?.yMax ?? b.y + 2} onChange={(e) => handleEditHitbox(b.id, 'yMax', parseFloat(e.target.value))} className="w-full bg-slate-950 border border-amber-900/50 rounded-lg p-1.5 text-xs text-white mt-1 outline-none focus:border-amber-500 font-mono" /></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <aside className="w-[260px] bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-2xl shrink-0 overflow-hidden select-none">
+        <div className="p-4 border-b border-slate-800 flex justify-between items-center shrink-0 bg-slate-950">
+          <h2 className="text-lg font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">Swordland</h2>
+          <div className="flex items-center gap-2">
+           <button onClick={() => setShowInstructions(true)} className="w-8 h-8 flex items-center justify-center bg-cyan-900/30 hover:bg-cyan-700 text-cyan-400 hover:text-white text-sm font-black rounded-full border border-cyan-700/50 transition-colors shadow-sm" title={t('swordland_manual.guide_btn', "Guida all'Uso")}>?</button>
+            <button onClick={() => navigate('/')} className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-full border border-slate-700 transition-colors shadow-sm" title="Home">🏠</button>
+          </div>
+        </div>
+        <div className="p-4 border-b border-slate-800 flex flex-col gap-2 shrink-0 bg-slate-900/50">
+          <button onClick={() => openPlayerManager('squads')} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider transition-colors shadow-[0_0_15px_rgba(79,70,229,0.3)] flex items-center justify-center gap-2">🛡️ Gestione Squadre</button>
+          <div className="grid grid-cols-2 gap-2 mt-1">
+             <button onClick={() => openPlayerManager('roster')} className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold py-2 rounded-xl text-[10px] uppercase tracking-wider transition-colors shadow-sm flex justify-center items-center gap-1">👥 Giocatori</button>
+             {(userRole === 'admin' || userRole === 'consultant') && (
+                <button onClick={() => setIsBuildingModalOpen(true)} className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold py-2 rounded-xl text-[10px] uppercase tracking-wider transition-colors shadow-sm flex justify-center items-center gap-1">🏰 Edifici</button>
+             )}
+          </div>
+        </div>
+        <div className="px-4 py-2 border-b border-slate-800 flex gap-2 shrink-0 bg-slate-950/30">
+          <button onClick={() => setTeamBase('blue')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors border ${teamBase === 'blue' ? 'bg-cyan-600/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'bg-slate-800/50 border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>🟦 Base Blu</button>
+          <button onClick={() => setTeamBase('red')} className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors border ${teamBase === 'red' ? 'bg-rose-600/20 text-rose-400 border-rose-500/50 shadow-[0_0_10px_rgba(244,63,94,0.2)]' : 'bg-slate-800/50 border-slate-700/50 text-slate-500 hover:text-slate-300'}`}>🟥 Base Rossa</button>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-slate-950/20">
+          <DeploymentPanel activeDeployment={activeDeployment} getAvailableMarches={getAvailableMarches} healingEvents={healingEvents} currentTime={currentTime} getCurrentPosition={getCurrentPosition} draftPositions={draftPositions} handleWithdraw={handleWithdraw} handleHeal={handleHeal} handleCancelHeal={handleCancelHeal} />
+        </div>
+        <div className="p-3 border-t border-slate-800 shrink-0 flex flex-col gap-2 bg-slate-950">
+          <button onClick={() => setIsExportModalOpen(true)} className="w-full bg-indigo-600/90 hover:bg-indigo-500 text-white font-black text-[10px] uppercase tracking-widest py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">📤 Esporta Ordini</button>
+          <button onClick={() => setIsEventManagerOpen(true)} className="w-full bg-emerald-600/90 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">☁️ Database Piani</button>
+         {userRole === 'admin' && (
+            <button onClick={() => setIsEditorModalOpen(true)} className="w-full mt-1 bg-slate-800 hover:bg-red-900/80 border border-slate-700 hover:border-red-500/50 text-slate-400 hover:text-red-400 font-bold text-[10px] uppercase tracking-wider py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm">
+              ⚙️ Editor Master
+            </button>
+          )}
+        </div>
+      </aside>
       
       <main className="flex-1 p-2 sm:p-4 flex flex-col lg:flex-row gap-3 sm:gap-4 min-w-0 min-h-0 h-full overflow-hidden">
         <div className="flex-1 relative min-w-0 min-h-0 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl bg-slate-900/50 border border-slate-800/80">
-         <InteractiveMap 
-            teamBase={teamBase} 
-            buildings={buildings} 
-            activeDeployment={activeDeployment} 
-            marches={marches} 
+        <InteractiveMap 
+            teamBase={teamBase} buildings={buildings} activeDeployment={activeDeployment} marches={marches} 
             onUpdatePosition={(dragData, newX, newY) => { setIsPlaying(false); handleUpdatePosition(dragData, newX, newY); }} 
-            currentTime={currentTime} 
-            draftPositions={draftPositions} 
-            healingEvents={healingEvents} 
-            onDispatchMarch={handleDispatchMarch} 
-            getAvailableMarches={getAvailableMarches} 
-            handleHeal={handleHeal} 
-            handleCancelHeal={handleCancelHeal} 
-            handleGarrisonAction={handleGarrisonAction}
-            isEditorMode={activePanel === 'settings'}
-            selectedBuildingForEdit={selectedBuildingForEdit}
-            setSelectedBuildingForEdit={setSelectedBuildingForEdit}
+            currentTime={currentTime} draftPositions={draftPositions} healingEvents={healingEvents} 
+            getAvailableMarches={getAvailableMarches} handleHeal={handleHeal} handleCancelHeal={handleCancelHeal} handleGarrisonAction={handleGarrisonAction} 
+            isEditorMode={isEditorModalOpen} 
+            popupPlayerId={popupPlayerId} setPopupPlayerId={setPopupPlayerId} 
+            marchAssignments={marchAssignments} setMarchAssignments={setMarchAssignments} 
+            lootDrops={lootDrops} 
+            buildingStates={buildingStates} 
          />
         </div>
-        <div className="w-full lg:w-48 xl:w-56 shrink-0 flex flex-col gap-3 xl:gap-4 z-10 h-[350px] lg:h-full">
-          <button onClick={() => navigate('/')} className="w-full shrink-0 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold py-2 xl:py-3 rounded-2xl xl:rounded-3xl text-[10px] xl:text-xs uppercase flex items-center justify-center gap-2 shadow-lg backdrop-blur-xl transition-all">
-            {t('swordland.hub_kingshot')}
-          </button>
-          <button onClick={() => setIsExportModalOpen(true)} className="w-full shrink-0 bg-indigo-500/20 hover:bg-indigo-500 border border-indigo-500/50 text-indigo-400 hover:text-white font-bold py-2 xl:py-3 rounded-2xl xl:rounded-3xl text-[10px] xl:text-xs uppercase flex items-center justify-center gap-2 shadow-lg backdrop-blur-xl">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-            {t('swordland.export_orders')}
-          </button>
+        
+        <div className={`w-full shrink-0 flex flex-col gap-3 xl:gap-4 z-10 transition-all duration-300 ease-in-out ${popupPlayerId ? 'h-full lg:w-[320px] xl:w-[380px]' : 'h-[350px] lg:h-full lg:w-36 xl:w-44'}`}>
+          <div className="relative w-full z-[120] shrink-0">
+            <button onClick={() => setShowManualPanel(!showManualPanel)} className="w-full shrink-0 bg-slate-800 hover:bg-slate-700 border border-slate-700/50 text-cyan-400 font-black py-3 rounded-2xl xl:rounded-3xl text-[9px] xl:text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg backdrop-blur-xl transition-colors">
+              📍 {showManualPanel ? t('interactive_map.close_panel', 'Chiudi') : t('interactive_map.move_marker', 'Sposta')}
+            </button>
+            {showManualPanel && (
+              <div className="absolute top-full mt-2 right-0 bg-slate-800/95 p-4 rounded-xl border border-slate-600 shadow-2xl flex flex-col gap-3 w-56 sm:w-64 backdrop-blur-sm z-[150]">
+                <h3 className="text-cyan-400 font-bold text-xs uppercase border-b border-slate-700 pb-1 tracking-wider">{t('interactive_map.manual_coords', 'Coordinate Manuali')}</h3>
+                <select className="bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm focus:border-cyan-500 outline-none w-full" value={manualPlayerId} onChange={(e) => setManualPlayerId(e.target.value)}>
+                  <option value="">{t('interactive_map.select_player', 'Seleziona Giocatore')}</option>
+                  {activeDeployment?.map(p => ( <option key={p.id} value={p.id}>{p.name || p.tag || `Giocatore ${p.id}`}</option> ))}
+                </select>
+                <div className="flex gap-2">
+                  <input type="number" placeholder="X" className="bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm w-full focus:border-cyan-500 outline-none" value={manualX} onChange={(e) => setManualX(e.target.value)} />
+                  <input type="number" placeholder="Y" className="bg-slate-900 border border-slate-600 text-slate-200 rounded p-2 text-sm w-full focus:border-cyan-500 outline-none" value={manualY} onChange={(e) => setManualY(e.target.value)} />
+                </div>
+                <button onClick={handleManualPositioning} disabled={!manualPlayerId || manualX === '' || manualY === ''} className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold py-2 rounded">{t('interactive_map.teleport_btn', 'Teletrasporta')}</button>
+              </div>
+            )}
+          </div>
           
-          <div className="bg-slate-900/40 backdrop-blur-xl rounded-2xl xl:rounded-3xl border border-slate-700/50 p-4 shadow-2xl flex flex-col gap-3 shrink-0">
-            <div className="flex justify-between items-end border-b border-slate-700/50 pb-2">
-              <span className="text-[9px] xl:text-[10px] font-bold text-cyan-400 uppercase pb-1">{t('swordland.team_blue')}</span>
-              <span className="text-2xl xl:text-3xl font-black text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] leading-none">{Math.floor(teamScores.blue)}</span>
+          {popupPlayerId ? (
+            <div className="flex-1 min-h-0 bg-slate-900/95 backdrop-blur-xl rounded-2xl xl:rounded-3xl border border-slate-700/50 shadow-2xl overflow-y-auto custom-scrollbar relative dispatch-sidebar-wrapper animate-in fade-in zoom-in-95 duration-200">
+              <style>{`.dispatch-sidebar-wrapper > div { position: static !important; transform: none !important; width: 100% !important; height: auto !important; min-height: 100% !important; max-height: none !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; margin: 0 !important; background: transparent !important; }`}</style>
+           
+           <DispatchModal 
+            activePlayer={activeDeployment.find(p => String(p.id) === String(popupPlayerId))}
+            activeDeployment={activeDeployment}
+            marchAssignments={marchAssignments}
+            setMarchAssignments={setMarchAssignments}
+            setPopupPlayerId={setPopupPlayerId}
+            handleConfirmDispatch={handleConfirmDispatch}
+            buildings={buildings}
+            getAvailableMarches={getAvailableMarches}
+            healingEvents={healingEvents}
+            currentTime={currentTime}
+            draftPositions={draftPositions}
+            teamBase={teamBase}
+            handleHeal={handleHeal}
+            handleCancelHeal={handleCancelHeal}
+            lootDrops={lootDrops}
+            marches={marches}
+            buildingStates={buildingStates}
+          />
             </div>
-            <div className="flex justify-between items-end pt-1">
-              <span className="text-[9px] xl:text-[10px] font-bold text-red-400 uppercase pb-1">{t('swordland.team_red')}</span>
-              <span className="text-2xl xl:text-3xl font-black text-white drop-shadow-[0_0_8px_rgba(248,113,113,0.5)] leading-none">{Math.floor(teamScores.red)}</span>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0 bg-slate-900/40 backdrop-blur-xl rounded-2xl xl:rounded-3xl border border-slate-700/50 shadow-2xl overflow-hidden">
-            <TimelineControls currentTime={currentTime} hasDrafts={hasDrafts} handleTimeChange={handleTimeChange} movementMode={movementMode} setMovementMode={setMovementMode} isPlaying={isPlaying} togglePlay={togglePlay} playbackSpeed={playbackSpeed} setPlaybackSpeed={setPlaybackSpeed} handleConfirmMinute={handleConfirmMinute} handleCancelMinute={handleCancelMinute} />
-          </div>
+          ) : (
+            <>
+              <div className="bg-slate-900/40 backdrop-blur-xl rounded-2xl xl:rounded-3xl border border-slate-700/50 p-4 shadow-2xl flex flex-col gap-3 shrink-0 mt-auto animate-in fade-in duration-300">
+                <div className="flex justify-between items-center border-b border-slate-700/50 pb-2">
+                  <span className="text-[9px] xl:text-[10px] font-black text-cyan-400 uppercase tracking-widest">{t('swordland.team_blue')}</span>
+                  <span className="text-xl xl:text-2xl font-black text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]">{Math.floor(teamScores.blue)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-[9px] xl:text-[10px] font-black text-red-400 uppercase tracking-widest">{t('swordland.team_red')}</span>
+                  <span className="text-xl xl:text-2xl font-black text-white drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]">{Math.floor(teamScores.red)}</span>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 bg-slate-900/40 backdrop-blur-xl rounded-2xl xl:rounded-3xl border border-slate-700/50 shadow-2xl overflow-hidden animate-in fade-in duration-300">
+                <TimelineControls currentTime={currentTime} hasDrafts={hasDrafts} handleTimeChange={handleTimeChange} movementMode={movementMode} setMovementMode={setMovementMode} isPlaying={isPlaying} togglePlay={togglePlay} playbackSpeed={playbackSpeed} setPlaybackSpeed={setPlaybackSpeed} handleConfirmMinute={handleConfirmMinute} handleCancelMinute={handleCancelMinute} />
+              </div>
+            </>
+          )}
         </div>
       </main>
       
       <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} marches={marches} activeDeployment={activeDeployment} roster={roster} />
+      
+      {/* 💡 RENDER DEL MANUALE TATTICO */}
+      {showInstructions && (
+        <InstructionsModal onClose={() => setShowInstructions(false)} />
+      )}
     </div>
   );
 }
