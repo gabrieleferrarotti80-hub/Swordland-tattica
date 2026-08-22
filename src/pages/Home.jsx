@@ -75,7 +75,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     }
   }, [auth.role]);
 
-  // Recupera i dati dell'Alleanza al login (Serve per il Banner Incoronazione)
   useEffect(() => {
     if (isLogged && auth.code && auth.code !== 'SINGLE' && auth.code !== '0000_MASTER') {
       const fetchAlliance = async () => {
@@ -86,7 +85,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     }
   }, [isLogged, auth.code]);
 
-  // --- AZIONI GLOBALI ---
   const handleLoadAllianceAsAdmin = async (code) => {
     const cleanCode = code.trim().toUpperCase();
     if (!cleanCode) return;
@@ -131,16 +129,13 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     } catch(e) { alert(t('home.error_generic', 'Errore.')); }
   };
 
-  // --- RENDER ---
   return (
     <div className="h-screen bg-slate-950 p-2 md:p-4 flex flex-col gap-2 md:gap-4 overflow-hidden select-none relative">
       <style>{`.hide-scroll::-webkit-scrollbar { display: none; } .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
       
-      {/* COMPONENTI FLUTTUANTI */}
       <SystemAnnouncement announcement={sysAnnouncement} onDismiss={() => { localStorage.setItem('dismissed_patch', sysAnnouncement.version); setSysAnnouncement(null); }} />
       {isLoginModalOpen && <AuthModal onClose={() => setIsLoginModalOpen(false)} setAuth={setAuth} setRoster={setRoster} setHubView={setHubView} setIsRosterOpen={setIsRosterOpen} accessPasswords={accessPasswords} />}
       
-      {/* BANNER INCORONAZIONE */}
       {isLogged && allianceDbData?.pendingTransferTo === auth.playerId && (
          <div className="absolute top-0 left-0 w-full z-50 animate-in slide-in-from-top duration-500">
            <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-slate-900 p-4 shadow-[0_10px_30px_rgba(217,119,6,0.6)] flex flex-col sm:flex-row items-center justify-between gap-4 border-b-2 border-yellow-300">
@@ -167,7 +162,8 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
           </h1>
         </div>
         <div className="flex gap-3 items-center">
-          <div className="flex bg-slate-800 p-0.5 rounded border border-slate-700 text-xs">
+          {/* 💡 AGGIUNTO translate="no" PER EVITARE CHE IL BROWSER TRADUCA "IT" IN "ESSO" */}
+          <div className="flex bg-slate-800 p-0.5 rounded border border-slate-700 text-xs" translate="no">
             {['it', 'en', 'pl', 'fr'].map(lng => (
               <button key={lng} onClick={() => changeLanguage(lng)} className={`px-1.5 py-0.5 rounded font-bold transition-colors uppercase ${i18n.language === lng ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>{lng}</button>
             ))}
@@ -216,18 +212,18 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                     <div className="w-full max-w-4xl bg-rose-950/40 border border-rose-500/30 p-5 rounded-2xl mb-8 flex flex-col gap-4 shadow-lg backdrop-blur-md">
                       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="text-left w-full">
-                           <h3 className="text-rose-400 font-black text-lg flex items-center gap-2">👑 Console Consulente</h3>
-                           <p className="text-slate-400 text-xs mt-1">Scegli un'alleanza dal DB e caricala nel sistema per visionarla.</p>
+                           <h3 className="text-rose-400 font-black text-lg flex items-center gap-2">{t('home.consultant_console')}</h3>
+                           <p className="text-slate-400 text-xs mt-1">{t('home.consultant_desc')}</p>
                         </div>
                         <div className="flex w-full sm:w-auto gap-2 shrink-0">
                           <select value={selectedAdminAlliance} onChange={(e) => setSelectedAdminAlliance(e.target.value)} className="w-40 bg-slate-900 border border-rose-900/50 rounded-xl px-3 py-2 text-white font-bold outline-none cursor-pointer">
                             {allianceList.map(tag => (<option key={tag} value={tag}>{tag}</option>))}
                           </select>
-                          <button onClick={() => handleLoadAllianceAsAdmin(selectedAdminAlliance)} className="px-5 py-2 bg-rose-700 hover:bg-rose-600 text-white font-black text-xs uppercase rounded-xl shadow-lg transition-all">Carica Dati</button>
+                          <button onClick={() => handleLoadAllianceAsAdmin(selectedAdminAlliance)} className="px-5 py-2 bg-rose-700 hover:bg-rose-600 text-white font-black text-xs uppercase rounded-xl shadow-lg transition-all">{t('home.load_data')}</button>
                         </div>
                       </div>
                       <div className="border-t border-rose-900/50 pt-4 flex justify-end">
-                        <button onClick={() => navigate('/admin')} className="px-6 py-2 bg-slate-900 hover:bg-indigo-900 text-indigo-400 font-black text-xs uppercase tracking-widest rounded-xl border border-indigo-500/30 transition-all flex items-center gap-2 shadow-lg"><span>🛠️</span> Apri God Room (Pannello DB)</button>
+                        <button onClick={() => navigate('/admin')} className="px-6 py-2 bg-slate-900 hover:bg-indigo-900 text-indigo-400 font-black text-xs uppercase tracking-widest rounded-xl border border-indigo-500/30 transition-all flex items-center gap-2 shadow-lg"><span>🛠️</span> {t('home.god_room')}</button>
                       </div>
                     </div>
                   )}
@@ -246,43 +242,41 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                     </div>
                   )}
 
-                {hubView === 'events' && (
-  <div className="flex flex-col w-full px-2 md:px-8 gap-4 lg:gap-8 animate-in slide-in-from-right-8 duration-300">
-    <button onClick={() => setHubView('main')} className="text-slate-400 hover:text-white font-bold text-xs uppercase mb-2 text-left w-fit flex items-center px-6 py-3 border border-slate-700 bg-slate-900 rounded-full">{t('home.back_menu')}</button>
-    
-    {/* 💡 Griglia aggiornata: di base 3 colonne su schermi larghi, 4 se c'è anche il Castello */}
-    <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${(auth.role === 'admin' || auth.castleAccess) ? 'xl:grid-cols-4' : ''} gap-4 lg:gap-8 w-full`}>
-      
-      <button onClick={() => navigate('/map', { state: { initialView: 'tactical' }})} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-rose-500/50 rounded-[2rem]">
-        <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">🎯</span>
-        <span className="text-2xl font-black text-white">{t('home.tactical_room')}</span>
-      </button>
-      
-      <button onClick={() => { if(checkAccess('swordland')) navigate('/swordland'); }} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-orange-500/50 rounded-[2rem]">
-        <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">🏰</span>
-        <span className="text-2xl font-black text-white">{t('home.swordland')}</span>
-      </button>
+                  {hubView === 'events' && (
+                    <div className="flex flex-col w-full px-2 md:px-8 gap-4 lg:gap-8 animate-in slide-in-from-right-8 duration-300">
+                      <button onClick={() => setHubView('main')} className="text-slate-400 hover:text-white font-bold text-xs uppercase mb-2 text-left w-fit flex items-center px-6 py-3 border border-slate-700 bg-slate-900 rounded-full">{t('home.back_menu')}</button>
+                      
+                      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${(auth.role === 'admin' || auth.castleAccess) ? 'xl:grid-cols-4' : ''} gap-4 lg:gap-8 w-full`}>
+                        
+                        <button onClick={() => navigate('/map', { state: { initialView: 'tactical' }})} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-rose-500/50 rounded-[2rem]">
+                          <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">🎯</span>
+                          <span className="text-2xl font-black text-white">{t('home.tactical_room')}</span>
+                        </button>
+                        
+                        <button onClick={() => { if(checkAccess('swordland')) navigate('/swordland'); }} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-orange-500/50 rounded-[2rem]">
+                          <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">🏰</span>
+                          <span className="text-2xl font-black text-white">{t('home.swordland')}</span>
+                        </button>
 
-      {/* 💡 IL NUOVO PULSANTE TRI-ALLIANCE */}
-      <button onClick={() => { navigate('/tri-alliance'); }} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-cyan-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-        <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">⚔️</span>
-        <span className="text-2xl font-black text-white">Tri-Alliance</span>
-        <span className="text-slate-400 mt-2">Strategia Canyon a 3 Vie</span>
-      </button>
+                        <button onClick={() => { navigate('/tri-alliance'); }} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-cyan-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+                          <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">⚔️</span>
+                          <span className="text-2xl font-black text-white">Tri-Alliance</span>
+                          <span className="text-slate-400 mt-2">{t('home.tri_alliance_desc')}</span>
+                        </button>
 
-      {(auth.role === 'admin' || auth.castleAccess) && (
-        <button onClick={() => {
-            const kingdom = selectedAdminAlliance ? selectedAdminAlliance.split('_')[0] : '';
-            if (!kingdom || kingdom === '0000' || kingdom === 'MASTER' || isNaN(kingdom)) { alert("⚠️ Seleziona prima un'alleanza."); return; }
-            navigate('/map', { state: { initialView: 'tactical', eventMode: 'castle_battle', targetKingdom: kingdom } });
-          }} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-fuchsia-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in duration-300">
-            <span className="text-5xl mb-4 group-hover:scale-110 transition-transform drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]">👑</span>
-            <span className="text-2xl font-black text-white">Battaglia Castello</span>
-        </button>
-      )}
-    </div>
-  </div>
-)}
+                        {(auth.role === 'admin' || auth.castleAccess) && (
+                          <button onClick={() => {
+                              const kingdom = selectedAdminAlliance ? selectedAdminAlliance.split('_')[0] : '';
+                              if (!kingdom || kingdom === '0000' || kingdom === 'MASTER' || isNaN(kingdom)) { alert("⚠️ Seleziona prima un'alleanza."); return; }
+                              navigate('/map', { state: { initialView: 'tactical', eventMode: 'castle_battle', targetKingdom: kingdom } });
+                            }} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-fuchsia-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in duration-300">
+                              <span className="text-5xl mb-4 group-hover:scale-110 transition-transform drop-shadow-[0_0_15px_rgba(217,70,239,0.5)]">👑</span>
+                              <span className="text-2xl font-black text-white">{t('home.castle_battle')}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {hubView === 'alliance' && (
                     <div className="flex flex-col w-full px-2 md:px-8 gap-4 lg:gap-8 animate-in slide-in-from-right-8 duration-300">
@@ -300,7 +294,6 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                     </div>
                   )}
 
-                  {/* VISTA GOVERNO ALLEANZA IMPORTATA */}
                   {hubView === 'governance' && (
                      <GovernancePanel auth={auth} roster={roster} setRoster={setRoster} onBack={() => setHubView('alliance')} allianceDbData={allianceDbData} setAllianceDbData={setAllianceDbData} />
                   )}

@@ -71,7 +71,13 @@
     "system_update_title": "System Update",
     "system_update_close": "Got it, Close",
     "my_marches_title": "My Marches",
-    "my_marches_desc": "Configure Heroes and Troops"
+    "my_marches_desc": "Configure Heroes and Troops",
+    "consultant_console": "👑 Consultant Console",
+    "consultant_desc": "Choose an alliance from the DB and load it into the system to view it.",
+    "load_data": "Load Data",
+    "god_room": "🛠️ Open God Room (DB Panel)",
+    "tri_alliance_desc": "3-Way Canyon Strategy",
+    "castle_battle": "Castle Battle"
   },
   "march_builder": {
     "access_denied": "Access Denied",

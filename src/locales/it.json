@@ -71,7 +71,13 @@
     "system_update_title": "Aggiornamento Sistema",
     "system_update_close": "Ricevuto, Chiudi",
     "my_marches_title": "Mie Marce",
-    "my_marches_desc": "Configura Eroi e Truppe"
+    "my_marches_desc": "Configura Eroi e Truppe",
+    "consultant_console": "👑 Console Consulente",
+    "consultant_desc": "Scegli un'alleanza dal DB e caricala nel sistema per visionarla.",
+    "load_data": "Carica Dati",
+    "god_room": "🛠️ Apri God Room (Pannello DB)",
+    "tri_alliance_desc": "Strategia Canyon a 3 Vie",
+    "castle_battle": "Battaglia Castello"
   },
   "march_builder": {
     "access_denied": "Accesso Negato",
