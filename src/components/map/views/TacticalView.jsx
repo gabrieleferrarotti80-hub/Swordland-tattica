@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getTacticalShapePts, GRID_SIZES } from '../utils/mapUtilsGen';
 
 const getPlayerRank = (player) => {
@@ -10,6 +11,7 @@ const getPlayerRank = (player) => {
 };
 
 export default function TacticalView(props) {
+  const { t } = useTranslation();
   const { 
     fixedBuildings, allianceStructures, validPlayers, inverseScale, TILE_SF, filters,
     selectedBuilding, setSelectedBuilding, marchOrigin, setMarchOrigin,
@@ -149,12 +151,12 @@ export default function TacticalView(props) {
           >
             <polygon points={buildingShape} fill={fillColor} stroke={strokeColor} strokeWidth={currentStrokeWidth * inverseScale} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
             <g transform={`scale(${inverseScale})`} className="pointer-events-none z-50">
-              {isOrigin && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">岫</text>}
-              {isDestination && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">識</text>}
+              {isOrigin && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🛫</text>}
+              {isDestination && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🎯</text>}
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="20" y="-12" width="140" height="28" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
                 <text x="26" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{building.code}] {building.name}</text>
-                <text x="26" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.occupiedBy ? ` | Occupato: ${building.occupiedBy}` : ''}</text>
+                <text x="26" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.occupiedBy ? ` | ${t('alliance_view.occupied', 'Occupato: ')}${building.occupiedBy}` : ''}</text>
               </g>
             </g>
           </g>
@@ -213,9 +215,6 @@ export default function TacticalView(props) {
         let polyFill = "rgba(59, 130, 246, 0.7)", polyStroke = "#3b82f6", polyStrokeW = 2;
         if (rank === 'R5') { polyFill = "rgba(250, 204, 21, 0.8)"; polyStroke = "#fef08a"; polyStrokeW = 3; } 
         else if (rank === 'R4') { polyFill = "rgba(168, 85, 247, 0.7)"; polyStroke = "#a855f7"; }
-        
-        if (isOrigin) { polyFill = "rgba(6, 182, 212, 0.9)"; polyStroke = "#22d3ee"; polyStrokeW = 3; } 
-        else if (isDestination) { polyStrokeW = 3; }
         if (isSelected) { polyStroke = "#ffffff"; polyStrokeW = 4; }
 
         return (
@@ -227,7 +226,7 @@ export default function TacticalView(props) {
             onDoubleClick={(e) => { e.stopPropagation(); if (setPopupPlayerId) setPopupPlayerId(player.id); }}
             onClick={(e) => { 
               e.stopPropagation(); 
-              const target = { ...player, isPlayer: true, code: player.originalTag || player.tag || 'PLY', type: `Membro Alleanza`, x: player.numX, y: player.numY }; 
+              const target = { ...player, isPlayer: true, code: player.originalTag || player.tag || 'PLY', type: t('alliance_view.member_type', 'Membro Alleanza'), x: player.numX, y: player.numY }; 
               if (selectedTool === 'distance') { 
                 if (!marchOrigin) setMarchOrigin(target); 
                 else if (!marchDestination) setMarchDestination(target); 
@@ -237,9 +236,9 @@ export default function TacticalView(props) {
           >
             <polygon points={shapePlayer} fill={polyFill} stroke={polyStroke} strokeWidth={polyStrokeW * inverseScale} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
             <g transform={`scale(${inverseScale})`} className="pointer-events-none">
-              <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
+              <g className={`${showLabels || isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="15" y="-12" width="130" height="32" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
-                <text x="21" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{player.originalTag || player.tag || 'PLY'}] {player.name}</text>
+                <text x="21" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{player.tag || 'PLY'}] {player.name}</text>
                 <text x="21" y="14" fill={rank === 'R5' ? '#facc15' : rank === 'R4' ? '#c084fc' : '#60a5fa'} fontSize="9" fontWeight="bold">({player.numX}, {player.numY}) | {player.role || player.rank}</text>
               </g>
             </g>

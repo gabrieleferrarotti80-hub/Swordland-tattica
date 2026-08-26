@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
 export default function TacticalDispatchModal({
   activePlayer,
@@ -12,12 +13,12 @@ export default function TacticalDispatchModal({
   handlePointerDownModal,
   buildings,
   getAvailableMarches,
-  TILE_SF // Ci serve per calcolare le distanze reali in caselle!
+  TILE_SF 
 }) {
+  const { t } = useTranslation(); // 🌍 Hook in azione
   
   if (!activePlayer) return null;
 
-  // X e Y visivi (in caselle) del giocatore selezionato
   const currentX = activePlayer.numX !== undefined ? activePlayer.numX : 0;
   const currentY = activePlayer.numY !== undefined ? activePlayer.numY : 0;
 
@@ -28,19 +29,15 @@ export default function TacticalDispatchModal({
     });
   };
 
-  // Calcolo tempo di marcia (Versione Mappa Globale)
-  // Formula Base: 1 casella = circa 4 secondi di marcia.
   const calculateTravelTime = (buildingId, originX, originY) => {
     if (!buildingId || originX === undefined) return null;
     const targetBuilding = buildings.find(b => String(b.id) === String(buildingId));
     if (!targetBuilding) return null;
 
-    // Distanza geometrica (Teorema di Pitagora sulle coordinate X/Y)
     const dx = targetBuilding.x - originX;
     const dy = targetBuilding.y - originY;
     const distanceInTiles = Math.sqrt(dx * dx + dy * dy);
     
-    // Assumiamo una velocità fissa per la mappa globale: 4 secondi per casella
     const SECONDS_PER_TILE = 4; 
     const travelTimeSecs = distanceInTiles * SECONDS_PER_TILE;
     
@@ -81,7 +78,7 @@ export default function TacticalDispatchModal({
       >
         <div className="font-bold text-[10px] uppercase flex items-center gap-1.5 pointer-events-none text-cyan-400">
           <span>📋</span> 
-          Ordini: {activePlayer.name || activePlayer.tag || 'Comandante'}
+          {t('tactical_dispatch.orders_title', 'Ordini: {{name}}', { name: activePlayer.name || activePlayer.tag || t('tactical_dispatch.commander') })}
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); setPopupPlayerId(null); setMarchAssignments({}); }}
@@ -93,7 +90,7 @@ export default function TacticalDispatchModal({
       </div>
 
       <div className="px-3 py-1.5 bg-slate-900/80 border-b border-slate-700 flex justify-between items-center text-[10px]">
-        <span className="text-slate-400">Coordinate:</span>
+        <span className="text-slate-400">{t('tactical_dispatch.coordinates')}</span>
         <span className="text-white font-mono font-bold">X: {currentX} | Y: {currentY}</span>
       </div>
 
@@ -106,8 +103,8 @@ export default function TacticalDispatchModal({
           return (
             <div key={`march-assign-${marchIdx}`} className="flex flex-col gap-1.5 bg-slate-700/30 p-2 rounded-lg border border-slate-600/50">
               <div className="flex justify-between items-center">
-                <span className="text-cyan-300 text-[9px] font-black tracking-wider uppercase">Marcia {marchIdx}</span>
-                {assignedMembers.length > 0 && <span className="text-[9px] font-bold text-slate-400">{assignedMembers.length + 1}/10 Membri</span>}
+                <span className="text-cyan-300 text-[9px] font-black tracking-wider uppercase">{t('tactical_dispatch.march_title', 'Marcia {{idx}}', { idx: marchIdx })}</span>
+                {assignedMembers.length > 0 && <span className="text-[9px] font-bold text-slate-400">{t('tactical_dispatch.members_count', '{{count}}/10 Membri', { count: assignedMembers.length + 1 })}</span>}
               </div>
               
               <div className="flex flex-col gap-1.5">
@@ -116,13 +113,13 @@ export default function TacticalDispatchModal({
                   value={currentAssign.buildingId} 
                   onChange={(e) => updateMarchAssignment(marchIdx, 'buildingId', e.target.value)}
                 >
-                  <option value="">Seleziona Bersaglio...</option>
+                  <option value="">{t('tactical_dispatch.select_target')}</option>
                   {buildings.map(b => (<option key={b.id} value={b.id}>[{b.code}] {b.name}</option>))}
                 </select>
 
                 {currentAssign.buildingId && (
                   <div className="text-amber-400 text-[10px] font-black flex items-center gap-1 bg-slate-900/80 p-1.5 rounded border border-amber-900/50">
-                    ⏱️ Arrivo: {calculateTravelTime(currentAssign.buildingId, currentX, currentY)}
+                    {t('tactical_dispatch.arrival', '⏱️ Arrivo: {{time}}', { time: calculateTravelTime(currentAssign.buildingId, currentX, currentY) })}
                   </div>
                 )}
                 
@@ -131,16 +128,16 @@ export default function TacticalDispatchModal({
                   value={currentAssign.type} 
                   onChange={(e) => updateMarchAssignment(marchIdx, 'type', e.target.value)}
                 >
-                  <option value="attacco">⚔️ Attacco Singolo</option>
-                  <option value="difesa">🛡️ Guarnigione / Difesa</option>
-                  <option value="supporto">🤝 Supporto (Rinforzo)</option>
-                  <option value="rally">🔥 Lancia Rally (5 min prep.)</option>
+                  <option value="attacco">{t('tactical_dispatch.single_attack')}</option>
+                  <option value="difesa">{t('tactical_dispatch.defense')}</option>
+                  <option value="supporto">{t('tactical_dispatch.support')}</option>
+                  <option value="rally">{t('tactical_dispatch.rally')}</option>
                 </select>
                 
                 {assignedMembers.length > 0 && (
                   <div className="flex flex-col gap-1 mt-1 bg-slate-900/50 p-1.5 rounded border border-slate-700">
                     <div className="text-[9px] text-slate-400 uppercase tracking-widest font-black border-b border-slate-700 pb-1 mb-1">
-                      Membri {currentAssign.type === 'rally' ? 'del Rally' : 'di Gruppo'}
+                      {currentAssign.type === 'rally' ? t('tactical_dispatch.rally_members') : t('tactical_dispatch.group_members')}
                     </div>
                     
                     {assignedMembers.map((memObj) => {
@@ -152,13 +149,11 @@ export default function TacticalDispatchModal({
                         const memX = mem?.numX !== undefined ? mem.numX : 0;
                         const memY = mem?.numY !== undefined ? mem.numY : 0;
                         
-                        // Per il rally calcoliamo il tempo verso il LEADER, per gli altri verso il bersaglio
                         const targetX = currentAssign.type === 'rally' ? currentX : currentAssign.buildingId; 
                         const timeCalc = currentAssign.type === 'rally' 
                           ? getTravelTimeMinutes({id: 'temp', x: currentX, y: currentY}, memX, memY, memSpeedups)
                           : getTravelTimeMinutes(currentAssign.buildingId, memX, memY, memSpeedups);
 
-                        // Rally a 5 minuti (non 4) per le regole standard
                         const isTooSlow = currentAssign.type === 'rally' && timeCalc > 5.0;
 
                         return (
@@ -174,7 +169,7 @@ export default function TacticalDispatchModal({
                             {currentAssign.type === 'rally' && (
                               <div className="flex items-center justify-between border-t border-slate-700/50 pt-1 mt-0.5">
                                 <span className={`${isTooSlow ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
-                                  Tempo: {timeCalc.toFixed(1)}m
+                                  {t('tactical_dispatch.time_calc', 'Tempo: {{time}}m', { time: timeCalc.toFixed(1) })}
                                 </span>
                                 {isTooSlow ? (
                                   <button onClick={(e) => {
@@ -183,9 +178,9 @@ export default function TacticalDispatchModal({
                                         if (String(typeof m === 'object' ? m.id : m) === String(memId)) return { id: memId, speedups: memSpeedups + 1 };
                                         return m;
                                       }));
-                                    }} className="bg-amber-600 hover:bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded transition-colors">+ Speedup</button>
+                                    }} className="bg-amber-600 hover:bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded transition-colors">{t('tactical_dispatch.speedup')}</button>
                                 ) : (
-                                  <span className="text-emerald-400 text-[9px] font-bold">✓ Ok</span>
+                                  <span className="text-emerald-400 text-[9px] font-bold">{t('tactical_dispatch.ok')}</span>
                                 )}
                               </div>
                             )}
@@ -205,7 +200,7 @@ export default function TacticalDispatchModal({
                       updateMarchAssignment(marchIdx, 'members', [...assignedMembers, { id: targetId, speedups: 0 }]);
                     }}
                   >
-                    <option value="" disabled>+ Unisci Giocatore...</option>
+                    <option value="" disabled>{t('tactical_dispatch.join_player')}</option>
                     {availablePlayers.filter(p => !assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id))).map(p => (
                         <option key={p.id} value={p.id}>[{p.tag}] {p.name}</option>
                     ))}
@@ -219,7 +214,7 @@ export default function TacticalDispatchModal({
 
         {getAvailableMarches(activePlayer.id) === 0 && (
           <div className="text-center text-rose-400 font-bold text-[10px] py-3 bg-rose-950/20 border border-rose-900/50 rounded-lg">
-            ⚠️ Nessuna marcia disponibile per questo giocatore.
+            {t('tactical_dispatch.no_marches')}
           </div>
         )}
       </div>
@@ -229,14 +224,14 @@ export default function TacticalDispatchModal({
           className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold py-1.5 rounded transition-colors cursor-pointer border border-slate-600" 
           onClick={() => { setPopupPlayerId(null); setMarchAssignments({}); }}
         >
-          Annulla
+          {t('tactical_dispatch.cancel')}
         </button>
         <button 
           className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-black py-1.5 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md" 
           onClick={() => handleConfirmDispatch(activePlayer.id)} 
           disabled={Object.values(marchAssignments).filter(v => v.buildingId !== '').length === 0}
         >
-          ✔ Conferma
+          {t('tactical_dispatch.confirm')}
         </button>
       </div>
     </div>

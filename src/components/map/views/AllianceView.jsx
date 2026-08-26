@@ -79,7 +79,6 @@ export default function AllianceView(props) {
   const pBottom = getIsoPoint(endX, endY);
   const pLeft = getIsoPoint(startX, endY);
 
-  // 🗺️ RENDER TERRITORIO ALLEANZA (Poligono personalizzato)
   const territory = hiveGridMeta?.territory || [];
   const validTerritory = territory.filter(p => p.x !== '' && p.y !== '' && p.x !== null && p.y !== null);
   let territoryPolygon = null;
@@ -104,7 +103,6 @@ export default function AllianceView(props) {
 
   return (
     <g>
-      {/* 1. RENDER PAVIMENTO E GRIGLIA DELL'ALVEARE */}
       {showGrid && (
         <g className="hive-tactical-grid">
           <polygon 
@@ -118,10 +116,8 @@ export default function AllianceView(props) {
         </g>
       )}
 
-      {/* 2. RENDER CONFINI TERRITORIO */}
       {territoryPolygon}
 
-      {/* 3. STRUTTURE MINORI FISSE */}
       {fixedBuildings.map(building => {
         const isCastle = building.type?.toLowerCase() === 'castle' || building.name.toLowerCase().includes('castello');
         if (isCastle || !filters.others) return null;
@@ -141,7 +137,6 @@ export default function AllianceView(props) {
         );
       })}
 
-      {/* 4. QUARTIER GENERALE DELL'ALLEANZA */}
       {allianceStructures.filter(s => s.type === 'headquarters').map(struct => {
         if (!filters.allianceHQ) return null;
 
@@ -168,7 +163,6 @@ export default function AllianceView(props) {
         );
       })}
 
-      {/* 5. TRAPPOLE PER ORSI */}
       {allianceStructures.filter(s => s.type === 'beartrap').map(struct => {
         if (!filters.allianceTraps) return null;
 
@@ -195,7 +189,6 @@ export default function AllianceView(props) {
         );
       })}
 
-      {/* 6. MEMBRI DELL'ALLEANZA */}
       {validPlayers && validPlayers.map(player => {
         const rank = getPlayerRank(player);
         if (rank === 'R5' && !filters.alliesR5) return null;
@@ -218,7 +211,7 @@ export default function AllianceView(props) {
             onMouseDown={(e) => { e.stopPropagation(); if(setDraggedPlayerId) setDraggedPlayerId(player.id); }}
             onClick={(e) => { 
               e.stopPropagation(); 
-              const target = { ...player, isPlayer: true, code: player.tag || 'PLY', type: t('alliance_view.member_type') }; 
+              const target = { ...player, isPlayer: true, code: player.tag || 'PLY', type: t('alliance_view.member_type', 'Membro Alleanza') }; 
               setSelectedBuilding(target); 
             }}
           >

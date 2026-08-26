@@ -13,8 +13,6 @@ export default function MapDetails({
   const [newHQ, setNewHQ] = useState({ name: '', x: '', y: '' });
   const [currentTargetId, setCurrentTargetId] = useState('');
   
-  // 💡 STATO PER GESTIRE LE MARCE RICHIUDIBILI (Accordion)
-  // Di default teniamo aperta la marcia 1
   const [expandedMarches, setExpandedMarches] = useState({ 1: true });
 
   const rawRoster = Array.isArray(roster) ? roster : (roster?.players || []);
@@ -60,7 +58,6 @@ export default function MapDetails({
       const current = prev[marchIdx] || { buildingId: currentTargetId, type: 'attacco', members: [] };
       return { ...prev, [marchIdx]: { ...current, [field]: value } };
     });
-    // Se modifichiamo una marcia, ci assicuriamo che sia aperta
     setExpandedMarches(prev => ({ ...prev, [marchIdx]: true }));
   };
 
@@ -116,7 +113,6 @@ export default function MapDetails({
     return `${finalM}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
-  // 💡 Mantenuta la formula geometrica Euclidea classica al centro del castello
   const calculateDistanceMinutes = (targetX, targetY, originX, originY, speedups = 0) => {
     if (targetX === undefined || targetY === undefined || originX === undefined || originY === undefined) return 0;
     const tX = Number(targetX);
@@ -139,8 +135,6 @@ export default function MapDetails({
 
     const travelTimeMins = calculateDistanceMinutes(targetBuilding.x, targetBuilding.y, originX, originY, 0);
     const delay = isRally ? 5 : 0;
-    
-    // 💡 currentTime è in secondi, diviso 60 = minuti decimali
     const arrivalMin = (currentTime / 60) + delay + travelTimeMins;
 
     return {
@@ -201,12 +195,11 @@ export default function MapDetails({
           {activeView === 'tactical' && isPlayerSelected && (
             <div className="flex flex-col bg-slate-950 flex-1 animate-fade-in">
               
-              {/* 💡 HEADER CON TASTO REGISTRA ORDINI SPOSTATO IN ALTO */}
               <div className="p-4 border-b border-slate-800 bg-cyan-950/10 flex flex-col gap-4 shrink-0 shadow-sm">
                 <div>
                   <h2 className="text-sm font-black text-cyan-400 uppercase tracking-wider flex items-center gap-2"><span>⚔️</span> {t('map.tactical_orders')}</h2>
                   <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                    <span className="text-amber-400 font-bold">Attenzione:</span> gli ordini creati verranno assegnati esattamente a <b>{currentMinutes}' {currentSeconds}"</b>.
+                    <span className="text-amber-400 font-bold">{t('map_details.warning', 'Attenzione:')}</span> {t('map_details.orders_exact_time', 'gli ordini creati verranno assegnati esattamente a')} <b>{currentMinutes}' {currentSeconds}"</b>.
                   </p>
                 </div>
                 
@@ -232,7 +225,6 @@ export default function MapDetails({
                   return (
                     <div key={`march-${marchIdx}`} className={`bg-slate-900 border transition-all flex flex-col shadow-inner ${hasTarget ? 'border-cyan-700/50' : 'border-slate-700/50'} ${isExpanded ? 'rounded-xl' : 'rounded-lg hover:border-slate-500'}`}>
                       
-                      {/* 💡 HEADER ACCORDION (Cliccabile) */}
                       <div 
                         className={`flex justify-between items-center p-3 cursor-pointer transition-colors ${isExpanded ? 'bg-slate-800/80 rounded-t-xl border-b border-slate-800/50' : 'hover:bg-slate-800 rounded-lg'}`}
                         onClick={() => toggleMarch(marchIdx)}
@@ -241,7 +233,7 @@ export default function MapDetails({
                           <span className={`text-[10px] font-black uppercase ${hasTarget ? 'text-cyan-300' : 'text-slate-400'}`}>
                             {t('map.march')} {marchIdx}
                           </span>
-                          {hasTarget && <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" title="Destinazione Selezionata"></div>}
+                          {hasTarget && <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" title={t('map_details.dest_selected', 'Destinazione Selezionata')}></div>}
                         </div>
                         <div className="flex items-center gap-3">
                           {assignedMembers.length > 0 && <span className="text-[10px] font-bold text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded">{assignedMembers.length + 1}/10</span>}
@@ -249,7 +241,6 @@ export default function MapDetails({
                         </div>
                       </div>
                       
-                      {/* 💡 BODY ACCORDION */}
                       {isExpanded && (
                         <div className="p-3 flex flex-col gap-2 bg-slate-900/50 rounded-b-xl">
                           <select className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-xs font-bold text-slate-200 outline-none focus:border-cyan-500" value={currentAssign.buildingId || ''} onChange={(e) => updateMarchAssignment(marchIdx, 'buildingId', e.target.value)}>
@@ -272,7 +263,7 @@ export default function MapDetails({
                             <option value="attacco">{t('map.single_attack')}</option>
                             <option value="difesa">{t('map.garrison_defense')}</option>
                             <option value="supporto">{t('map.support')}</option>
-                            <option value="rally">Lancia Rally (5 min prep.)</option>
+                            <option value="rally">{t('map_details.rally_5m', 'Lancia Rally (5 min prep.)')}</option>
                           </select>
 
                           {assignedMembers.length > 0 && (
@@ -303,7 +294,7 @@ export default function MapDetails({
                                     <div key={memId} className={`text-[10px] bg-slate-900 border ${isTooSlow ? 'border-red-500/50' : 'border-slate-700'} text-slate-300 px-2 py-1.5 rounded flex flex-col gap-1`}>
                                       <div className="flex justify-between items-center">
                                         <span className="font-bold">
-                                          {mem?.name || mem?.tag || `Sconosciuto`} 
+                                          {mem?.name || mem?.tag || t('map_details.unknown', 'Sconosciuto')} 
                                           {!isDeployed && <span className="text-indigo-400 ml-1 font-normal opacity-80">({t('map.hive')})</span>}
                                           {memSpeedups > 0 && <span className="text-amber-400 ml-1">⚡x{memSpeedups}</span>}
                                         </span>
@@ -311,10 +302,10 @@ export default function MapDetails({
                                       </div>
                                       {currentAssign.type === 'rally' && (
                                         <div className="flex justify-between border-t border-slate-800 pt-1 mt-1 text-[9px] items-center">
-                                          <span className={isTooSlow ? 'text-red-400 font-bold' : 'text-slate-400'}>Viaggio: {formatTimeMinSec(timeCalc)}</span>
+                                          <span className={isTooSlow ? 'text-red-400 font-bold' : 'text-slate-400'}>{t('map_details.travel', 'Viaggio:')} {formatTimeMinSec(timeCalc)}</span>
                                           <div className="flex gap-2 items-center">
                                             {isTooSlow ? <span className="text-red-400 flex items-center gap-1 font-bold">⚠️ {t('map.late')}</span> : <span className="text-emerald-400 font-bold">✓ {t('map.on_time')}</span>}
-                                            <button onClick={() => updateMarchAssignment(marchIdx, 'members', assignedMembers.map(m => String(typeof m === 'object' ? m.id : m) === String(memId) ? { id: memId, speedups: memSpeedups + 1 } : m))} className={`px-1.5 py-0.5 rounded transition-colors ${isTooSlow ? 'bg-amber-600/40 text-amber-300 hover:bg-amber-600/60 border border-amber-500/50 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}`}>+ Speedup</button>
+                                            <button onClick={() => updateMarchAssignment(marchIdx, 'members', assignedMembers.map(m => String(typeof m === 'object' ? m.id : m) === String(memId) ? { id: memId, speedups: memSpeedups + 1 } : m))} className={`px-1.5 py-0.5 rounded transition-colors ${isTooSlow ? 'bg-amber-600/40 text-amber-300 hover:bg-amber-600/60 border border-amber-500/50 font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'}`}>{t('map_details.btn_speedup', '+ Speedup')}</button>
                                           </div>
                                         </div>
                                       )}

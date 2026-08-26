@@ -1,3 +1,4 @@
+import i18next from 'i18next';
 import { cleanText } from '../hooks/useTacticalExport';
 
 export const generateNativePrint = (params) => {
@@ -18,9 +19,6 @@ export const generateNativePrint = (params) => {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  // ==========================================
-  // 1. CALCOLO BOUNDING BOX (Inquadratura Mappa)
-  // ==========================================
   let minRawX = 9999, maxRawX = -9999, minRawY = 9999, maxRawY = -9999;
   let hasValidPoints = false;
   
@@ -74,9 +72,6 @@ export const generateNativePrint = (params) => {
      return { px: centerPx + (iso.x - isoCx) * scaleMap, py: centerPy + (iso.y - isoCy) * scaleMap };
   };
 
-  // ==========================================
-  // 2. DISEGNO SFONDO E GRIGLIA
-  // ==========================================
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, size, size);
 
@@ -105,10 +100,6 @@ export const generateNativePrint = (params) => {
   const teamColorMap = {};
   draftTeamsMap.forEach((t, idx) => { teamColorMap[t.id] = teamPalette[idx % teamPalette.length]; });
 
-  // ==========================================
-  // 3. DISEGNO EDIFICI (CASTELLO E TORRETTE ESPANSE)
-  // ==========================================
-  // Disegna PRIMA il castello, così le torrette raddoppiate lo sovrascrivono integrandosi perfettamente
   const sortedBuildings = [...buildings].sort((a, b) => {
       const aIsCas = a.type === 'castle' || a.code === 'CAS';
       return aIsCas ? -1 : 1;
@@ -120,7 +111,7 @@ export const generateNativePrint = (params) => {
     if (b.x >= minRawX && b.x <= maxRawX && b.y >= minRawY && b.y <= maxRawY) {
        const isCastle = b.type === 'castle' || b.code === 'CAS';
        
-       let r = 2; // 💡 RAGGIO TORRETTE RADDOPPIATO (era 1)
+       let r = 2; 
        let drawX = b.x;
        let drawY = b.y;
        
@@ -134,8 +125,6 @@ export const generateNativePrint = (params) => {
              }
           }
        } else if (castleObj) {
-          // 💡 SHIFT VETTORIALE INVERSO: Tira la torretta verso il centro del castello
-          // Raddoppiando il raggio, questo spostamento fa combaciare la punta esterna al millimetro!
           if (drawX > castleObj.x) drawX -= 1;
           else if (drawX < castleObj.x) drawX += 1;
           
@@ -153,12 +142,11 @@ export const generateNativePrint = (params) => {
        ctx.closePath(); ctx.fill(); 
        
        ctx.strokeStyle = isCastle ? '#9f1239' : '#1e293b'; 
-       ctx.lineWidth = isCastle ? 6 : 3; // Bordo bilanciato
+       ctx.lineWidth = isCastle ? 6 : 3;
        ctx.stroke();
 
        const { px, py } = mapToCanvas(drawX, drawY);
        ctx.fillStyle = '#ffffff'; 
-       // 💡 FONT INGRANDITO per riempire il nuovo spazio della torretta raddoppiata
        ctx.font = `bold ${isCastle ? scaleMap * 3 : scaleMap * 1.5}px Arial, sans-serif`; 
        ctx.textAlign = 'center'; 
        ctx.textBaseline = 'middle'; 
@@ -180,9 +168,6 @@ export const generateNativePrint = (params) => {
     }
   });
 
-  // ==========================================
-  // 4. DISEGNO TRUPPE E LEADER
-  // ==========================================
   const leaderIds = new Set();
   draftTeamsMap.forEach(team => {
      const teamPlayers = positionedPlayers.filter(p => draftMetaMap[p.id]?.teamId === team.id);
@@ -195,7 +180,6 @@ export const generateNativePrint = (params) => {
   let leaderCounter = 1;
   const mapLegends = [];
 
-  // DISEGNO PIASTRELLE GIOCATORI
   positionedPlayers.forEach(p => {
      if (p.x >= minRawX && p.x <= maxRawX && p.y >= minRawY && p.y <= maxRawY) {
        const tId = draftMetaMap[p.id]?.teamId;
@@ -216,7 +200,6 @@ export const generateNativePrint = (params) => {
      }
   });
 
-  // DISEGNO MARKER CIRCOLARI PER I LEADER
   positionedPlayers.forEach(p => {
      if (p.x >= minRawX && p.x <= maxRawX && p.y >= minRawY && p.y <= maxRawY) {
        const pMeta = draftMetaMap[p.id] || {};
@@ -239,7 +222,6 @@ export const generateNativePrint = (params) => {
      }
   });
 
-  // Legenda colori interna alla mappa (In basso)
   if (draftTeamsMap.length > 0) {
     ctx.fillStyle = '#1e293b'; ctx.fillRect(0, size - 120, size, 120);
     ctx.font = 'bold 24px Arial, sans-serif';
@@ -252,31 +234,29 @@ export const generateNativePrint = (params) => {
   }
 
   const radarDataUrl = canvas.toDataURL('image/png');
-  const eventName = tacticalMeta?.eventName || 'Pianificazione Evento Kingshot';
+  const eventName = tacticalMeta?.eventName || i18next.t('pdf.default_event', 'Pianificazione Evento Kingshot');
 
-  // ==========================================
-  // 5. GENERAZIONE DOCUMENTO HTML (PDF NATIVO)
-  // ==========================================
+  // 💡 TRADUZIONI APPLICATE ALL'HTML DEL PDF!
   let mapLegendHtml = '';
   if (mapLegends.length > 0) {
     const itemsHtml = mapLegends.map(l => `<div class="legend-item"><div class="legend-badge" style="background-color: ${l.color};">${l.num}</div><div class="legend-text"><b>[${l.tag}]</b> ${l.name}</div></div>`).join('');
-    mapLegendHtml = `<div class="section-title bg-slate">LEGENDA POSIZIONI MAPPA</div><div class="legend-grid">${itemsHtml}</div>`;
+    mapLegendHtml = `<div class="section-title bg-slate">${i18next.t('pdf.legend_title', 'LEGENDA POSIZIONI MAPPA')}</div><div class="legend-grid">${itemsHtml}</div>`;
   }
 
   let teamsHtml = draftTeamsMap.length > 0 
-    ? draftTeamsMap.map(team => `<div class="team-block"><div class="team-name">Squadra: ${team.name} (${team.macro})</div>${rawArray.filter(p => draftMetaMap[p.id]?.teamId === team.id).map(p => `<div class="player-item">- ${draftMetaMap[p.id]?.tempTag ? `[${draftMetaMap[p.id]?.tempTag}] ` : ''}${p.name} <i>(${draftMetaMap[p.id]?.role || 'Membro'})</i></div>`).join('')}</div>`).join('')
-    : `<p>Nessuna squadra configurata in questo piano.</p>`;
+    ? draftTeamsMap.map(team => `<div class="team-block"><div class="team-name">${i18next.t('pdf.team', 'Squadra:')} ${team.name} (${team.macro})</div>${rawArray.filter(p => draftMetaMap[p.id]?.teamId === team.id).map(p => `<div class="player-item">- ${draftMetaMap[p.id]?.tempTag ? `[${draftMetaMap[p.id]?.tempTag}] ` : ''}${p.name} <i>(${draftMetaMap[p.id]?.role || i18next.t('pdf.member', 'Membro')})</i></div>`).join('')}</div>`).join('')
+    : `<p>${i18next.t('pdf.no_teams', 'Nessuna squadra configurata in questo piano.')}</p>`;
 
   let voliHtml = flightMessages.length > 0 
-    ? flightMessages.map(msg => `<div class="team-block"><div class="team-name">Voli verso Alleanza [${msg.destination}]:</div>${msg.players.map(p => `<div class="player-item">- Da [${p.originalTag || p.tag || '?'}] ➔ <b>${p.name}</b></div>`).join('')}</div>`).join('')
-    : `<p>Tutti i giocatori sono nell'alleanza corretta. Nessun volo richiesto.</p>`;
+    ? flightMessages.map(msg => `<div class="team-block"><div class="team-name">${i18next.t('pdf.flights_to', 'Voli verso Alleanza [')}${msg.destination}]:</div>${msg.players.map(p => `<div class="player-item">- ${i18next.t('pdf.from', 'Da [')}${p.originalTag || p.tag || '?'}] ➔ <b>${p.name}</b></div>`).join('')}</div>`).join('')
+    : `<p>${i18next.t('pdf.no_flights', "Tutti i giocatori sono nell'alleanza corretta. Nessun volo richiesto.")}</p>`;
 
   let timelineHtml = timelineSummaryObj.length > 0 
-    ? timelineSummaryObj.map(group => `<div class="timeline-group"><div class="timeline-time">[ Minuto ${group.formattedTime} ]</div>${group.actions.map(a => `<div class="timeline-action">• ${a}</div>`).join('')}</div>`).join('')
-    : `<p>Nessun ordine tattico registrato nella Timeline.</p>`;
+    ? timelineSummaryObj.map(group => `<div class="timeline-group"><div class="timeline-time">[ ${i18next.t('pdf.minute', 'Minuto')} ${group.formattedTime} ]</div>${group.actions.map(a => `<div class="timeline-action">• ${a}</div>`).join('')}</div>`).join('')
+    : `<p>${i18next.t('pdf.no_orders', 'Nessun ordine tattico registrato nella Timeline.')}</p>`;
 
   const printWindow = window.open('', '_blank');
-  if (!printWindow) return alert("⚠️ Il browser ha bloccato il popup. Consenti i popup per stampare.");
+  if (!printWindow) return alert(i18next.t('pdf.popup_blocked', "⚠️ Il browser ha bloccato il popup. Consenti i popup per stampare."));
 
   printWindow.document.open();
   printWindow.document.write(`
@@ -297,12 +277,12 @@ export const generateNativePrint = (params) => {
       .timeline-group { margin-bottom: 15px; page-break-inside: avoid; } .timeline-time { font-weight: bold; color: #d97706; font-size: 14px; margin-bottom: 5px; } .timeline-action { font-size: 13px; margin: 3px 0 3px 15px; }
     </style></head>
     <body>
-      <div class="header"><h1>DOSSIER TATTICO UFFICIALE</h1><h2>${eventName}</h2></div>
-      <div class="section-title bg-slate">MAPPA TATTICA E POSIZIONAMENTI (RADAR)</div>
+      <div class="header"><h1>${i18next.t('pdf.title', 'DOSSIER TATTICO UFFICIALE')}</h1><h2>${eventName}</h2></div>
+      <div class="section-title bg-slate">${i18next.t('pdf.map_title', 'MAPPA TATTICA E POSIZIONAMENTI (RADAR)')}</div>
       <div class="map-container"><img class="map-image" src="${radarDataUrl}" /></div>
-      ${mapLegendHtml}<div class="section-title bg-rose">1. SQUADRE D'ASSALTO E ASSEGNAZIONI</div>${teamsHtml}
-      <div class="section-title bg-fuchsia">2. TRASFERIMENTI E LOGISTICA (VOLI)</div>${voliHtml}
-      <div class="section-title bg-amber">3. TIMELINE OPERATIVA (CRONOLOGIA)</div>${timelineHtml}
+      ${mapLegendHtml}<div class="section-title bg-rose">${i18next.t('pdf.teams_title', "1. SQUADRE D'ASSALTO E ASSEGNAZIONI")}</div>${teamsHtml}
+      <div class="section-title bg-fuchsia">${i18next.t('pdf.flights_title', '2. TRASFERIMENTI E LOGISTICA (VOLI)')}</div>${voliHtml}
+      <div class="section-title bg-amber">${i18next.t('pdf.timeline_title', '3. TIMELINE OPERATIVA (CRONOLOGIA)')}</div>${timelineHtml}
       <script>window.onload = () => setTimeout(() => window.print(), 500);</script>
     </body></html>
   `);

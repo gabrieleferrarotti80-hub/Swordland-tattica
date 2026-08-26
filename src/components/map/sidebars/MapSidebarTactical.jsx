@@ -16,7 +16,7 @@ const formatDecimalToTime = (decimalMinutes) => {
 export default function MapSidebarTactical({
   roster, isReadOnly, tacticalMeta, setTacticalMeta, playerOverrides, setPlayerOverrides,
   allianceStructures, exportableOrders, setExportableOrders, fixedBuildings,
-  onOpenHelp, openBuilder, openEventManager, openExportModal // 💡 RICEVIAMO openBuilder come prop!
+  onOpenHelp, openBuilder, openEventManager, openExportModal
 }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -76,14 +76,14 @@ export default function MapSidebarTactical({
   }, [exportableOrders, rosterArray, fixedBuildings, playerOverrides, allianceStructures]);
 
   const handleDeleteOrder = (indexToRemove) => {
-    if (window.confirm("Cancellare questo ordine dalla programmazione?")) {
+    if (window.confirm(t('map_sidebar.confirm_delete_order', "Cancellare questo ordine dalla programmazione?"))) {
       setExportableOrders(prev => prev.filter((_, i) => i !== indexToRemove));
     }
   };
 
   const handleResetFillersOnly = () => {
     if (isReadOnly) return;
-    if (window.confirm("Vuoi ritirare tutti i filler e mantenere sulla mappa SOLO i Leader?")) {
+    if (window.confirm(t('map_sidebar.confirm_reset_fillers', "Vuoi ritirare tutti i filler e mantenere sulla mappa SOLO i Leader?"))) {
       const draftTeams = tacticalMeta?.draftData?.teams || [];
       const draftMeta = tacticalMeta?.draftData?.playerMeta || {};
       const leaderIds = new Set();
@@ -108,7 +108,7 @@ export default function MapSidebarTactical({
 
   const handleResetAllDeployments = () => {
     if (isReadOnly) return;
-    if (window.confirm("Attenzione: vuoi riportare TUTTI i giocatori nella sidebar e ripartire da zero?")) {
+    if (window.confirm(t('map_sidebar.confirm_reset_all', "Attenzione: vuoi riportare TUTTI i giocatori nella sidebar e ripartire da zero?"))) {
       setPlayerOverrides({});
     }
   };
@@ -118,7 +118,7 @@ export default function MapSidebarTactical({
     const draftTeams = tacticalMeta?.draftData?.teams || [];
     const draftMeta = tacticalMeta?.draftData?.playerMeta || {};
 
-    if (draftTeams.length === 0) return alert("Nessuna squadra configurata.");
+    if (draftTeams.length === 0) return alert(t('map_sidebar.no_teams_configured', "Nessuna squadra configurata."));
 
     const teamsData = [];
     for (let team of draftTeams) {
@@ -134,7 +134,7 @@ export default function MapSidebarTactical({
       const leaderY = leaderOverride?.y ?? leader.y;
 
       if (leaderX === '' || leaderY === '' || leaderX == null || leaderY == null) {
-        return alert(`❌ Errore Globale: Posiziona prima TUTTI i Leader sulla mappa! Manca la coordinata di: [${leader.name}]`);
+        return alert(t('map_sidebar.error_missing_leader', "❌ Errore Globale: Posiziona prima TUTTI i Leader sulla mappa! Manca la coordinata di: [{{name}}]", { name: leader.name }));
       }
 
       const fillers = teamPlayers.filter(p => p.id !== leader.id);
@@ -147,7 +147,7 @@ export default function MapSidebarTactical({
     setPlayerOverrides({ ...playerOverrides, ...results });
 
     if (missingSpace) {
-      alert("⚠️ Schieramento globale completato, ma lo spazio esterno era così affollato che alcune squadre non hanno trovato posto per tutti i membri.");
+      alert(t('map_sidebar.deploy_warning_space', "⚠️ Schieramento globale completato, ma lo spazio esterno era così affollato che alcune squadre non hanno trovato posto per tutti i membri."));
     }
   };
 
@@ -161,14 +161,14 @@ export default function MapSidebarTactical({
       <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-black tracking-wider text-rose-500">{t('map.tactical_room')}</h2>
-          <button onClick={onOpenHelp} className="w-6 h-6 flex items-center justify-center bg-slate-800 hover:bg-cyan-900 text-cyan-400 rounded-full border border-slate-700 transition-colors text-xs font-bold" title="Guida">?</button>
+          <button onClick={onOpenHelp} className="w-6 h-6 flex items-center justify-center bg-slate-800 hover:bg-cyan-900 text-cyan-400 rounded-full border border-slate-700 transition-colors text-xs font-bold" title={t('map_sidebar.guide_tooltip', 'Guida')}>?</button>
         </div>
         <button onClick={() => navigate('/')} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 transition-colors">🏠</button>
       </div>
 
       <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 shrink-0 shadow-inner">
-        <button onClick={() => setTacticalTab('teams')} className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded transition-all ${tacticalTab === 'teams' ? 'bg-rose-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>⚔️ Squadre</button>
-        <button onClick={() => setTacticalTab('timeline')} className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded transition-all ${tacticalTab === 'timeline' ? 'bg-cyan-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>⏱️ Timeline</button>
+        <button onClick={() => setTacticalTab('teams')} className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded transition-all ${tacticalTab === 'teams' ? 'bg-rose-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>{t('map_sidebar.tab_teams', '⚔️ Squadre')}</button>
+        <button onClick={() => setTacticalTab('timeline')} className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded transition-all ${tacticalTab === 'timeline' ? 'bg-cyan-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>{t('map_sidebar.tab_timeline', '⏱️ Timeline')}</button>
       </div>
 
       {tacticalTab === 'teams' && (
@@ -176,10 +176,9 @@ export default function MapSidebarTactical({
           <div className="bg-slate-950 p-4 rounded-xl border border-rose-900/50 flex flex-col gap-3">
             <div className="flex justify-between items-center mb-1">
               <h3 className="text-xs font-black text-rose-400 uppercase tracking-wider">{t('map.event_details')}</h3>
-              {/* 💡 RICHIAMIAMO LA FUNZIONE PASSATA DAL PADRE */}
               {!isReadOnly && (
                 <button onClick={openBuilder} className="bg-cyan-900/50 hover:bg-cyan-600 text-cyan-300 hover:text-white border border-cyan-800 hover:border-cyan-500 px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-lg">
-                  🛠️ Costruttore
+                  {t('map_sidebar.btn_builder', '🛠️ Costruttore')}
                 </button>
               )}
             </div>
@@ -192,7 +191,7 @@ export default function MapSidebarTactical({
           <div className="bg-slate-950 p-4 rounded-xl border border-indigo-900/50 flex flex-col gap-3 flex-1">
             <div className="flex justify-between items-end mb-1">
               <h3 className="text-xs font-black text-indigo-400 uppercase tracking-wider">
-                {hasTeams ? '⚔️ Squadre d\'Assalto' : t('map.forces_in_field')}
+                {hasTeams ? t('map_sidebar.assault_teams', "⚔️ Squadre d'Assalto") : t('map.forces_in_field')}
               </h3>
             </div>
             <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar pr-1 mt-1">
@@ -206,7 +205,7 @@ export default function MapSidebarTactical({
               ))}
               {unassignedPlayers.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-slate-800">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 text-center">Truppe Non Assegnate ({unassignedPlayers.length})</h4>
+                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 text-center">{t('map_sidebar.unassigned_troops', 'Truppe Non Assegnate ({{count}})', { count: unassignedPlayers.length })}</h4>
                   {unassignedPlayers.map(player => {
                     const override = playerOverrides[player.id];
                     const currentX = override?.x ?? player.x ?? '';
@@ -235,8 +234,8 @@ export default function MapSidebarTactical({
           {groupedTimeline.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-6 text-slate-500">
               <span className="text-4xl mb-2 opacity-50">⏳</span>
-              <p className="text-sm font-bold">Timeline Vuota</p>
-              <p className="text-[10px] mt-1">Registra gli ordini dalla finestra di destra per vederli scorrere qui.</p>
+              <p className="text-sm font-bold">{t('map_sidebar.empty_timeline', 'Timeline Vuota')}</p>
+              <p className="text-[10px] mt-1">{t('map_sidebar.empty_timeline_desc', 'Registra gli ordini dalla finestra di destra per vederli scorrere qui.')}</p>
             </div>
           ) : (
             <div className="relative pl-3 ml-2 border-l-2 border-cyan-800/50 py-4 flex flex-col gap-6">
@@ -257,14 +256,14 @@ export default function MapSidebarTactical({
                           <div key={order.originalIndex} className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex justify-between items-start group shadow-sm hover:border-cyan-700/50 transition-colors">
                             <div className="flex flex-col gap-1 min-w-0 pr-2 w-full">
                               <div className="text-sm font-black text-white truncate drop-shadow-md">{typeIcon} {order.leaderName}</div>
-                              <div className={`text-[10px] font-black ${typeColor} uppercase tracking-widest`}>{isRally ? 'Lancia Rally (5m prep)' : order.type}</div>
-                              <div className="text-[10px] text-slate-400 truncate flex items-center gap-1.5 mt-0.5"><span className="text-slate-500">Su:</span> <span className="text-slate-200 font-bold">{order.targetName}</span></div>
+                              <div className={`text-[10px] font-black ${typeColor} uppercase tracking-widest`}>{isRally ? t('map_sidebar.launch_rally_5m', 'Lancia Rally (5m prep)') : order.type}</div>
+                              <div className="text-[10px] text-slate-400 truncate flex items-center gap-1.5 mt-0.5"><span className="text-slate-500">{t('map_sidebar.on_target', 'Su:')}</span> <span className="text-slate-200 font-bold">{order.targetName}</span></div>
                               <div className="flex items-center gap-3 mt-2 bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                                <div className="flex flex-col flex-1"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{isRally ? 'Chiamata' : 'Partenza'}</span><span className="text-xs text-cyan-400 font-mono font-black mt-0.5">{formatDecimalToTime(order.dispatchTime)}</span></div>
+                                <div className="flex flex-col flex-1"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{isRally ? t('map_sidebar.call', 'Chiamata') : t('map_sidebar.departure', 'Partenza')}</span><span className="text-xs text-cyan-400 font-mono font-black mt-0.5">{formatDecimalToTime(order.dispatchTime)}</span></div>
                                 <div className="text-slate-600 text-xs font-black">➔</div>
-                                <div className="flex flex-col flex-1 items-end"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Impatto</span><span className="text-xs text-amber-400 font-mono font-black mt-0.5">{formatDecimalToTime(order.arrivalTime)}</span></div>
+                                <div className="flex flex-col flex-1 items-end"><span className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">{t('map_sidebar.impact', 'Impatto')}</span><span className="text-xs text-amber-400 font-mono font-black mt-0.5">{formatDecimalToTime(order.arrivalTime)}</span></div>
                               </div>
-                              {order.membersCount > 0 && <div className="text-[9px] font-bold text-slate-500 mt-1.5 bg-slate-800/40 inline-block self-start px-2 py-0.5 rounded">+ {order.membersCount} truppe aggregate</div>}
+                              {order.membersCount > 0 && <div className="text-[9px] font-bold text-slate-500 mt-1.5 bg-slate-800/40 inline-block self-start px-2 py-0.5 rounded">{t('map_sidebar.aggregated_troops', '+ {{count}} truppe aggregate', { count: order.membersCount })}</div>}
                             </div>
                             {!isReadOnly && <button onClick={() => handleDeleteOrder(order.originalIndex)} className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-800 text-slate-500 hover:bg-red-900/80 hover:text-red-400 border border-slate-700 opacity-0 group-hover:opacity-100">✕</button>}
                           </div>
@@ -280,18 +279,18 @@ export default function MapSidebarTactical({
       )}
 
       <div className="flex flex-col gap-2 shrink-0 pt-3 border-t border-slate-800 mt-2">
-        {!isReadOnly && <button onClick={openEventManager} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] flex justify-center gap-2">☁️ Database Piani</button>}
-        <button onClick={openExportModal} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl shadow-lg flex justify-center gap-2">📤 Esporta Testi per Chat</button>
+        {!isReadOnly && <button onClick={openEventManager} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.3)] flex justify-center gap-2">{t('map_sidebar.plans_db_btn', '☁️ Database Piani')}</button>}
+        <button onClick={openExportModal} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl shadow-lg flex justify-center gap-2">{t('map_sidebar.export_chat_btn', '📤 Esporta Testi per Chat')}</button>
       </div>
 
       {!isReadOnly && tacticalTab === 'teams' && (
         <div className="flex gap-2 mt-2">
-          <button onClick={handleResetFillersOnly} className="flex-1 bg-orange-700 hover:bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider py-2 rounded-lg shadow-lg border border-orange-500/50">🧹 Reset Filler</button>
-          <button onClick={handleResetAllDeployments} className="flex-1 bg-red-800 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider py-2 rounded-lg shadow-lg border border-red-500/50">🗑️ Reset Totale</button>
+          <button onClick={handleResetFillersOnly} className="flex-1 bg-orange-700 hover:bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider py-2 rounded-lg shadow-lg border border-orange-500/50">{t('map_sidebar.reset_fillers_btn', '🧹 Reset Filler')}</button>
+          <button onClick={handleResetAllDeployments} className="flex-1 bg-red-800 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider py-2 rounded-lg shadow-lg border border-red-500/50">{t('map_sidebar.reset_all_btn', '🗑️ Reset Totale')}</button>
         </div>
       )}
       {!isReadOnly && hasTeams && tacticalTab === 'teams' && (
-        <button onClick={handleDeployAllTeams} className="w-full bg-blue-700 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider py-2 mt-2 rounded-lg shadow-lg border border-blue-500/50">🚀 Schieramento Globale</button>
+        <button onClick={handleDeployAllTeams} className="w-full bg-blue-700 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider py-2 mt-2 rounded-lg shadow-lg border border-blue-500/50">{t('map_sidebar.global_deploy_btn', '🚀 Schieramento Globale')}</button>
       )}
 
     </aside>

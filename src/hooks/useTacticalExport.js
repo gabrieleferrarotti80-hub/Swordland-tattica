@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
-// 💡 Pulisce i nomi da Emoji e Caratteri Non Supportati
 export const cleanText = (str) => {
   if (!str) return '';
   return str.replace(/[^\x00-\xFF]/g, "").trim(); 
@@ -24,6 +24,7 @@ export function useTacticalExport({
   playerOverrides, roster, targetBuilding, exportableOrders, 
   activeDeployment, buildings, tacticalMeta, allianceStructures 
 }) {
+  const { t } = useTranslation(); // 🌍 Hook in azione
   
   const rawArray = Array.isArray(roster) ? roster : (roster?.players || []);
 
@@ -34,11 +35,11 @@ export function useTacticalExport({
       const player = rawArray.find(p => String(p.id) === String(playerId));
       if (!player) return;
       if (coords && coords.x !== '' && coords.y !== '' && coords.x != null && coords.y != null) {
-        list.push({ id: playerId, name: player.name || 'Senza Nome', tag: player.originalTag || player.tag || '?', x: Number(coords.x), y: Number(coords.y) });
+        list.push({ id: playerId, name: player.name || t('hooks.unnamed', 'Senza Nome'), tag: player.originalTag || player.tag || '?', x: Number(coords.x), y: Number(coords.y) });
       }
     });
     return list;
-  }, [playerOverrides, rawArray]);
+  }, [playerOverrides, rawArray, t]);
 
   const positionChunks = useMemo(() => {
     const result = [];
@@ -58,7 +59,7 @@ export function useTacticalExport({
     exportableOrders.forEach(order => {
       const leaderIdStr = String(order.leaderId);
       let leaderPlayer = activeDeployment.find(p => String(p.id) === leaderIdStr) || rawArray.find(r => String(r.id) === leaderIdStr);
-      const leaderName = leaderPlayer ? (leaderPlayer.name || leaderPlayer.tag || `[ID:${leaderIdStr}]`) : `[ID:${leaderIdStr}]`;
+      const leaderName = leaderPlayer ? (leaderPlayer.name || leaderPlayer.tag || `[ID:${leaderIdStr}]`) : t('hooks.unknown_player', 'Sconosciuto');
 
       const memberNames = [];
       if (order.members && order.members.length > 0) {
@@ -74,7 +75,7 @@ export function useTacticalExport({
       const isRally = mType === 'rally' || memberNames.length > 0;
       
       const targetB = buildings?.find(b => String(b.id) === String(order.targetId));
-      const targetNameStr = targetB ? targetB.name : (targetBuilding?.name || 'Obiettivo');
+      const targetNameStr = targetB ? targetB.name : (targetBuilding?.name || t('hooks.target', 'Obiettivo'));
 
       const dispatchTimeVal = Number(order.startMinute || 0); 
       let travelTimeMins = 0;
@@ -103,25 +104,29 @@ export function useTacticalExport({
     });
 
     return Object.values(strategies).map(strategy => {
-      let text = `📜 *ORDINI TATTICI: ${strategy.name.toUpperCase()}*\n\n`;
+      let text = t('hooks.tactical_orders_header', "📜 *ORDINI TATTICI: {{name}}*\n\n", { name: strategy.name.toUpperCase() });
       strategy.actions.sort((a, b) => a.sortValue - b.sortValue);
       strategy.actions.forEach(a => {
         let actionText = "";
-        let timeLabel = "Partenza";
+        let timeLabel = t('hooks.departure_label', 'Partenza');
         if (a.marchType === 'rally_leader') {
-          actionText = `🔥 **LANCIA RALLY (5 min)**\n👥 In attesa di: ${a.members.join(', ')}\n🎯 Obiettivo: **${a.targetName}**`;
-          timeLabel = "Chiamata";
+          actionText = t('hooks.launch_rally_txt', "🔥 **LANCIA RALLY (5 min)**\n👥 In attesa di: {{members}}\n🎯 Obiettivo: **{{target}}**", { members: a.members.join(', '), target: a.targetName });
+          timeLabel = t('hooks.call_label', 'Chiamata');
         } else if (a.marchType === 'rally_join') {
-          actionText = `🏃 **UNISCITI AL RALLY**\n🎯 Obiettivo: **${a.targetName}**`;
+          actionText = t('hooks.join_rally_txt', "🏃 **UNISCITI AL RALLY**\n🎯 Obiettivo: **{{target}}**", { target: a.targetName });
         } else {
-          const iconType = a.marchType === 'difesa' ? '🛡️ DIFESA' : a.marchType === 'supporto' ? '🤝 SUPPORTO' : '⚔️ ATTACCO SINGOLO';
+          const iconType = a.marchType === 'difesa' ? t('hooks.defend_label', '🛡️ DIFESA') : a.marchType === 'supporto' ? t('hooks.support_label', '🤝 SUPPORTO') : t('hooks.attack_label', '⚔️ ATTACCO SINGOLO');
           actionText = `${iconType}\n🎯 Obiettivo: **${a.targetName}**`;
         }
-        text += `⏱️ **${timeLabel}: ${a.startParsed.m.toString().padStart(2, '0')}' ${a.startParsed.s.toString().padStart(2, '0')}"**\n${actionText}\n⏳ Impatto alle ${a.arrivalParsed.m.toString().padStart(2, '0')}' ${a.arrivalParsed.s.toString().padStart(2, '0')}"\n\n`;
+        
+        const timeStr = `${a.startParsed.m.toString().padStart(2, '0')}' ${a.startParsed.s.toString().padStart(2, '0')}"`;
+        const arrivalStr = `${a.arrivalParsed.m.toString().padStart(2, '0')}' ${a.arrivalParsed.s.toString().padStart(2, '0')}"`;
+        
+        text += t('hooks.order_time_details', "⏱️ **{{label}}: {{time}}**\n{{action}}\n⏳ Impatto alle {{arrival}}\n\n", { label: timeLabel, time: timeStr, action: actionText, arrival: arrivalStr });
       });
       return { name: strategy.name, text };
     });
-  }, [exportableOrders, activeDeployment, rawArray, buildings, targetBuilding, playerOverrides, allianceStructures]);
+  }, [exportableOrders, activeDeployment, rawArray, buildings, targetBuilding, playerOverrides, allianceStructures, t]);
 
   const flightMessages = useMemo(() => {
     const playerMeta = tacticalMeta?.draftData?.playerMeta || {};
@@ -141,11 +146,11 @@ export function useTacticalExport({
 
     return Object.entries(flights).map(([dest, players]) => {
       players.sort((a, b) => (b.power || 0) - (a.power || 0));
-      let msg = `✈️ **TRASFERIMENTI VERSO [${dest}]**\n\n`;
+      let msg = t('hooks.transfers_to', "✈️ **TRASFERIMENTI VERSO [{{dest}}]**\n\n", { dest });
       players.forEach(p => { msg += `• [${p.originalTag || p.tag || '?'}] ${p.name}\n`; });
       return { destination: dest, text: msg, count: players.length, players: players };
     });
-  }, [tacticalMeta, rawArray]);
+  }, [tacticalMeta, rawArray, t]);
 
   const timelineSummaryObj = useMemo(() => {
     if (!exportableOrders || exportableOrders.length === 0) return [];
@@ -158,9 +163,9 @@ export function useTacticalExport({
     exportableOrders.forEach(order => {
       const leaderIdStr = String(order.leaderId);
       let leaderPlayer = activeDeployment.find(p => String(p.id) === leaderIdStr) || rawArray.find(r => String(r.id) === leaderIdStr);
-      const leaderName = leaderPlayer ? (leaderPlayer.name || leaderPlayer.tag || `[ID:${leaderIdStr}]`) : `Sconosciuto`;
+      const leaderName = leaderPlayer ? (leaderPlayer.name || leaderPlayer.tag || `[ID:${leaderIdStr}]`) : t('hooks.unknown_player', 'Sconosciuto');
       const targetB = buildings?.find(b => String(b.id) === String(order.targetId));
-      const targetNameStr = targetB ? targetB.name : (targetBuilding?.name || 'Obiettivo');
+      const targetNameStr = targetB ? targetB.name : (targetBuilding?.name || t('hooks.target', 'Obiettivo'));
 
       const isRally = order.marchType === 'rally';
       const dispatchTimeVal = Number(order.startMinute || 0);
@@ -187,28 +192,31 @@ export function useTacticalExport({
       if (!groups[key]) groups[key] = { timeDecimal: dispatchTimeVal, formattedTime: formatDecimalToStr(dispatchTimeVal), actions: [] };
 
       let actionIcon = '⚔️';
-      let partenzaLabel = 'Partenza';
-      if (isRally) { actionIcon = '🔥'; partenzaLabel = 'Chiamata'; }
+      let partenzaLabel = t('hooks.departure_label', 'Partenza');
+      if (isRally) { actionIcon = '🔥'; partenzaLabel = t('hooks.call_label', 'Chiamata'); }
       else if (order.marchType === 'difesa') { actionIcon = '🛡️'; }
       else if (order.marchType === 'supporto') { actionIcon = '🤝'; }
 
-      const membersTxt = (order.members && order.members.length > 0) ? ` (+${order.members.length} truppe)` : '';
-      groups[key].actions.push(`${actionIcon} ${leaderName} su ${targetNameStr}${membersTxt} ➔ ${partenzaLabel}: ${formatDecimalToStr(dispatchTimeVal)} | Impatto: ${formatDecimalToStr(arrivalDecimal)}`);
+      const membersTxt = (order.members && order.members.length > 0) ? t('hooks.plus_troops', ' (+{{count}} truppe)', { count: order.members.length }) : '';
+      
+      groups[key].actions.push(t('hooks.timeline_action_row', "{{icon}} {{leader}} su {{target}}{{membersTxt}} ➔ {{label}}: {{departure}} | Impatto: {{arrival}}", {
+          icon: actionIcon, leader: leaderName, target: targetNameStr, membersTxt, label: partenzaLabel, departure: formatDecimalToStr(dispatchTimeVal), arrival: formatDecimalToStr(arrivalDecimal)
+      }));
     });
 
     return Object.values(groups).sort((a, b) => a.timeDecimal - b.timeDecimal);
-  }, [exportableOrders, activeDeployment, rawArray, buildings, targetBuilding, playerOverrides, allianceStructures]);
+  }, [exportableOrders, activeDeployment, rawArray, buildings, targetBuilding, playerOverrides, allianceStructures, t]);
 
   const timelineSummaryText = useMemo(() => {
     if (timelineSummaryObj.length === 0) return null;
-    let text = `📅 **TIMELINE EVENTO**\n\n`;
+    let text = t('hooks.timeline_event_header', "📅 **TIMELINE EVENTO**\n\n");
     timelineSummaryObj.forEach(g => {
-      text += `[ Minuto ${g.formattedTime} ]\n`;
+      text += t('hooks.minute_bracket', "[ Minuto {{time}} ]\n", { time: g.formattedTime });
       g.actions.forEach(act => text += `  - ${act}\n`);
       text += `\n`;
     });
     return text;
-  }, [timelineSummaryObj]);
+  }, [timelineSummaryObj, t]);
 
   return { rawArray, positionedPlayers, positionChunks, orderStrategies, flightMessages, timelineSummaryObj, timelineSummaryText };
 }

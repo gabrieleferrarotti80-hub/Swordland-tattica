@@ -1,4 +1,4 @@
-// src/utils/scoreEngine.js
+import i18next from 'i18next';
 
 export const calculateDynamicScores = (currentTime, activeDeployment, marches, manualCaptures, buildings, teamBase) => {
   let globalScores = { blue: 0, red: 0 };
@@ -106,14 +106,12 @@ export const calculateDynamicScores = (currentTime, activeDeployment, marches, m
                 
                 state.totalPoints[state.owner] += (state.sessionPoints - stolenPoints);
                 
-                // 💡 NUOVA LOGICA: Esattamente 5 Diamanti
                 if (stolenPoints > 0) {
-                    const numDrops = Math.min(5, stolenPoints); // Evita bug se i punti rubati sono < 5
+                    const numDrops = Math.min(5, stolenPoints);
                     const baseValue = Math.floor(stolenPoints / numDrops);
                     let remainder = stolenPoints % numDrops;
 
                     for (let dropIdx = 0; dropIdx < numDrops; dropIdx++) {
-                        // Distribuisce il resto sui primi diamanti
                         const dropValue = baseValue + (remainder > 0 ? 1 : 0);
                         remainder--;
                         
@@ -127,7 +125,9 @@ export const calculateDynamicScores = (currentTime, activeDeployment, marches, m
                         const safeName = b.name || 'UNK';
                         const shortCode = safeName.substring(0, 3).toUpperCase();
                         const shortName = `${shortCode}-${dropIdx + 1}`;
-                        const fullName = `Bottino ${safeName} #${dropIdx + 1}`;
+                        
+                        // 💡 MOTORE TRADUZIONI AGGANCIATO QUI
+                        const fullName = i18next.t('hooks.loot_numbered', 'Bottino {{name}} #{{num}}', { name: safeName, num: dropIdx + 1 });
 
                         allLoot.push({
                           id: `loot_${bId}_${min}_${dropIdx}`,

@@ -14,7 +14,7 @@ import AllianceView from '../components/map/views/AllianceView';
 import TacticalExportModal from '../components/map/TacticalExportModal';
 import EventManagerModal from '../components/map/EventManagerModal';
 import MapHelpModal from '../components/map/MapHelpModal';
-import AllianceBuilderModal from '../components/map/AllianceBuilderModal'; // 💡 IMPORTIAMO IL COSTRUTTORE QUI
+import AllianceBuilderModal from '../components/map/AllianceBuilderModal'; 
 
 import { useMapData } from '../hooks/useMapData';
 import { useMapCamera } from '../hooks/useMapCamera';
@@ -26,15 +26,17 @@ const INITIAL_BUILDINGS = mapBuildings.map(b => ({
   x: b.x, y: b.y, minX: b.x - 30, maxX: b.x + 30, minY: b.y - 30, maxY: b.y + 30, occupiedBy: b.occupant || ''
 }));
 
-const DEFAULT_STRUCTURES = [
-  { id: 'alliance-hq', code: 'HQ', name: 'Quartier Generale', type: 'headquarters', x: 500, y: 500 },
-  { id: 'alliance-bear-1', code: 'TRP1', name: 'Trappola per Orsi 1', type: 'beartrap', x: 520, y: 500 }
-];
-
 export default function MapPage({ roster, userRole, allianceCode, allianceRole }) {
   const mainRef = useRef(null);
   const location = useLocation();
   const { t } = useTranslation();
+
+ // 💡 Spostato qui dentro per poter tradurre i nomi delle strutture di default!
+  const defaultStructures = useMemo(() => [
+    { id: 'alliance-hq', code: 'HQ', name: t('map_page.hq_name', 'Quartier Generale'), type: 'headquarters', x: 500, y: 500 },
+    { id: 'alliance-bear-1', code: 'TRP1', name: t('map_page.bear_trap_name', 'Trappola per Orsi 1'), type: 'beartrap', x: 520, y: 500 },
+    { id: 'alliance-bear-2', code: 'TRP2', name: t('map_page.bear_trap_2_name', 'Trappola per Orsi 2'), type: 'beartrap', x: 480, y: 500 }
+  ], [t]);
 
   const isReadOnly = userRole === 'guest' || (userRole === 'alliance' && allianceRole === 'member');
   const initialView = location.state?.initialView || 'global';
@@ -53,7 +55,6 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   const [isEventManagerOpen, setIsEventManagerOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   
-  // 💡 NUOVO STATO PER IL COSTRUTTORE
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
 
   const [currentPlanId, setCurrentPlanId] = useState(null);
@@ -96,7 +97,7 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
     loadedMarches, handleSaveMapToCloud, handleSaveSimulation
   } = useMapData({
     roster, allianceCode, userRole, allianceRole, eventMode, targetKingdom,
-    isReadOnly, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES, DEMO_STRUCTURES: [], DEMO_OVERRIDES: {}, DEMO_ROSTER: []
+    isReadOnly, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES: defaultStructures, DEMO_STRUCTURES: [], DEMO_OVERRIDES: {}, DEMO_ROSTER: []
   });
 
   const rosterArray = Array.isArray(effectiveRoster) ? effectiveRoster : (effectiveRoster?.players || []);
@@ -152,12 +153,13 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
 
   const handleManualCoord = useCallback((type, axis, value) => {
     const numVal = value === '' ? '' : Number(value);
+    const pointName = t('map_page.manual_point', 'Punto Manuale');
     if (type === 'origin') {
-      setMarchOrigin(prev => prev ? { ...prev, [axis]: numVal, isCustomPoint: true, name: 'Punto Manuale' } : { id: 'manual-o', code: 'MAN', name: 'Punto Manuale', [axis]: numVal, isCustomPoint: true });
+      setMarchOrigin(prev => prev ? { ...prev, [axis]: numVal, isCustomPoint: true, name: pointName } : { id: 'manual-o', code: 'MAN', name: pointName, [axis]: numVal, isCustomPoint: true });
     } else {
-      setMarchDestination(prev => prev ? { ...prev, [axis]: numVal, isCustomPoint: true, name: 'Punto Manuale' } : { id: 'manual-d', code: 'MAN', name: 'Punto Manuale', [axis]: numVal, isCustomPoint: true });
+      setMarchDestination(prev => prev ? { ...prev, [axis]: numVal, isCustomPoint: true, name: pointName } : { id: 'manual-d', code: 'MAN', name: pointName, [axis]: numVal, isCustomPoint: true });
     }
-  }, []);
+  }, [t]);
 
   const marchResult = useMemo(() => {
     if (!marchOrigin || !marchDestination || marchOrigin.x === '' || marchOrigin.y === '' || marchDestination.x === '' || marchDestination.y === '') return null;
@@ -190,7 +192,7 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
       setMarchAssignments({});
       const m = Math.floor(currentTime / 60);
       const s = currentTime % 60;
-      alert(`✅ Ordini registrati per il minuto ${m}' ${s.toString().padStart(2, '0')}"`);
+      alert(t('map_page.orders_registered_success', `✅ Ordini registrati per il minuto {{m}}' {{s}}"`, { m, s: s.toString().padStart(2, '0') }));
     }
   }, [isReadOnly, marchAssignments, handleDispatchMarch, currentTime, handleConfirmMinute, t]);
 
@@ -205,11 +207,11 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
     pt.x = e.clientX; pt.y = e.clientY;
     const svgPoint = pt.matrixTransform(svgElement.getScreenCTM().inverse());
     const coords = svgToGameCoordinates(svgPoint.x, svgPoint.y);
-    const freePointTarget = { id: `free-${Date.now()}`, code: 'POS', name: `Coordinate Mappa`, x: coords.x, y: coords.y, isCustomPoint: true };
+    const freePointTarget = { id: `free-${Date.now()}`, code: 'POS', name: t('map_page.map_coords', 'Coordinate Mappa'), x: coords.x, y: coords.y, isCustomPoint: true };
     if (!marchOrigin) setMarchOrigin(freePointTarget);
     else if (!marchDestination) setMarchDestination(freePointTarget);
     else { setMarchOrigin(freePointTarget); setMarchDestination(null); }
-  }, [selectedTool, marchOrigin, marchDestination]);
+  }, [selectedTool, marchOrigin, marchDestination, t]);
 
   const commonProps = useMemo(() => ({
     validPlayers, fixedBuildings, allianceStructures, filters, scale, inverseScale: 1 / scale, TILE_SF,
@@ -225,7 +227,7 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   }), [tacticalMeta, playerOverrides, hiveGridMeta, exportableOrders, fixedBuildings, allianceStructures, marches, allianceMeta]);
 
   const handleLoadEventData = (data, planId, planName) => {
-    if (window.confirm(`⚠️ Vuoi caricare il piano "${planName}"? La mappa attuale verrà sovrascritta.`)) {
+    if (window.confirm(t('map_page.confirm_load_plan', `⚠️ Vuoi caricare il piano "{{planName}}"? La mappa attuale verrà sovrascritta.`, { planName }))) {
       if (data.tacticalMeta) setTacticalMeta(data.tacticalMeta);
       else setTacticalMeta({ participants: [], draftData: { teams: [], playerMeta: {}, macroGroups: [] } });
       if (data.playerOverrides) setPlayerOverrides(data.playerOverrides);
@@ -244,7 +246,7 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   };
 
   const handleCreateNewPlan = () => {
-    if (window.confirm("⚠️ Vuoi davvero azzerare la mappa? Perderai tutto il lavoro non salvato su squadre, posizioni e ordini.")) {
+    if (window.confirm(t('map_page.confirm_reset_map', "⚠️ Vuoi davvero azzerare la mappa? Perderai tutto il lavoro non salvato su squadre, posizioni e ordini."))) {
       setTacticalMeta({ participants: [], draftData: { teams: [], playerMeta: {}, macroGroups: [] } });
       setPlayerOverrides({}); setExportableOrders([]); setMarches([]); setMarchAssignments({});
       setCurrentPlanId(null); setCurrentPlanName(''); setIsEventManagerOpen(false);
@@ -257,12 +259,12 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
       {showDemoWelcome && (
         <div className="absolute inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-cyan-500/50 rounded-2xl shadow-2xl max-w-2xl w-full p-6 flex flex-col gap-4 animate-fade-in">
-            <h2 className="text-2xl font-black text-cyan-400">Benvenuto nella Demo di Kingshot! 👑</h2>
+            <h2 className="text-2xl font-black text-cyan-400">{t('map_page.demo_title', 'Benvenuto nella Demo di Kingshot! 👑')}</h2>
             <p className="text-slate-300 text-sm leading-relaxed">
-              Sei in modalità Sandbox. Abbiamo caricato alcuni dati fittizi per te: esplora liberamente tutte le funzionalità della mappa senza paura di intaccare i database reali.
+              {t('map_page.demo_desc', 'Sei in modalità Sandbox. Abbiamo caricato alcuni dati fittizi per te: esplora liberamente tutte le funzionalità della mappa senza paura di intaccare i database reali.')}
             </p>
             <button onClick={() => setShowDemoWelcome(false)} className="mt-4 w-full bg-cyan-700 hover:bg-cyan-600 text-white font-black tracking-widest uppercase py-3 rounded-lg transition-colors">
-              Inizia l'esplorazione
+              {t('map_page.demo_start', "Inizia l'esplorazione")}
             </button>
           </div>
         </div>
@@ -270,7 +272,6 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
 
       <MapHelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} activeView={activeView} eventMode={eventMode} />
       
-      {/* 💡 IL MODALE COSTRUTTORE ORA VIVE QUI ED È SOVRAPPOSTO AL RESTO! */}
       <AllianceBuilderModal 
         isOpen={isBuilderOpen} 
         onClose={() => setIsBuilderOpen(false)} 
@@ -278,7 +279,7 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
         draftData={tacticalMeta?.draftData} 
         onSaveDraft={(data) => { 
           setTacticalMeta({...tacticalMeta, draftData: data}); 
-          alert("✅ Lavoro memorizzato temporaneamente!\n\nRicordati di cliccare 'SALVA PIANO' per renderlo definitivo su Cloud."); 
+          alert(t('map_page.draft_saved', "✅ Lavoro memorizzato temporaneamente!\n\nRicordati di cliccare 'SALVA PIANO' per renderlo definitivo su Cloud.")); 
         }} 
       />
 
@@ -292,7 +293,7 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
         handleSaveToCloud={handleSaveMapToCloud} isLoadingCloud={isLoadingCloud} selectedBuilding={selectedBuilding}
         userRole={userRole} activeView={activeView} handleSaveSimulation={handleSaveSimulation} isSavingSim={isSavingSim}
         openExportModal={() => setIsExportModalOpen(true)} openEventManager={() => setIsEventManagerOpen(true)}
-        openBuilder={() => { setIsBuilderOpen(true); setIsRightPanelOpen(false); }} // 💡 PASSIAMO L'AZIONE
+        openBuilder={() => { setIsBuilderOpen(true); setIsRightPanelOpen(false); }} 
         onOpenHelp={() => setIsHelpModalOpen(true)} 
         tacticalMeta={tacticalMeta} setTacticalMeta={setTacticalMeta} setSelectedBuilding={handleSelectBuilding}
         playerOverrides={playerOverrides} setPlayerOverrides={setPlayerOverrides} hiveGridMeta={hiveGridMeta} setHiveGridMeta={setHiveGridMeta}
@@ -305,17 +306,16 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
       >
         
-        {/* 💡 I BOTTONI SPANISCONO SE APRI IL COSTRUTTORE */}
         {activeView === 'tactical' && !isBuilderOpen && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-full border border-slate-700/50 shadow-2xl flex items-center gap-1">
-            <button onClick={() => setIsPlacementMode(true)} className={`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-colors shadow-lg ${isPlacementMode ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>📍 Solo Segnalini (Mappa Statica)</button>
-            <button onClick={() => setIsPlacementMode(false)} className={`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-colors shadow-lg ${!isPlacementMode ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>🏰 Ordini & Edifici (Mappa Dinamica)</button>
+            <button onClick={() => setIsPlacementMode(true)} className={`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-colors shadow-lg ${isPlacementMode ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>{t('map_page.static_mode', '📍 Solo Segnalini (Mappa Statica)')}</button>
+            <button onClick={() => setIsPlacementMode(false)} className={`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-colors shadow-lg ${!isPlacementMode ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>{t('map_page.dynamic_mode', '🏰 Ordini & Edifici (Mappa Dinamica)')}</button>
           </div>
         )}
         
         {activeView === 'tactical' && (
           <div className="absolute bottom-6 left-6 z-50 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700/50 shadow-2xl flex items-center gap-3" onMouseDown={e => e.stopPropagation()}>
-            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider">⏱️ TEMPO</span>
+            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider">⏱️ {t('map_page.time', 'TEMPO')}</span>
             <button onClick={() => setCurrentTime(Math.max(0, currentTime - 10))} className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors border border-slate-700">-</button>
             <input type="range" min="0" max="14400" step="10" value={currentTime} onChange={(e) => setCurrentTime(Number(e.target.value))} className="w-48 accent-cyan-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"/>
             <button onClick={() => setCurrentTime(Math.min(14400, currentTime + 10))} className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors border border-slate-700">+</button>

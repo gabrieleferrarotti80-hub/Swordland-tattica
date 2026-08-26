@@ -47,20 +47,20 @@ export default function MapSidebarAlliance({
       <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-black tracking-wider text-indigo-400">{t('alliance_sidebar.title', 'Gestione Alveare')}</h2>
-          <button onClick={onOpenHelp} className="w-6 h-6 flex items-center justify-center bg-slate-800 hover:bg-indigo-900 text-indigo-400 rounded-full border border-slate-700 transition-colors text-xs font-bold">?</button>
+          <button onClick={onOpenHelp} className="w-6 h-6 flex items-center justify-center bg-slate-800 hover:bg-indigo-900 text-indigo-400 rounded-full border border-slate-700 transition-colors text-xs font-bold" title={t('map_sidebar.guide_tooltip', 'Guida')}>?</button>
         </div>
         <button onClick={() => navigate('/')} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 transition-colors">🏠</button>
       </div>
 
       {isReadOnly && (
         <div className="bg-rose-950/40 border border-rose-500/50 rounded-lg p-2 text-[10px] text-rose-300 font-bold text-center uppercase tracking-wider shadow-inner">
-          🔒 Modalità Sola Lettura
+          {t('map_sidebar.readonly_mode', '🔒 Modalità Sola Lettura')}
         </div>
       )}
 
       {showHelp && (
         <div className="bg-indigo-950/30 border border-indigo-500/50 rounded-xl p-3 text-xs text-indigo-100 shadow-inner leading-relaxed animate-fade-in shrink-0">
-          <strong>💡 Guida Alveare:</strong> Trascina i giocatori dalla lista direttamente in mappa. Accendi la <em>Griglia Olografica</em> per centrarla su una trappola e definisci i confini aggiungendo punti al <em>Territorio</em>.
+          <strong>{t('map_sidebar.hive_guide_title', '💡 Guida Alveare:')}</strong> <span dangerouslySetInnerHTML={{ __html: t('map_sidebar.hive_guide_desc', 'Trascina i giocatori dalla lista direttamente in mappa. Accendi la <em>Griglia Olografica</em> per centrarla su una trappola e definisci i confini aggiungendo punti al <em>Territorio</em>.') }}></span>
         </div>
       )}
 
@@ -79,18 +79,18 @@ export default function MapSidebarAlliance({
           
           {hiveGridMeta.showGrid && (
             <div className="flex flex-col gap-2 mt-1 animate-fade-in">
-              <div className="flex gap-2">
-                <div className="flex flex-col flex-1">
-                  <label className="text-[8px] text-slate-500 uppercase font-bold mb-0.5">{t('map.center_x', 'Centro X')}</label>
-                  <input disabled={isReadOnly} type="number" value={hiveGridMeta.centerX} onChange={e => setHiveGridMeta({...hiveGridMeta, centerX: Number(e.target.value)})} className="bg-slate-900 border border-slate-700 text-xs text-white px-2 py-1.5 rounded outline-none focus:border-cyan-500 text-center font-mono disabled:opacity-50"/>
+             <div className="grid grid-cols-3 gap-2 w-full">
+                <div className="flex flex-col w-full min-w-0">
+                  <label className="text-[8px] text-slate-500 uppercase font-bold mb-0.5 truncate">{t('map.center_x', 'Centro X')}</label>
+                  <input disabled={isReadOnly} type="number" value={hiveGridMeta.centerX} onChange={e => setHiveGridMeta({...hiveGridMeta, centerX: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 text-xs text-white px-1 py-1.5 rounded outline-none focus:border-cyan-500 text-center font-mono disabled:opacity-50"/>
                 </div>
-                <div className="flex flex-col flex-1">
-                  <label className="text-[8px] text-slate-500 uppercase font-bold mb-0.5">{t('map.center_y', 'Centro Y')}</label>
-                  <input disabled={isReadOnly} type="number" value={hiveGridMeta.centerY} onChange={e => setHiveGridMeta({...hiveGridMeta, centerY: Number(e.target.value)})} className="bg-slate-900 border border-slate-700 text-xs text-white px-2 py-1.5 rounded outline-none focus:border-cyan-500 text-center font-mono disabled:opacity-50"/>
+                <div className="flex flex-col w-full min-w-0">
+                  <label className="text-[8px] text-slate-500 uppercase font-bold mb-0.5 truncate">{t('map.center_y', 'Centro Y')}</label>
+                  <input disabled={isReadOnly} type="number" value={hiveGridMeta.centerY} onChange={e => setHiveGridMeta({...hiveGridMeta, centerY: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 text-xs text-white px-1 py-1.5 rounded outline-none focus:border-cyan-500 text-center font-mono disabled:opacity-50"/>
                 </div>
-                <div className="flex flex-col flex-1">
-                  <label className="text-[8px] text-slate-500 uppercase font-bold mb-0.5">{t('map.radius', 'Raggio')}</label>
-                  <input disabled={isReadOnly} type="number" value={hiveGridMeta.radius} onChange={e => setHiveGridMeta({...hiveGridMeta, radius: Number(e.target.value)})} min="10" max="100" className="bg-slate-900 border border-slate-700 text-xs text-white px-2 py-1.5 rounded outline-none focus:border-cyan-500 text-center font-mono disabled:opacity-50"/>
+                <div className="flex flex-col w-full min-w-0">
+                  <label className="text-[8px] text-slate-500 uppercase font-bold mb-0.5 truncate">{t('map.radius', 'Raggio')}</label>
+                  <input disabled={isReadOnly} type="number" value={hiveGridMeta.radius} onChange={e => setHiveGridMeta({...hiveGridMeta, radius: Number(e.target.value)})} min="10" max="100" className="w-full bg-slate-900 border border-slate-700 text-xs text-white px-1 py-1.5 rounded outline-none focus:border-cyan-500 text-center font-mono disabled:opacity-50"/>
                 </div>
               </div>
             </div>
@@ -115,7 +115,7 @@ export default function MapSidebarAlliance({
 
           {!isReadOnly && (
             <button onClick={addTerritoryPoint} className="w-full bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 py-2 rounded border border-slate-700 transition-colors uppercase mt-1">
-              + Aggiungi Punto
+              {t('map_sidebar.add_point_btn', '+ Aggiungi Punto')}
             </button>
           )}
         </div>

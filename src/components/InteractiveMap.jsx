@@ -190,7 +190,6 @@ export const InteractiveMap = ({
           
           const bState = buildingStates[building.id]; 
           
-          // 💡 CONTROLLO BLOCCO VISIVO:
           const isLocked = (building.unlockTime || 0) > currentTime;
 
           return (
@@ -199,12 +198,11 @@ export const InteractiveMap = ({
                 {isEditorMode && <div className="absolute -inset-4 bg-amber-500/20 rounded-full blur-md animate-pulse pointer-events-none"></div>}
                 {isCaptured && !isEditorMode && !isLocked && <div className="absolute inset-0 bg-cyan-500/20 rounded-full blur-md animate-pulse pointer-events-none"></div>}
                 
-                {/* Lucchetto per edifici non ancora sbloccati */}
                 {isLocked && !isEditorMode && (
                    <div className="absolute -top-3 -right-3 z-[80] flex flex-col items-center pointer-events-none drop-shadow-lg">
                       <div className="text-2xl">🔒</div>
                       <div className="bg-slate-900/90 text-rose-400 border border-rose-500/50 text-[8px] font-black px-1.5 py-0.5 rounded shadow mt-0.5 whitespace-nowrap">
-                         SBLOCCA A {building.unlockTime}'
+                         {t('interactive_map.unlocks_at', "SBLOCCA A {{time}}'", { time: building.unlockTime })}
                       </div>
                    </div>
                 )}
@@ -216,25 +214,23 @@ export const InteractiveMap = ({
                 </div>
               </div>
 
-              {/* Tag Punti nascosto se l'edificio è chiuso */}
               {!isEditorMode && bState && !isLocked && (
                 <div className="absolute top-full mt-1 flex flex-col items-center pointer-events-none w-max z-[80]">
                    {bState.owner !== 'neutral' && (
                      <div className={`text-[9px] font-black px-2 py-0.5 rounded shadow border flex items-center gap-1 ${bState.owner === 'blue' ? 'bg-blue-900/90 text-blue-200 border-blue-500' : 'bg-rose-900/90 text-rose-200 border-rose-500'}`}>
-                       <span>🏦 Tot: {bState.totalPoints[bState.owner]}</span>
+                       <span>{t('interactive_map.tot_points', '🏦 Tot: {{points}}', { points: bState.totalPoints[bState.owner] })}</span>
                        <span className="opacity-50">|</span>
-                      <span className="text-amber-400" title="Bottino che cadrà a terra in caso di furto">📦 {Math.floor(bState.sessionPoints / 2)}</span>
+                      <span className="text-amber-400" title={t('interactive_map.loot_drop_tooltip', 'Bottino che cadrà a terra in caso di furto')}>📦 {Math.floor(bState.sessionPoints / 2)}</span>
                      </div>
                    )}
                    {bState.capturingTeam && (
                      <div className={`text-[8px] font-bold px-1.5 py-0.5 rounded mt-0.5 animate-pulse ${bState.capturingTeam === 'blue' ? 'bg-blue-600/90 text-white' : 'bg-rose-600/90 text-white'}`}>
-                       ⚠️ Cattura in corso... {bState.captureProgress}/3
+                       {t('interactive_map.capturing', '⚠️ Cattura in corso... {{progress}}/3', { progress: bState.captureProgress })}
                      </div>
                    )}
                 </div>
               )}
 
-              {/* Tooltip Hover Semplice */}
               {!isEditorMode && popupBuildingId !== building.id && (
                 <div className={`absolute ${isNearTop ? 'top-full mt-2' : 'bottom-full mb-2'} bg-slate-800/95 px-3 py-2 rounded-lg text-xs font-bold text-slate-200 border border-slate-600 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-[100] shadow-xl flex flex-col gap-1`}>
                   <div className="text-cyan-400 uppercase text-center">{building.name}</div>
@@ -247,7 +243,6 @@ export const InteractiveMap = ({
                 </div>
               )}
 
-              {/* GARRISON POPUP */}
               {popupBuildingId === building.id && !isEditorMode && getPlayersInBuilding(building.id).length > 0 && (
                 <div 
                    className={`absolute ${isNearTop ? 'top-full mt-4' : 'bottom-full mb-4'} left-1/2 transform -translate-x-1/2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-4 flex flex-col gap-3 pointer-events-auto w-[280px] z-[9999] cursor-default`} 
@@ -264,12 +259,12 @@ export const InteractiveMap = ({
                       {getPlayersInBuilding(building.id).map(p => (
                          <div key={p.id} className="flex justify-between items-center bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/50">
                             <span className="text-[11px] font-bold text-slate-200 flex items-center gap-2 truncate">
-                              {p.isLeader ? <span title="Leader del Presidio" className="text-sm drop-shadow-sm">👑</span> : <span className="text-sm opacity-50 grayscale">👤</span>} 
+                              {p.isLeader ? <span title={t('garrison_popup.garrison_leader', 'Leader del Presidio')} className="text-sm drop-shadow-sm">👑</span> : <span className="text-sm opacity-50 grayscale">👤</span>} 
                               {p.name}
                             </span>
                             {p.isLeader && (
                                <button onClick={(e) => { e.stopPropagation(); handleGarrisonAction('withdraw', building.id, p.id); }} className="bg-slate-700 hover:bg-amber-600 border border-slate-600 hover:border-amber-500 text-[9px] font-black tracking-wider px-2.5 py-1.5 rounded transition-all text-white shrink-0 shadow-sm">
-                                 RITIRA
+                                 {t('garrison_popup.retreat_single_btn', 'RITIRA').toUpperCase()}
                                </button>
                             )}
                          </div>
@@ -278,7 +273,7 @@ export const InteractiveMap = ({
                    
                    <div className="flex flex-col mt-2 border-t border-slate-700 pt-3">
                        <button onClick={(e) => { e.stopPropagation(); handleGarrisonAction('withdraw', building.id); setPopupBuildingId(null); }} className="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-black uppercase tracking-wider py-3 rounded-lg text-[10px] shadow-md transition-colors flex items-center justify-center gap-2">
-                          🚩 RITIRA TRUPPE
+                          🚩 {t('garrison_popup.retreat_all_btn', 'RITIRA TRUPPE')}
                        </button>
                    </div>
                 </div>

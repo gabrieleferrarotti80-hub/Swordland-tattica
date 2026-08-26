@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getTacticalShapePts, GRID_SIZES } from '../utils/mapUtilsGen';
 import { TEAM_COLORS } from '../../../utils/tacticalDeployment';
 
@@ -10,8 +11,8 @@ const getPlayerRank = (player) => {
   return 'other';
 };
 
-// 💡 React.memo GHIACCIA IL COMPONENTE EVITANDO I LAG DELLO SLIDER
 export default React.memo(function CastleView(props) {
+  const { t } = useTranslation();
   const { 
     fixedBuildings, validPlayers, inverseScale, TILE_SF,tacticalMeta,
     selectedBuilding, setSelectedBuilding, marchOrigin, setMarchOrigin,
@@ -118,12 +119,12 @@ export default React.memo(function CastleView(props) {
             <polygon points={buildingShape} fill={fillColor} stroke={strokeColor} strokeWidth={currentStrokeWidth * inverseScale} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
             <g transform={`scale(${inverseScale})`} className="pointer-events-none z-50">
               {!isCastle && !showLabels && !isSelected && <text x="0" y="5" fill="#ffffff" fontSize="14" fontWeight="black" textAnchor="middle" className="drop-shadow-md">T</text>}
-              {isOrigin && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">岫</text>}
-              {isDestination && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">識</text>}
+              {isOrigin && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🛫</text>}
+              {isDestination && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🎯</text>}
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="20" y="-12" width="140" height="28" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
                 <text x="26" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{building.code}] {building.name}</text>
-                <text x="26" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.occupiedBy ? ` | Occupato: ${building.occupiedBy}` : ''}</text>
+                <text x="26" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.occupiedBy ? ` | ${t('alliance_view.occupied', 'Occupato: ')}${building.occupiedBy}` : ''}</text>
               </g>
             </g>
           </g>
@@ -168,9 +169,9 @@ export default React.memo(function CastleView(props) {
             onMouseDown={(e) => { e.stopPropagation(); if(setDraggedPlayerId) setDraggedPlayerId(player.id); }}
             onClick={(e) => { 
               e.stopPropagation(); 
-              const target = { ...player, isPlayer: true, code: player.originalTag || player.tag || 'PLY', type: `Membro Alleanza`, x: player.numX, y: player.numY }; 
+              const target = { ...player, isPlayer: true, code: player.originalTag || player.tag || 'PLY', type: t('alliance_view.member_type', 'Membro Alleanza'), x: player.numX, y: player.numY }; 
               if (selectedTool === 'distance') { 
-                if (!marchOrigin) setMarchOrigin(target); 
+                if (!marchOrigin) setOrigin(target); 
                 else if (!marchDestination) setMarchDestination(target); 
                 else { setMarchOrigin(target); setMarchDestination(null); } 
               } else { setSelectedBuilding(target); } 

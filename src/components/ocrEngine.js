@@ -1,8 +1,6 @@
 import Tesseract from 'tesseract.js';
+import i18next from 'i18next'; // 🌍 Import i18n per file di sola logica
 
-// ==========================================
-// 🎨 HELPER: PRE-PROCESSING IMMAGINE (SOLO SCALA DI GRIGI)
-// ==========================================
 const preProcessaImmagine = (file) => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -20,20 +18,16 @@ const preProcessaImmagine = (file) => {
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const data = imageData.data;
                 
-                // Applica SOLO la scala di grigi (mantenendo le sfumature per non sgranare il testo)
                 for (let i = 0; i < data.length; i += 4) {
                     const r = data[i];
                     const g = data[i + 1];
                     const b = data[i + 2];
                     
-                    // Calcola la luminanza (luminosità reale percepita dall'occhio umano)
                     const luma = 0.299 * r + 0.587 * g + 0.114 * b;
                     
-                    // Invece di forzare bianco/nero, assegniamo la sfumatura di grigio a tutti e 3 i canali
-                    data[i] = luma;     // Rosso diventa grigio
-                    data[i + 1] = luma; // Verde diventa grigio
-                    data[i + 2] = luma; // Blu diventa grigio
-                    // data[i+3] (Alpha/Trasparenza) rimane intatto
+                    data[i] = luma;    
+                    data[i + 1] = luma; 
+                    data[i + 2] = luma; 
                 }
                 
                 ctx.putImageData(imageData, 0, 0);
@@ -48,31 +42,22 @@ const preProcessaImmagine = (file) => {
     });
 };
 
-// ==========================================
-// 🔍 MOTORE DI RICERCA NOMI (AGGIORNATO CON RICERCA CODA)
-// ==========================================
 const trovaIndiceNome = (righe, player) => {
     const playerClean = player.replace(/\[.*?\]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
     for (let i = 0; i < righe.length; i++) {
         const rigaPulita = righe[i].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-        // 1. Match Esatto
         if (rigaPulita.includes(playerClean)) return i;
 
-        // 2. Match Tronco Principale (prime 4 lettere)
         if (playerClean.length >= 4) {
             const troncoPrincipale = playerClean.substring(0, 4);
             if (rigaPulita.includes(troncoPrincipale)) return i;
         }
         
-        // 3. NUOVO: Match Coda (ultime 4 lettere per nomi lunghi)
-        // Se Tesseract ha distrutto l'inizio ma ha letto bene la fine a capo (es. "cely")
         if (playerClean.length >= 6) {
             const troncoFinale = playerClean.substring(playerClean.length - 4);
             if (rigaPulita.includes(troncoFinale)) {
-                // Se la coda è qui, i numeri sono quasi certamente sulla riga precedente.
-                // Restituiamo i - 1 (senza andare sotto lo zero)
                 return Math.max(0, i - 1); 
             }
         }
@@ -81,36 +66,28 @@ const trovaIndiceNome = (righe, player) => {
     return -1; 
 };
 
-// ==========================================
-// 🏆 MOTORE DEDICATO: ESTRAZIONE PUNTEGGI BLINDATA + FILTRO
-// ==========================================
 export async function estraiPunteggi(scoreFile, playersTemplate, logCallback) {
     const waveScores = {};
     playersTemplate.forEach(p => waveScores[p] = 0); 
 
     if (!scoreFile) {
-        logCallback("   ⚠️ Nessun file punteggi caricato per questa ondata.\n");
+        logCallback(i18next.t('viking_wizard.ocr_log_no_scores', "   ⚠️ Nessun file punteggi caricato per questa ondata.\n"));
         return waveScores;
     }
 
-    logCallback(`   📸 [MOTORE BLINDATO] Pre-processing e lettura immagine PUNTEGGI in corso...\n`);
+    logCallback(i18next.t('viking_wizard.ocr_log_reading_scores', "   📸 [MOTORE BLINDATO] Pre-processing e lettura immagine PUNTEGGI in corso...\n"));
     
     try {
-        // 1. Passaggio in "lavanderia" (Rimuove lo sfondo evidenziato)
         const immaginePulita = await preProcessaImmagine(scoreFile);
         
-        // 2. Tesseract legge l'immagine ad alto contrasto
         const { data } = await Tesseract.recognize(immaginePulita, 'eng');
         const righe = data.text.split('\n').map(r => r.trim()).filter(r => r !== '');
-
-        console.log("=== RAW TESSERACT PUNTEGGI (FILTRATA) ===");
-        console.log(righe);
 
         playersTemplate.forEach(player => {
             const lineIdx = trovaIndiceNome(righe, player);
 
             if (lineIdx === -1) {
-                logCallback(`      ❌ [PUNTI] ${player} -> Nome non trovato nell'immagine.\n`);
+                logCallback(i18next.t('viking_wizard.ocr_log_score_not_found', "      ❌ [PUNTI] {{player}} -> Nome non trovato nell'immagine.\n", { player }));
                 waveScores[player] = 0;
                 return;
             }
@@ -122,7 +99,6 @@ export async function estraiPunteggi(scoreFile, playersTemplate, logCallback) {
 
             for (let j = lineIdx; j <= limite; j++) {
                 
-                // 🛑 MURO DI CONTENIMENTO COMBINATO
                 if (j > lineIdx) {
                     const rigaLow = righe[j].toLowerCase();
                     const rigaSoloLettere = rigaLow.replace(/[^a-z]/g, '');
@@ -145,7 +121,6 @@ export async function estraiPunteggi(scoreFile, playersTemplate, logCallback) {
                     if (invasioneDiCampo) break;
                 }
 
-              // MANGIAMO LO SPAZIO: \s*\) intercetta ")", " )", "  )" e li fonde nel numero finale "1"
                 const rigaNum = righe[j].replace(/\s*\)/g, '1').replace(/[.,'‘]/g, '').replace(/[oO]/g, '0');
                 const matchNumeri = rigaNum.match(/\b\d+\b/g);
                 
@@ -164,22 +139,19 @@ export async function estraiPunteggi(scoreFile, playersTemplate, logCallback) {
 
             waveScores[player] = punteggioEstratto;
             if (trovatoValore) {
-                logCallback(`      🎯 [PUNTI] ${player} -> Punteggio estratto: ${punteggioEstratto}\n`);
+                logCallback(i18next.t('viking_wizard.ocr_log_score_extracted', "      🎯 [PUNTI] {{player}} -> Punteggio estratto: {{score}}\n", { player, score: punteggioEstratto }));
             } else {
-                logCallback(`      ⚠️ [PUNTI] ${player} -> Nessun numero valido trovato (impostato a 0).\n`);
+                logCallback(i18next.t('viking_wizard.ocr_log_score_no_valid_number', "      ⚠️ [PUNTI] {{player}} -> Nessun numero valido trovato (impostato a 0).\n", { player }));
             }
         });
 
     } catch (err) {
-        logCallback(`   ❌ Errore critico lettura foto punteggi: ${err.message}\n`);
+        logCallback(i18next.t('viking_wizard.ocr_log_score_critical_error', "   ❌ Errore critico lettura foto punteggi: {{msg}}\n", { msg: err.message }));
     }
 
     return waveScores;
 }
 
-// ==========================================
-// ⚔️ MOTORE 2: ESTRAZIONE TRUPPE + FILTRO
-// ==========================================
 export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, logCallback) {
     const waveTroops = JSON.parse(JSON.stringify(initialTroops)); 
     
@@ -187,13 +159,10 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
 
     for (let i = 0; i < troopFiles.length; i++) {
         const file = troopFiles[i];
-        logCallback(`   📸 Pre-processing e lettura immagine TRUPPE ${i + 1} di ${troopFiles.length}...\n`);
+        logCallback(i18next.t('viking_wizard.ocr_log_reading_troops', "   📸 Pre-processing e lettura immagine TRUPPE {{current}} di {{total}}...\n", { current: i + 1, total: troopFiles.length }));
         
         try {
-            // 1. Passaggio in "lavanderia" anche per le truppe
             const immaginePulita = await preProcessaImmagine(file);
-            
-            // 2. Lettura Tesseract
             const { data } = await Tesseract.recognize(immaginePulita, 'eng');
             
             let testoPulito = data.text
@@ -213,12 +182,10 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                         const rigaLower = righe[k].toLowerCase();
                         const rigaSoloLettere = rigaLower.replace(/[^a-z]/g, '');
                         
-                        // 1. Muro Statico
                         if(rigaLower.includes('[rev]') || rigaLower.includes('liv.') || rigaLower.includes('lv.')) {
                             break; 
                         }
 
-                        // 2. MURO DINAMICO (Previene il furto dati su tendine chiuse come nello Scan 4)
                         let invasioneDiCampo = false;
                         for (const altroPlayer of playersTemplate) {
                             if (altroPlayer !== player) { 
@@ -229,9 +196,8 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                                 }
                             }
                         }
-                        if (invasioneDiCampo) break; // Se invadiamo un altro giocatore PRIMA di trovare "uccisioni", la tendina era chiusa!
+                        if (invasioneDiCampo) break; 
 
-                        // Trova l'inizio della tabella truppe
                         if(rigaLower.includes('uccision') || rigaLower.includes('perdit') || rigaLower.includes('ferit') || rigaLower.includes('kills')) {
                             indiceIntestazione = k;
                             break;
@@ -239,19 +205,16 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                     }
 
                    if (indiceIntestazione !== -1) {
-                        logCallback(`      👤 Tabella truppe trovata per: ${player}\n`);
+                        logCallback(i18next.t('viking_wizard.ocr_log_table_found', "      👤 Tabella truppe trovata per: {{player}}\n", { player }));
                         
-                        // 🛡️ 1. SCUDO WIZARD: Mappiamo solo le truppe con valore "inviate" > 0
                         const truppeAttese = [];
                         ['fant', 'cav', 'arc'].forEach(cat => {
                             if (waveTroops[player] && waveTroops[player][cat]) {
                                 waveTroops[player][cat].forEach((row, idx) => {
                                     const numInviate = parseInt(row.inviate, 10);
                                     if (!isNaN(numInviate) && numInviate > 0) {
-                                        // Truppe inviate: l'OCR cercherà questa riga
                                         truppeAttese.push({ cat, idx });
                                     } else {
-                                        // Nessuna truppa inviata: forza a 0, l'OCR non deve nemmeno cercare
                                         waveTroops[player][cat][idx].uccise = "0";
                                     }
                                 });
@@ -263,7 +226,6 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                         for(let k = indiceIntestazione + 1; k < righe.length && truppeTrovate < truppeAttese.length; k++) {
                             const rigaLower = righe[k].toLowerCase();
                             
-                            // Muro inferiore
                             if (rigaLower.includes('attaccante') || rigaLower.includes('difensore') || rigaLower.includes('[rev]')) {
                                 break; 
                             }
@@ -284,7 +246,6 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                             if (matchNumeri && matchNumeri.length >= 4) {
                                 let arrNumeri = [...matchNumeri];
                                 
-                                // Salta il livello Tier se letto per sbaglio
                                 if (arrNumeri.length >= 5 && parseInt(arrNumeri[0], 10) <= 25) {
                                     arrNumeri.shift();
                                 }
@@ -294,7 +255,6 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                                 if (arrNumeri.length > 0) {
                                     let mergedKills = arrNumeri[0];
                                     let idx = 1;
-                                    // Ricostruisce numeri separati da spazio
                                     while (idx < arrNumeri.length) {
                                         if (arrNumeri[idx].length === 3) {
                                             mergedKills += arrNumeri[idx];
@@ -306,17 +266,14 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                                     ucciseEstratte = mergedKills;
                                 }
 
-                                // 🛡️ 2. REGOLA DELLE MIGLIAIA
                                 const killsNum = parseInt(ucciseEstratte, 10);
-                                // Un attacco reale fa danni a migliaia o fallisce totalmente (0).
-                                // Numeri piccoli sono allucinazioni di Tesseract.
                                 if (killsNum > 0 && killsNum < 1000) {
-                                    continue; // Ignora questa riga e passa alla successiva
+                                    continue; 
                                 }
                                 
                                 const target = truppeAttese[truppeTrovate];
                                 waveTroops[player][target.cat][target.idx].uccise = ucciseEstratte;
-                                logCallback(`         -> ${target.cat.toUpperCase()} (Riga ${target.idx + 1}) uccise: ${ucciseEstratte}\n`);
+                                logCallback(i18next.t('viking_wizard.ocr_log_troops_extracted', "         -> {{cat}} (Riga {{row}}) uccise: {{kills}}\n", { cat: target.cat.toUpperCase(), row: target.idx + 1, kills: ucciseEstratte }));
                                 
                                 truppeTrovate++;
                             }
@@ -325,7 +282,7 @@ export async function estraiTruppe(troopFiles, playersTemplate, initialTroops, l
                 }
             });
         } catch (err) {
-            logCallback(`   ❌ Errore critico lettura foto truppe ${i+1}: ${err.message}\n`);
+            logCallback(i18next.t('viking_wizard.ocr_log_troops_critical_error', "   ❌ Errore critico lettura foto truppe {{index}}: {{msg}}\n", { index: i + 1, msg: err.message }));
         }
     }
     

@@ -119,7 +119,6 @@ export const DispatchModal = ({
       if (!targetB || !(targetB.unlockTime > 0)) return false;
       
       const travelMins = getTravelTimeMins(marchAssign.buildingId);
-      // 💡 CALCOLO DINAMICO DEL RITARDO
       const isRally = marchAssign.type.startsWith('rally');
       const rallyDelay = marchAssign.type === 'rally_1' ? 1 : (isRally ? 4 : 0);
       const arrTime = currentTime + rallyDelay + travelMins;
@@ -297,29 +296,29 @@ export const DispatchModal = ({
                   <div className="flex flex-col gap-2.5 pt-1">
                     
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Destinazione</label>
+                      <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">{t('dispatch_modal.destination')}</label>
                       <select 
                         className="w-full bg-slate-950 border border-slate-600 rounded-xl p-2.5 text-xs font-bold text-slate-200 outline-none focus:border-cyan-500 cursor-pointer shadow-inner"
                         value={currentAssign.buildingId} 
                         onChange={(e) => handleTargetChange(marchIdx, e.target.value)}
                       >
                         <option value="">{t('dispatch_modal.no_target', 'Nessuna Destinazione')}</option>
-                        <optgroup label="Edifici">
+                        <optgroup label={t('dispatch_modal.buildings_optgroup')}>
                           {buildings.map(b => (
                              <option key={b.id} value={b.id}>
-                               {b.name} {(b.unlockTime && b.unlockTime > 0) ? ` (Sblocca a ${b.unlockTime}')` : ''}
-                               {buildingStates[b.id]?.owner === teamBase ? ' 🛡️ (Tuo)' : ''}
+                               {b.name} {(b.unlockTime && b.unlockTime > 0) ? t('dispatch_modal.unlocks_at', ' (Sblocca a {{time}}\')', {time: b.unlockTime}) : ''}
+                               {buildingStates[b.id]?.owner === teamBase ? t('dispatch_modal.yours') : ''}
                              </option>
                           ))}
                         </optgroup>
                         
                         {lootDrops.length > 0 && (
-                          <optgroup label="Bottino sul Campo">
+                          <optgroup label={t('dispatch_modal.field_loot')}>
                             {lootDrops.map(l => {
                               const isClaimedByOther = claimedLoots.has(String(l.id)) && String(currentTargetId) !== String(l.id);
                               return (
                                 <option key={l.id} value={l.id} disabled={isClaimedByOther}>
-                                  💎 {l.name} {isClaimedByOther ? '⛔ (Occupato)' : ''}
+                                  💎 {l.name} {isClaimedByOther ? t('dispatch_modal.occupied_loot') : ''}
                                 </option>
                               );
                             })}
@@ -337,12 +336,12 @@ export const DispatchModal = ({
                     
                     {earlyArrival && targetB && (
                         <div className="text-rose-400 bg-rose-950/50 p-2.5 rounded-xl border border-rose-800/50 text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-inner text-center leading-tight">
-                            <span className="text-lg">🔒</span> Arrivo Anticipato!<br/>L'edificio apre al minuto {targetB.unlockTime}
+                            <span dangerouslySetInnerHTML={{ __html: t('dispatch_modal.early_arrival', "🔒 Arrivo Anticipato!<br/>L'edificio apre al minuto {{time}}", {time: targetB.unlockTime}) }} />
                         </div>
                     )}
                     
                     <div className="flex flex-col gap-1 mt-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">Azione</label>
+                      <label className="text-[10px] text-slate-400 uppercase font-bold ml-1">{t('dispatch_modal.action')}</label>
                       <select 
                         className="w-full bg-slate-950 border border-slate-600 rounded-xl p-2.5 text-xs font-bold text-slate-200 outline-none focus:border-cyan-500 cursor-pointer shadow-inner"
                         value={currentAssign.type} 
@@ -357,22 +356,21 @@ export const DispatchModal = ({
                         )}
                         
                         {!targetIsLoot && !targetIsOwned && (
-                           <option value="rally_4">{t('dispatch_modal.call_rally', 'Ammassamento')}</option>
+                           <option value="rally_4">{t('dispatch_modal.mass_rally', 'Ammassamento')}</option>
                         )}
                       </select>
                     </div>
 
-                    {/* 💡 NUOVO MENU A TENDINA: Appare solo se selezioni il Rally! */}
                     {currentAssign.type.startsWith('rally') && (
                       <div className="flex flex-col gap-1 mt-1 border-t border-slate-700/50 pt-2 pb-1">
-                        <label className="text-[10px] text-amber-400 uppercase font-bold ml-1 tracking-widest">⏱️ Durata Ammassamento</label>
+                        <label className="text-[10px] text-amber-400 uppercase font-bold ml-1 tracking-widest">{t('dispatch_modal.rally_duration')}</label>
                         <select 
                           className="w-full bg-slate-900 border border-amber-600/50 rounded-xl p-2 text-xs font-bold text-amber-400 outline-none focus:border-amber-400 cursor-pointer shadow-inner"
                           value={currentAssign.type} 
                           onChange={(e) => updateMarchAssignment(marchIdx, 'type', e.target.value)}
                         >
-                          <option value="rally_4">4 Minuti (Standard)</option>
-                          <option value="rally_1">1 Minuto (Rapido)</option>
+                          <option value="rally_4">{t('dispatch_modal.mins_4')}</option>
+                          <option value="rally_1">{t('dispatch_modal.mins_1')}</option>
                         </select>
                       </div>
                     )}
@@ -392,7 +390,6 @@ export const DispatchModal = ({
                             const mem = activeDeployment.find(p => String(p.id) === String(memId));
                             const currentTimeCalc = memBaseTime * Math.pow(0.75, memSpeedups);
                             
-                            // 💡 CONTROLLO VELOCITÀ DINAMICO IN BASE ALLA SCELTA (1 o 4)
                             const rTime = currentAssign.type === 'rally_1' ? 1 : 4;
                             const isTooSlow = currentAssign.type.startsWith('rally') && currentTimeCalc > rTime;
 
@@ -459,7 +456,7 @@ export const DispatchModal = ({
                         >
                           <option value="" disabled>➕ {t('dispatch_modal.join_player')}</option>
                           {availablePlayers.filter(p => !assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id))).map(p => (
-                              <option key={p.id} value={p.id}>{p.name} ({p.tag})</option>
+                              <option key={p.id} value={p.id}>[{p.tag}] {p.name}</option>
                           ))}
                         </select>
                       </div>

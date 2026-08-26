@@ -1,5 +1,5 @@
 import React from 'react';
-// IMPORT CORRETTO:
+import { useTranslation } from 'react-i18next';
 import { getGlobalShapePts, GRID_SIZES } from '../utils/mapUtilsGen';
 
 const getPlayerRank = (player) => {
@@ -11,6 +11,7 @@ const getPlayerRank = (player) => {
 };
 
 export default function GlobalView(props) {
+  const { t } = useTranslation();
   const { 
     fixedBuildings, 
     allianceStructures, 
@@ -36,7 +37,6 @@ export default function GlobalView(props) {
   else if (scale < 0.5) BUILDING_SCALE = 1.4;
   else if (scale < 0.8) BUILDING_SCALE = 1.2;
 
-  // Usa le dimensioni visive
   const shapeCastle = getGlobalShapePts(GRID_SIZES.CASTLE, BUILDING_SCALE);
   const shapeMajor  = getGlobalShapePts(GRID_SIZES.MAJOR, BUILDING_SCALE);
   const shapeMinor  = getGlobalShapePts(GRID_SIZES.MINOR, BUILDING_SCALE);
@@ -137,7 +137,7 @@ export default function GlobalView(props) {
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="15" y="-15" width="160" height="32" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" className="shadow-lg" />
                 <text x="21" y="0" fill="#ffffff" fontSize="11" fontWeight="bold">[{building.code}] {building.name}</text>
-                <text x="21" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.occupiedBy ? ` | Occupato: ${building.occupiedBy}` : ''}</text>
+                <text x="21" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.occupiedBy ? ` | ${t('alliance_view.occupied', 'Occupato: ')}${building.occupiedBy}` : ''}</text>
               </g>
             </g>
           </g>
@@ -224,7 +224,7 @@ export default function GlobalView(props) {
 
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="12" y="-12" width="160" height="28" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="rgba(159, 18, 57, 0.8)" strokeWidth="1" className="shadow-lg" />
-                <text x="18" y="2" fill="#fda4af" fontSize="11" fontWeight="bold">[NEMICO] {hq.name}</text>
+                <text x="18" y="2" fill="#fda4af" fontSize="11" fontWeight="bold">{t('alliance_view.enemy_tag', '[NEMICO]')} {hq.name}</text>
                 <text x="18" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({hq.x}, {hq.y})</text>
               </g>
             </g>
@@ -264,7 +264,7 @@ export default function GlobalView(props) {
 
             onClick={(e) => { 
               e.stopPropagation(); 
-              const target = { ...player, isPlayer: true, code: player.tag || 'PLY', type: `Membro Alleanza`, x: player.numX, y: player.numY }; 
+              const target = { ...player, isPlayer: true, code: player.tag || 'PLY', type: t('alliance_view.member_type', 'Membro Alleanza'), x: player.numX, y: player.numY }; 
               if (selectedTool === 'distance') { 
                 if (!marchOrigin) setMarchOrigin(target); 
                 else if (!marchDestination) setMarchDestination(target); 

@@ -1,7 +1,9 @@
+import i18next from 'i18next';
+
 export const initialBuildings = [
   { 
     id: 'Swordshrine', 
-    name: 'Swordshrine', 
+    get name() { return i18next.t('buildings_db.swordshrine', 'Swordshrine'); }, 
     unlockTime: 15, 
     pointsPerMin: 1800, 
     pointsPerMinPlayer: 360, 
@@ -10,12 +12,12 @@ export const initialBuildings = [
     y: 117,
     icon: '/Swordshrine.png',
     scale: 1.8,
-    travelTimeBlue: 235, // 03:55 (Al centro, uguale per entrambi)
+    travelTimeBlue: 235, 
     travelTimeRed: 235
   },
   { 
     id: 'mercenary', 
-    name: 'Mercenary Camp', 
+    get name() { return i18next.t('buildings_db.mercenary', 'Campo Mercenari'); }, 
     unlockTime: 15, 
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
@@ -24,12 +26,12 @@ export const initialBuildings = [
     y: 169,
     icon: '/Mercenary.png',
     scale: 1.2,
-    travelTimeBlue: 271, // Speculare di Reformation
-    travelTimeRed: 272   // 04:32
+    travelTimeBlue: 271, 
+    travelTimeRed: 272   
   },
   { 
     id: 'reformation', 
-    name: 'Reformation', 
+    get name() { return i18next.t('buildings_db.reformation', 'Riformazione'); }, 
     unlockTime: 15, 
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
@@ -38,12 +40,12 @@ export const initialBuildings = [
     y: 69,
     icon: '/Reformation.png',
     scale: 1.1,
-    travelTimeBlue: 272, // Speculare di Mercenary
-    travelTimeRed: 271   // 04:31
+    travelTimeBlue: 272, 
+    travelTimeRed: 271   
   },
   { 
     id: 'sanctum-1', 
-    name: 'Sanctum (Sinistra)', 
+    get name() { return i18next.t('buildings_db.sanctum_left', 'Sanctum (Sinistra)'); }, 
     unlockTime: 0, 
     pointsPerMin: 1200, 
     pointsPerMinPlayer: 240, 
@@ -52,12 +54,12 @@ export const initialBuildings = [
     y: 197,
     icon: '/Sanctum.png',
     scale: 1,
-    travelTimeBlue: 103, // Speculare di Sanctum Destra
-    travelTimeRed: 377   // 06:17
+    travelTimeBlue: 103, 
+    travelTimeRed: 377   
   },
   { 
     id: 'sanctum-2', 
-    name: 'Sanctum (Destra)', 
+    get name() { return i18next.t('buildings_db.sanctum_right', 'Sanctum (Destra)'); }, 
     unlockTime: 0, 
     pointsPerMin: 1200, 
     pointsPerMinPlayer: 240, 
@@ -66,12 +68,12 @@ export const initialBuildings = [
     y: 42,
     icon: '/Sanctum.png',
     scale: 1,
-    travelTimeBlue: 377, // Speculare di Sanctum Sinistra
-    travelTimeRed: 103   // 01:43
+    travelTimeBlue: 377, 
+    travelTimeRed: 103   
   },
   { 
     id: 'bell-tower', 
-    name: 'Bell Tower', 
+    get name() { return i18next.t('buildings_db.bell_tower', 'Torre della Campana'); }, 
     unlockTime: 0, 
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
@@ -80,12 +82,12 @@ export const initialBuildings = [
     y: 230,
     icon: '/Bell Tower.png',
     scale: 1.1,
-    travelTimeBlue: 279, // Speculare di Stables
-    travelTimeRed: 374   // 06:14
+    travelTimeBlue: 279, 
+    travelTimeRed: 374   
   },
   { 
     id: 'stables', 
-    name: 'Stables', 
+    get name() { return i18next.t('buildings_db.stables', 'Scuderie'); }, 
     unlockTime: 0, 
     pointsPerMin: 240, 
     pointsPerMinPlayer: 48, 
@@ -94,12 +96,12 @@ export const initialBuildings = [
     y: 9,
     icon: '/Stables.png',
     scale: 1.1,
-    travelTimeBlue: 374, // Speculare di Bell Tower
-    travelTimeRed: 279   // 04:39
+    travelTimeBlue: 374, 
+    travelTimeRed: 279   
   },
   { 
     id: 'abbey-1', 
-    name: 'Abbey (Alto Destra)', 
+    get name() { return i18next.t('buildings_db.abbey_tr', 'Abbazia (Alto Destra)'); }, 
     unlockTime: 0, 
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
@@ -108,12 +110,12 @@ export const initialBuildings = [
     y: 175,
     icon: '/Abbey.png',
     scale: 0.7,
-    travelTimeBlue: 371, // Speculare di Abbey Basso Sx
-    travelTimeRed: 283   // 04:43
+    travelTimeBlue: 371, 
+    travelTimeRed: 283   
   },
   { 
     id: 'abbey-2', 
-    name: 'Abbey (Basso Sinistra)', 
+    get name() { return i18next.t('buildings_db.abbey_bl', 'Abbazia (Basso Sinistra)'); }, 
     unlockTime: 0, 
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
@@ -122,12 +124,12 @@ export const initialBuildings = [
     y: 64,
     icon: '/Abbey.png',
     scale: 0.7,
-    travelTimeBlue: 283, // Speculare di Abbey Alto Dx
-    travelTimeRed: 371   // 06:11
+    travelTimeBlue: 283, 
+    travelTimeRed: 371   
   },
   { 
     id: 'abbey-3', 
-    name: 'Abbey (Centro Sinistra)', 
+    get name() { return i18next.t('buildings_db.abbey_cl', 'Abbazia (Centro Sinistra)'); }, 
     unlockTime: 0, 
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
@@ -136,12 +138,12 @@ export const initialBuildings = [
     y: 179,
     icon: '/Abbey.png',
     scale: 0.7,
-    travelTimeBlue: 54,  // Speculare di Abbey Centro Dx
-    travelTimeRed: 405   // 06:45
+    travelTimeBlue: 54,  
+    travelTimeRed: 405   
   },
   { 
     id: 'abbey-4', 
-    name: 'Abbey (Centro Destra)', 
+    get name() { return i18next.t('buildings_db.abbey_cr', 'Abbazia (Centro Destra)'); }, 
     unlockTime: 0, 
     pointsPerMin: 600, 
     pointsPerMinPlayer: 120, 
@@ -150,7 +152,7 @@ export const initialBuildings = [
     y: 60,
     icon: '/Abbey.png',
     scale: 0.7,
-    travelTimeBlue: 405, // Speculare di Abbey Centro Sx
-    travelTimeRed: 54    // 00:54
+    travelTimeBlue: 405, 
+    travelTimeRed: 54    
   }
 ];

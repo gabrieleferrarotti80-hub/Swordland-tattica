@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 
 const getBasePositionApp = (idStr, teamBase) => {
   let hash = 0;
@@ -15,6 +16,8 @@ const getBasePositionApp = (idStr, teamBase) => {
 };
 
 export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buildings, setBuildings, teamBase, currentTime, setManualCaptures, setHealingEvents }) => {
+  const { t } = useTranslation(); // 🌍 Hook in azione
+  
   const [marches, setMarches] = useState(() => {
     const saved = localStorage.getItem('swordland-marches');
     return saved ? JSON.parse(saved) : [];
@@ -99,7 +102,6 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     const availableForLeader = getAvailableMarches(playerId);
     if (availableForLeader <= 0) return;
 
-    // 💡 INTERCETTA LA DURATA DEL RALLY
     let marchType = rawMarchType;
     let rallyTime = 4;
     if (rawMarchType === 'rally_1') { marchType = 'rally'; rallyTime = 1; }
@@ -111,7 +113,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     if (externalTarget) {
       targetX = externalTarget.x;
       targetY = externalTarget.y;
-      targetName = externalTarget.name || "Bottino";
+      targetName = externalTarget.name || t('hooks.loot', 'Bottino');
     } else {
       targetBuilding = buildings.find(b => String(b.id) === String(targetId));
       if (!targetBuilding) return;
@@ -152,7 +154,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     newDrafts[leaderMarchId] = {
       isNewMarch: true, leader: playerId, members,
       startTime: currentTime + rallyDelay, rallyCallTime: currentTime,
-      rallyTime: marchType === 'rally' ? rallyTime : null, // Salviamo la durata per usarla nel Minute Confirm!
+      rallyTime: marchType === 'rally' ? rallyTime : null,
       startX, startY, targetX, targetY, removed: false,
       isMarching: travelTime > 0, isGarrison: marchType !== 'raccolta', targetName,
       targetBuildingId: targetId, arrivalTime, travelTime, marchType,
@@ -181,7 +183,6 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
         let memTravelTime = (memToLeaderDist / speed) / 60;
         if (speedupsUsed > 0) memTravelTime = memTravelTime * Math.pow(0.75, speedupsUsed);
         
-        // 💡 LIMITE VELOCITÀ DINAMICO (se hai scelto il rally da 1 min, l'alleato deve starci dentro!)
         if (memTravelTime > rallyTime && speedupsUsed > 0) memTravelTime = rallyTime - 0.01; 
 
         const memArrivalTime = currentTime + memTravelTime;
@@ -215,7 +216,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
             newPositions[draft.returnTime] = { removed: true };
         } 
         else if (draft.marchType === 'rally') {
-            const rTime = draft.rallyTime || 4; // Recupera la durata esatta che hai scelto
+            const rTime = draft.rallyTime || 4; 
             newPositions[currentTime] = { x: draft.startX, y: draft.startY, isGarrison: false, marchType: draft.marchType };
             newPositions[draft.rallyCallTime + rTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
             newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: false, isGarrison: draft.isGarrison, marchType: draft.marchType, targetBuildingId: draft.targetBuildingId };
@@ -248,7 +249,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
                newPositions[draft.returnTime] = { removed: true };
             } 
             else if (draft.marchType === 'rally') {
-                const rTime = draft.rallyTime || 4; // Anche qui
+                const rTime = draft.rallyTime || 4; 
                 newPositions[currentTime] = { x: draft.startX, y: draft.startY, isGarrison: false, marchType: draft.marchType };
                 newPositions[draft.rallyCallTime + rTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
                 newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: false, isGarrison: draft.isGarrison, marchType: draft.marchType, targetBuildingId: draft.targetBuildingId };
@@ -275,7 +276,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
   const handleWithdraw = (id) => setDraftPositions(prev => ({ ...prev, [id]: { removed: true } }));
   
   const handleHeal = (playerId) => {
-    if (!window.confirm("Confermi di voler mandare in cura questo giocatore?")) return;
+    if (!window.confirm(t('hooks.confirm_heal', "Confermi di voler mandare in cura questo giocatore?"))) return;
     setActiveDeployment(prev => prev.map(p => String(p.id) === String(playerId) ? { ...p, positions: { ...(p.positions || {}), [currentTime]: { removed: true } } } : p));
     setMarches(prevMarches => {
       const updatedMarches = [];
@@ -353,7 +354,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
       return entity;
     };
 
-    if (window.confirm(isDefeat ? `Confermi di voler cedere ${building.name}? Le truppe torneranno ai propri segnalini.` : `Confermi di voler RITIRARE le truppe da ${building.name}?`)) {
+    if (window.confirm(isDefeat ? t('hooks.confirm_defeat', "Confermi di voler cedere {{building}}? Le truppe torneranno ai propri segnalini.", { building: building.name }) : t('hooks.confirm_withdraw', "Confermi di voler RITIRARE le truppe da {{building}}?", { building: building.name }))) {
        setActiveDeployment(prev => prev.map(p => processEntityRetreat(p, false)));
        setMarches(prev => prev.map(m => processEntityRetreat(m, true)));
     }

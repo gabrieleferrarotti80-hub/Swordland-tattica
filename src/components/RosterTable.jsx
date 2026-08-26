@@ -49,7 +49,6 @@ const EditableInput = ({ initialValue, onSave, type = "text", className, maxLeng
   );
 };
 
-// 💡 AGGIUNTO: Riceviamo userRole e onClearRoster dalle prop
 export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRoster, userRole }) {
   const { t } = useTranslation(); 
   
@@ -117,13 +116,11 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
     else setSortOrder('default');
   };
 
-  // 💡 FUNZIONE PER SVUOTARE IL ROSTER
   const handleClearRoster = () => {
-    if (window.confirm("⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE TUTTO IL ROSTER?\n\nQuesta operazione cancellerà tutti i giocatori dalla lista attuale. Dovrai poi salvare in Cloud per rendere la modifica definitiva sul database.")) {
+    if (window.confirm(t('roster_table.clear_roster_confirm', "⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE TUTTO IL ROSTER?\n\nQuesta operazione cancellerà tutti i giocatori dalla lista attuale. Dovrai poi salvare in Cloud per rendere la modifica definitiva sul database."))) {
       if (onClearRoster) {
         onClearRoster();
       } else {
-        // Fallback di sicurezza: se non gli passi onClearRoster, elimina uno per uno
         roster.forEach(p => onDelete(p.id));
       }
     }
@@ -174,21 +171,20 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
               </select>
             </div>
 
-           {/* 💡 BOTTONE ELIMINA TUTTO */}
             {roster.length > 0 && (
               <button 
                 onClick={handleClearRoster}
                 className="px-3 py-1.5 bg-rose-700 hover:bg-rose-600 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow-[0_0_10px_rgba(225,29,72,0.4)] transition-all flex items-center gap-1.5 border border-rose-500/50"
-                title="Svuota l'intero Roster"
+                title={t('roster_table.clear_roster_tooltip', "Svuota l'intero Roster")}
               >
-                <span className="text-sm">🗑️</span> <span className="hidden sm:inline">Svuota Roster</span>
+                <span className="text-sm">🗑️</span> <span className="hidden sm:inline">{t('roster_table.clear_roster_btn', 'Svuota Roster')}</span>
               </button>
             )}
 
             <button 
               onClick={() => setIsExcelOpen(true)} 
               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all flex items-center gap-1.5"
-              title="Importa da Excel"
+              title={t('roster_table.import_excel_tooltip', "Importa da Excel")}
             >
               <span className="text-sm">📊</span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
             </button>
@@ -250,7 +246,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
               <th 
                 className="px-2 py-3 text-cyan-400 font-bold text-[10px] uppercase w-auto cursor-pointer hover:text-cyan-300 transition-colors select-none flex items-center gap-1"
                 onClick={toggleSort}
-                title="Clicca per cambiare ordine"
+                title={t('roster_table.sort_tooltip', "Clicca per cambiare ordine")}
               >
                 {t('roster_table.name')}
                 <span className="text-slate-500 text-[14px]">

@@ -1,17 +1,17 @@
-// src/utils/triAllianceConfig.js
+import i18next from 'i18next';
 
 export const BUILDING_TYPES = {
-  TEMPLE: { id: 'TEMPLE', name: 'Temple of Tides', pts: 1800 },
-  HQ: { id: 'HQ', name: 'Headquarters', pts: 1800 },
-  GARRISON: { id: 'GARRISON', name: 'Garrison', pts: 1800 },
-  CLUSTER: { id: 'CLUSTER', name: 'Cluster of Ruins', pts: 600 },
-  RUINS: { id: 'RUINS', name: 'Ruins', pts: 180 },
-  HUB: { id: 'HUB', name: 'Transit Hub', pts: 60 },
-  PILLAR: { id: 'PILLAR', name: 'Pillars', pts: 60 },
-  WAYPOINT: { id: 'WAYPOINT', name: 'Snodo (Curva)', pts: 0 }
+  TEMPLE: { id: 'TEMPLE', get name() { return i18next.t('tri_alliance.buildings.temple', 'Temple of Tides'); }, pts: 1800 },
+  HQ: { id: 'HQ', get name() { return i18next.t('tri_alliance.buildings.hq', 'Headquarters'); }, pts: 1800 },
+  GARRISON: { id: 'GARRISON', get name() { return i18next.t('tri_alliance.buildings.garrison', 'Garrison'); }, pts: 1800 },
+  CLUSTER: { id: 'CLUSTER', get name() { return i18next.t('tri_alliance.buildings.cluster', 'Cluster of Ruins'); }, pts: 600 },
+  RUINS: { id: 'RUINS', get name() { return i18next.t('tri_alliance.buildings.ruins', 'Ruins'); }, pts: 180 },
+  HUB: { id: 'HUB', get name() { return i18next.t('tri_alliance.buildings.hub', 'Transit Hub'); }, pts: 60 },
+  PILLAR: { id: 'PILLAR', get name() { return i18next.t('tri_alliance.buildings.pillar', 'Pillars'); }, pts: 60 },
+  WAYPOINT: { id: 'WAYPOINT', get name() { return i18next.t('tri_alliance.buildings.waypoint', 'Snodo (Curva)'); }, pts: 0 }
 };
 
-export const UNKNOWN_BUILDING = { id: 'UNKNOWN', name: 'Edificio Obsoleto', pts: 0 };
+export const UNKNOWN_BUILDING = { id: 'UNKNOWN', get name() { return i18next.t('tri_alliance.buildings.unknown', 'Edificio Obsoleto'); }, pts: 0 };
 
 export const TEAM_HEX_COLORS = {
   rose: '#f43f5e',
@@ -95,7 +95,7 @@ export const generateLogicalMovementsText = (paths, allNodes) => {
      }
 
      destinations.forEach(dest => {
-        text += `- Marcia da ${startId} verso ${dest}\n`;
+        text += i18next.t('tri_alliance.map.march_from_to', '- Marcia da {{start}} verso {{dest}}\n', { start: startId, dest: dest });
      });
   });
   return text;

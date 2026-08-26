@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
 import { calculateDeployment, TEAM_COLORS } from '../../utils/tacticalDeployment';
 
 export default function TacticalTeamCard({ 
@@ -10,11 +11,11 @@ export default function TacticalTeamCard({
   setPlayerOverrides, 
   isReadOnly 
 }) {
+  const { t } = useTranslation(); // 🌍 Hook in azione
   const [isExpanded, setIsExpanded] = useState(false);
   const [maxRadius, setMaxRadius] = useState(20);
-  const [history, setHistory] = useState(null); // Per il tasto "Torna Indietro"
+  const [history, setHistory] = useState(null); 
 
-  // Colore assegnato in base all'indice della squadra
   const teamColor = TEAM_COLORS[teamIndex % TEAM_COLORS.length];
 
   const leader = teamPlayers.find(p => draftMeta[p.id]?.role === 'Rally Leader') 
@@ -29,21 +30,19 @@ export default function TacticalTeamCard({
     const leaderY = playerOverrides[leader.id]?.y ?? leader.y;
 
     if (leaderX === '' || leaderY === '' || leaderX == null || leaderY == null) {
-      return alert(`❌ Posiziona prima il Leader (${leader.name}) sulla mappa!`);
+      return alert(t('tactical_team_card.error_leader_pos', { name: leader.name }));
     }
 
     const fillers = teamPlayers.filter(p => p.id !== leader.id);
-    if (fillers.length === 0) return alert("Nessun filler da schierare.");
+    if (fillers.length === 0) return alert(t('tactical_team_card.error_no_fillers'));
 
     setHistory({ ...playerOverrides });
 
-    // 💡 Cerchiamo il castello centrale tra gli edifici fissi della mappa se disponibili, 
-    // oppure usiamo le coordinate fisse del castello di default (es. 597, 597 come nel tuo screenshot)
-    const castleBuilding = { x: 597, y: 597 }; // Centro stimato del castello del regno
+    const castleBuilding = { x: 597, y: 597 };
 
     const result = calculateDeployment(leaderX, leaderY, fillers.length, playerOverrides, maxRadius, castleBuilding);
     
-    if (!result.success) alert(`⚠️ Spazio esaurito nel raggio di ${maxRadius} caselle a causa dei confini del castello.`);
+    if (!result.success) alert(t('tactical_team_card.error_space', { radius: maxRadius }));
 
     const newOverrides = { ...playerOverrides };
     fillers.forEach((filler, index) => {
@@ -60,24 +59,20 @@ const handleUndo = (e) => {
     const fillers = teamPlayers.filter(p => p.id !== leader?.id);
 
     fillers.forEach(filler => {
-      // Se abbiamo la memoria dell'ultima mossa, torniamo lì
       if (history && history[filler.id]) {
         newOverrides[filler.id] = history[filler.id];
       } else {
-        // Altrimenti (es. dopo un refresh della pagina), cancelliamo la sua posizione 
-        // per farlo tornare direttamente nella Sidebar
         delete newOverrides[filler.id];
       }
     });
 
     setPlayerOverrides(newOverrides);
-    setHistory(null); // Puliamo la memoria
+    setHistory(null); 
   };
 
   return (
     <div className="bg-slate-900 border rounded-xl flex flex-col overflow-hidden shadow-sm transition-all mb-2" style={{ borderColor: `${teamColor}40` }}>
       
-      {/* TESTATA SQUADRA */}
       <div 
         className="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-800 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -85,35 +80,33 @@ const handleUndo = (e) => {
         <div className="flex flex-col min-w-0 pr-2 border-l-4 pl-2" style={{ borderColor: teamColor }}>
           <span className="text-xs font-black truncate tracking-wider" style={{ color: teamColor }}>{team.name}</span>
           <span className="text-[10px] text-slate-400 truncate mt-0.5">
-            Leader: <span className="font-bold text-white">{leader ? leader.name : 'Nessuno'}</span>
+            {t('tactical_team_card.leader')}<span className="font-bold text-white">{leader ? leader.name : t('tactical_team_card.nobody')}</span>
           </span>
         </div>
         
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-1">
             {history && !isReadOnly && (
-              <button onClick={handleUndo} className="bg-rose-900/80 hover:bg-rose-600 text-rose-200 px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors" title="Annulla Schieramento">
-                ↩️ Undo
+              <button onClick={handleUndo} className="bg-rose-900/80 hover:bg-rose-600 text-rose-200 px-2 py-0.5 rounded text-[9px] font-black uppercase transition-colors" title={t('tactical_team_card.undo_tooltip')}>
+                {t('tactical_team_card.undo_btn')}
               </button>
             )}
             {!isReadOnly && leader && (
               <button onClick={handleDeploy} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider transition-colors shadow-sm">
-                🎯 Schiera
+                {t('tactical_team_card.deploy_btn')}
               </button>
             )}
           </div>
-          <span className="text-[9px] font-bold text-slate-500">{teamPlayers.length} Membri {isExpanded ? '▲' : '▼'}</span>
+          <span className="text-[9px] font-bold text-slate-500">{t('tactical_team_card.members', { count: teamPlayers.length })} {isExpanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
-      {/* PANNELLO ESPANSO */}
       {isExpanded && (
         <div className="p-2 border-t flex flex-col gap-1.5 bg-slate-950/50" style={{ borderColor: `${teamColor}20` }}>
           
-          {/* Controlli Area */}
           {!isReadOnly && (
             <div className="flex items-center justify-between bg-slate-900 p-1.5 rounded border border-slate-800 mb-1">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Raggio Diffusione:</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('tactical_team_card.radius')}</span>
               <div className="flex items-center gap-1">
                 <input type="range" min="3" max="25" value={maxRadius} onChange={e => setMaxRadius(Number(e.target.value))} className="w-16 accent-emerald-500" />
                 <span className="text-[9px] text-emerald-400 font-bold w-4">{maxRadius}</span>
@@ -121,7 +114,6 @@ const handleUndo = (e) => {
             </div>
           )}
 
-          {/* Lista Giocatori */}
           <div className="max-h-48 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-1">
             {teamPlayers.map(player => {
               const override = playerOverrides[player.id];
@@ -142,7 +134,7 @@ const handleUndo = (e) => {
                     <span className={`text-[10px] font-bold truncate ${isLeader ? 'text-white' : 'text-slate-400'}`}>
                       [{player.originalTag || player.tag || '?'}] {player.name}
                     </span>
-                    <span className="text-[8px] text-slate-500 font-bold uppercase">{role || 'Membro'}</span>
+                    <span className="text-[8px] text-slate-500 font-bold uppercase">{role || t('tactical_team_card.member_role')}</span>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>

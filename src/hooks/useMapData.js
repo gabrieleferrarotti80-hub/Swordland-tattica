@@ -31,7 +31,6 @@ export function useMapData({
     }
   }, [allianceCode, DEMO_STRUCTURES, DEMO_OVERRIDES, DEFAULT_STRUCTURES]);
 
-  // 1. MOTORE MEGA ROSTER (Battaglia Castello)
   useEffect(() => {
     if (eventMode === 'castle_battle' && targetKingdom) {
       const fetchMegaRoster = async () => {
@@ -45,13 +44,7 @@ export function useMapData({
             if (docId.startsWith(`${targetKingdom}_`)) {
               const tag = docId.split('_')[1];
               const players = doc.data().players || [];
-              
-              players.forEach((p, index) => combinedPlayers.push({ 
-                ...p, 
-                id: `${tag}-${p.id}-idx${index}`, 
-                originalTag: tag, 
-                name: p.name // 💡 FIX: Ora passiamo solo il nome pulito senza aggiungere il tag!
-              }));
+              players.forEach((p, index) => combinedPlayers.push({ ...p, id: `${tag}-${p.id}-idx${index}`, originalTag: tag, name: p.name }));
             }
           });
 
@@ -61,13 +54,7 @@ export function useMapData({
             if (docId.startsWith(`${targetKingdom}_`) && !snap1.docs.find(d => d.id === docId)) {
               const tag = docId.split('_')[1];
               const players = doc.data().players || [];
-              
-              players.forEach((p, index) => combinedPlayers.push({ 
-                ...p, 
-                id: `${tag}-${p.id}-idx${index}`, 
-                originalTag: tag, 
-                name: p.name // 💡 FIX: Come sopra
-              }));
+              players.forEach((p, index) => combinedPlayers.push({ ...p, id: `${tag}-${p.id}-idx${index}`, originalTag: tag, name: p.name }));
             }
           });
 
@@ -75,7 +62,7 @@ export function useMapData({
           setMegaRoster(uniquePlayers);
 
           if (!isReadOnly) {
-            alert(`⚔️ Modalità Simulatore Castello Avviata!\n\nTutti i ${uniquePlayers.length} giocatori del Regno ${targetKingdom} sono ora sul tavolo tattico.`);
+            alert(t('hooks.castle_sim_started', "⚔️ Modalità Simulatore Castello Avviata!\n\nTutti i {{count}} giocatori del Regno {{kingdom}} sono ora sul tavolo tattico.", { count: uniquePlayers.length, kingdom: targetKingdom }));
           }
         } catch (error) {
           console.error("❌ [MEGA-ROSTER] Errore critico durante il caricamento:", error);
@@ -85,9 +72,8 @@ export function useMapData({
       };
       fetchMegaRoster();
     }
-  }, [eventMode, targetKingdom, isReadOnly, db]);
+  }, [eventMode, targetKingdom, isReadOnly, db, t]);
 
-  // 2. MOTORE DATI MAPPA
   useEffect(() => {
     const fetchMapData = async () => {
       setIsLoadingCloud(true);
@@ -123,7 +109,6 @@ export function useMapData({
     fetchMapData();
   }, [userRole, allianceCode, INITIAL_BUILDINGS, eventMode]);
 
-  // 3. ENEMY HQs
   useEffect(() => {
     if (allianceMeta.kingdom && allianceMeta.tag) {
       const fetchHQs = async () => {
@@ -138,7 +123,6 @@ export function useMapData({
     }
   }, [allianceMeta.kingdom, allianceMeta.tag]);
 
-  // 4. SIMULATION
   useEffect(() => {
     const fetchSimulation = async () => {
       let simDocId = `${allianceCode}_tacticalPlan`;
@@ -161,9 +145,8 @@ export function useMapData({
     fetchSimulation();
   }, [allianceCode, eventMode, targetKingdom]);
 
-  // HANDLERS Database
   const handleSaveMapToCloud = async (activeView) => {
-    if (isReadOnly || eventMode === 'castle_battle') return alert("Salvataggio Mappa disabilitato durante l'evento Battaglia Castello.");
+    if (isReadOnly || eventMode === 'castle_battle') return alert(t('hooks.save_map_disabled', "Salvataggio Mappa disabilitato durante l'evento Battaglia Castello."));
     if (userRole === 'guest' || (allianceCode === 'DEMO' && !['admin','consulente'].includes(userRole) && allianceRole !== 'officer')) return alert(t('map.sandbox_action_denied'));
     setIsLoadingCloud(true);
     try {
@@ -187,29 +170,26 @@ export function useMapData({
 
     if (eventMode === 'castle_battle' && targetKingdom) {
       simDocId = `castle_${targetKingdom}_tacticalPlan`;
-      successMsg = `Simulazione Battaglia Castello (Regno ${targetKingdom}) salvata con successo!`;
+      successMsg = t('hooks.castle_sim_saved', "Simulazione Battaglia Castello (Regno {{kingdom}}) salvata con successo!", { kingdom: targetKingdom });
     } else if (!allianceCode) {
       return alert(t('map.no_alliance_selected'));
     }
     
     setIsSavingSim(true);
     try {
-      // 💡 TRUCCO FIREBASE: Converte l'oggetto in JSON e lo ricrea. 
-      // Questo distrugge istantaneamente qualsiasi variabile "undefined" che manderebbe in crash il database!
       const payload = JSON.parse(JSON.stringify({ 
         overrides: playerOverrides || {}, 
         marches: marches || null, 
         tacticalMeta: tacticalMeta || {}, 
-        author: (userRole || 'UNKNOWN').toUpperCase(), // 💡 Fix se per caso userRole non era stato caricato
+        author: (userRole || 'UNKNOWN').toUpperCase(),
         timestamp: new Date().toISOString()
       }));
 
       await setDoc(doc(db, "simulations", simDocId), payload, { merge: true });
       alert(successMsg);
     } catch (error) { 
-      // 💡 ORA l'errore verrà stampato a caratteri cubitali!
       console.error("🚨 ERRORE CRITICO CLOUD:", error);
-      alert(`Salvataggio fallito. Dettaglio:\n\n${error.message}`); 
+      alert(t('hooks.save_failed', "Salvataggio fallito. Dettaglio:\n\n{{message}}", { message: error.message })); 
     }
     setIsSavingSim(false);
   };
@@ -221,7 +201,7 @@ export function useMapData({
   };
   const handleAddBuilding = () => {
     if (isReadOnly) return;
-    setFixedBuildings(prev => [{ id: `custom-${Date.now()}`, code: 'NEW', name: 'Nuovo Edificio', type: 'others', x: 500, y: 500, occupiedBy: '' }, ...prev]);
+    setFixedBuildings(prev => [{ id: `custom-${Date.now()}`, code: 'NEW', name: t('hooks.new_building', 'Nuovo Edificio'), type: 'others', x: 500, y: 500, occupiedBy: '' }, ...prev]);
   };
   const handleDeleteBuilding = (id) => {
     if (isReadOnly) return;
