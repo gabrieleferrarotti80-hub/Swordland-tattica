@@ -517,6 +517,7 @@
     "sort_default": "↕ Sort: Default",
     "sort_asc": "↕ Sort: A ➝ Z",
     "sort_desc": "↕ Sort: Z ➝ A",
+    "sort_role": "↕ Order: Role (R5 ➝ R1)",
     "close_form": "Close form",
     "add_player": "Add new player",
     "tag": "Tag",

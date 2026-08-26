@@ -519,6 +519,7 @@
     "sort_default": "↕ Ordine: Predefinito",
     "sort_asc": "↕ Ordine: A ➝ Z",
     "sort_desc": "↕ Ordine: Z ➝ A",
+    "sort_role": "↕ Ordine: Ruolo (R5 ➝ R1)",
     "close_form": "Chiudi modulo",
     "add_player": "Aggiungi nuovo giocatore",
     "tag": "Sigla",

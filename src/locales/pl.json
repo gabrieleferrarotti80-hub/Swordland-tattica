@@ -514,6 +514,7 @@
     "sort_default": "↕ Sortowanie: Domyślne",
     "sort_asc": "↕ Sortowanie: A ➝ Z",
     "sort_desc": "↕ Sortowanie: Z ➝ A",
+    "sort_role": "↕ Kolejność: Rola (R5 ➝ R1)",
     "close_form": "Zamknij formularz",
     "add_player": "Dodaj nowego gracza",
     "tag": "Tag",

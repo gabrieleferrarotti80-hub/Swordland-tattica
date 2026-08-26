@@ -31,7 +31,6 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   const location = useLocation();
   const { t } = useTranslation();
 
- // 💡 Spostato qui dentro per poter tradurre i nomi delle strutture di default!
   const defaultStructures = useMemo(() => [
     { id: 'alliance-hq', code: 'HQ', name: t('map_page.hq_name', 'Quartier Generale'), type: 'headquarters', x: 500, y: 500 },
     { id: 'alliance-bear-1', code: 'TRP1', name: t('map_page.bear_trap_name', 'Trappola per Orsi 1'), type: 'beartrap', x: 520, y: 500 },

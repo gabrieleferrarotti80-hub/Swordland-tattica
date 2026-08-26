@@ -28,25 +28,66 @@ export default function GovernancePanel({ auth, roster, setRoster, onBack, allia
     if (auth.code && auth.code !== 'SINGLE') fetchData();
   }, [auth]);
 
+  // 📌 NUOVA LOGICA: APPROVAZIONE CON ANTI-DUPLICATO (ACCOUNT CLAIMING)
   const handleApproveUser = async (user) => {
     try {
-      await updateDoc(doc(db, "users", user.id), { status: 'Approved' });
-      const tag = auth.code.split('_')[1] || '';
-      const newPlayer = { id: user.id, name: user.displayName, tag: tag, role: 'Member', power: 0, marches: 1, isParticipating: true };
+      const targetName = String(user.displayName || '').trim().toLowerCase();
       
-      const updatedRoster = [...roster, newPlayer];
-      setRoster(updatedRoster);
+      // 1. Cerca nel roster attuale se esiste un giocatore con lo stesso nome
+      const existingIndex = roster.findIndex(p => String(p.name || '').trim().toLowerCase() === targetName);
+
+      let updatedRoster = [...roster];
+      let assignedRole = 'R1'; // Ruolo base di default
+
+      if (existingIndex >= 0) {
+        // 🔹 SCENARIO A: Il giocatore esiste già (profilo fantasma creato da Excel o a mano)
+        const ghostProfile = updatedRoster[existingIndex];
+        assignedRole = ghostProfile.role || 'R1'; // Eredita il ruolo (es. se l'ufficiale l'aveva già messo R4)
+        
+        // Fonde il vero ID utente dentro il profilo esistente
+        updatedRoster[existingIndex] = {
+          ...ghostProfile,
+          id: user.id,
+          name: user.displayName // sovrascrive con il nome esatto digitato dall'utente
+        };
+      } else {
+        // 🔹 SCENARIO B: Nuova recluta totale, mai inserita nel roster prima
+        const tag = auth.code.split('_')[1] || '';
+        updatedRoster.push({ 
+          id: user.id, 
+          name: user.displayName, 
+          tag: tag, 
+          role: 'R1', 
+          power: 0, 
+          marches: 4, 
+          isParticipating: true 
+        });
+      }
+
+      // 2. Aggiorna il documento personale dell'utente (assegnandogli il ruolo corretto)
+      await updateDoc(doc(db, "users", user.id), { 
+        status: 'Approved',
+        role: assignedRole 
+      });
+      
+      // 3. Salva il Roster fuso/aggiornato nell'Alleanza
       await updateDoc(doc(db, "rosters", auth.code), { players: updatedRoster });
       
+      // 4. Aggiorna lo stato visivo
+      setRoster(updatedRoster);
       setPendingUsers(prev => prev.filter(u => u.id !== user.id));
-      setApprovedUsers(prev => [...prev, { ...user, status: 'Approved' }]);
+      setApprovedUsers(prev => [...prev, { ...user, status: 'Approved', role: assignedRole }]);
+      
       alert(t('governance.approved_success'));
-    } catch (e) { alert(t('governance.error_generic')); }
+    } catch (e) { 
+      console.error(e);
+      alert(t('governance.error_generic')); 
+    }
   };
 
   const handleRejectUser = async (userId) => {
     try {
-       await updateDoc(doc(db, "users", userId), { allianceId: null, status: 'Approved', role: 'Single' });
+       await updateDoc(doc(db, "users", userId), { allianceId: null, status: 'Approved', role: 'singolo' });
        setPendingUsers(prev => prev.filter(u => u.id !== userId));
        alert(t('governance.rejected_success'));
     } catch(e) { alert(t('governance.error_generic')); }
@@ -82,18 +123,26 @@ export default function GovernancePanel({ auth, roster, setRoster, onBack, allia
           {isLoading ? ( <div className="text-slate-500 text-center py-10 animate-pulse">{t('governance.loading')}</div> ) : 
            pendingUsers.length === 0 ? ( <div className="text-slate-600 text-center py-8 italic bg-slate-950 rounded-2xl border border-slate-800">{t('governance.no_pending')}</div> ) : (
              <div className="flex flex-col gap-3">
-                {pendingUsers.map(u => (
-                   <div key={u.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-950 border border-slate-800 p-4 rounded-xl gap-4 hover:border-slate-600 transition-colors">
-                      <div>
-                         <div className="text-white font-black text-lg">{u.displayName}</div>
-                         <div className="text-xs text-slate-500 font-mono tracking-widest mt-1">{t('governance.id_label', { id: u.id })}</div>
-                      </div>
-                      <div className="flex gap-2 w-full sm:w-auto">
-                         <button onClick={() => handleApproveUser(u)} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase rounded-lg transition-all shadow-[0_0_10px_rgba(5,150,105,0.3)]">{t('governance.approve')}</button>
-                         <button onClick={() => handleRejectUser(u.id)} className="px-6 py-2.5 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white text-xs font-black uppercase rounded-lg transition-all border border-slate-700">{t('governance.reject')}</button>
-                      </div>
-                   </div>
-                ))}
+                {pendingUsers.map(u => {
+                   // Segnala visivamente se il sistema fonderà questo account con uno già presente
+                   const willClaim = roster.some(p => String(p.name || '').trim().toLowerCase() === String(u.displayName || '').trim().toLowerCase());
+                   
+                   return (
+                     <div key={u.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-950 border border-slate-800 p-4 rounded-xl gap-4 hover:border-slate-600 transition-colors">
+                        <div>
+                           <div className="flex items-center gap-2">
+                             <span className="text-white font-black text-lg">{u.displayName}</span>
+                             {willClaim && <span className="bg-emerald-900/50 text-emerald-400 border border-emerald-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider">Account Trovato in Roster</span>}
+                           </div>
+                           <div className="text-xs text-slate-500 font-mono tracking-widest mt-1">{t('governance.id_label', { id: u.id })}</div>
+                        </div>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                           <button onClick={() => handleApproveUser(u)} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase rounded-lg transition-all shadow-[0_0_10px_rgba(5,150,105,0.3)]">{t('governance.approve')}</button>
+                           <button onClick={() => handleRejectUser(u.id)} className="px-6 py-2.5 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white text-xs font-black uppercase rounded-lg transition-all border border-slate-700">{t('governance.reject')}</button>
+                        </div>
+                     </div>
+                   );
+                })}
              </div>
           )}
        </div>
