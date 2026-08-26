@@ -157,7 +157,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
             )}
 
             <button type="button" onClick={() => setIsExcelOpen(true)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all flex items-center gap-1.5">
-              <span className="text-sm">📊</span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
+              <span className="text-sm"></span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
             </button>
           </div>
         </div>

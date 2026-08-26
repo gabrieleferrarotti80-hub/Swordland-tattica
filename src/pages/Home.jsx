@@ -191,7 +191,7 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
         </div>
         <div className="flex gap-3 items-center">
           <div className="flex bg-slate-800 p-0.5 rounded border border-slate-700 text-xs" translate="no">
-            {['it', 'en', 'pl', 'fr'].map(lng => (
+            {['it', 'en', 'pl', 'fr','de'].map(lng => (
               <button key={lng} onClick={() => changeLanguage(lng)} className={`px-1.5 py-0.5 rounded font-bold transition-colors uppercase ${i18n.language === lng ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>{lng}</button>
             ))}
           </div>
@@ -266,18 +266,18 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                          </div>
                       )}
 
-                      <div className="border-t border-rose-900/50 pt-4 flex justify-end relative">
-                        <button onClick={() => navigate('/admin')} className="relative px-6 py-2 bg-slate-900 hover:bg-indigo-900 text-indigo-400 font-black text-xs uppercase tracking-widest rounded-xl border border-indigo-500/30 transition-all flex items-center gap-2 shadow-lg">
-                           <span>🛠️</span> {t('home.god_room')}
-                           
-                           {/* 📌 BADGE DI NOTIFICA SUL BOTTONE */}
-                           {openTicketsCount > 0 && (
-                              <span className="absolute -top-2 -right-2 bg-rose-600 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(225,29,72,1)] animate-pulse border border-white/20">
-                                 {openTicketsCount}
-                              </span>
-                           )}
-                        </button>
-                      </div>
+                     <div className="border-t border-rose-900/50 pt-4 flex justify-end relative">
+  <button onClick={() => navigate('/admin')} className="relative px-6 py-2 bg-slate-900 hover:bg-indigo-900 text-indigo-400 font-black text-xs uppercase tracking-widest rounded-xl border border-indigo-500/30 transition-all flex items-center gap-2 shadow-lg">
+     {t('home.god_room')}
+     
+     {/* 📌 BADGE DI NOTIFICA SUL BOTTONE */}
+     {openTicketsCount > 0 && (
+        <span className="absolute -top-2 -right-2 bg-rose-600 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(225,29,72,1)] animate-pulse border border-white/20">
+           {openTicketsCount}
+        </span>
+     )}
+  </button>
+</div>
                     </div>
                   )}
 
