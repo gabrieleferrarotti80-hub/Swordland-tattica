@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import RosterExcelModal from './roster/RosterExcelModal'; // Se nel tuo progetto il percorso è diverso, aggiustalo
+import RosterExcelModal from './roster/RosterExcelModal';
 
 const levelOptions = [
   ...Array.from({ length: 30 }, (_, i) => String(i + 1)),
@@ -16,7 +16,6 @@ const getDefaultMarches = (power) => {
   return 6;
 };
 
-// 📌 FUNZIONE PER PESARE IL RUOLO (R5 = 5, R1 = 1)
 const getRoleWeight = (role) => {
   const match = String(role || 'R1').match(/R(\d)/i);
   return match ? parseInt(match[1], 10) : 0;
@@ -37,66 +36,32 @@ const EditableInput = ({ initialValue, onSave, type = "text", className, maxLeng
   );
 };
 
-export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRoster, userRole }) {
+export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRoster, userRole, onBulkUpdate }) {
   const { t } = useTranslation(); 
   
   const [newPlayer, setNewPlayer] = useState({
-    tag: '', name: '', role: 'R1', level: '1', power: 0, marches: 4, x: '', y: '', isParticipating: false
+    tag: '', name: '', role: 'R1', level: '1', power: 0, marches: 4, x: '', y: '', assignedTrap: 1
   });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('default');
-  const [showAddForm, setShowAddForm] = useState(false); 
   const [isExcelOpen, setIsExcelOpen] = useState(false);
 
-  // Controllo autorizzazione: Solo R5, Admin o Master possono espellere/svuotare
   const canKick = ['r5', 'admin', 'master'].includes(String(userRole).toLowerCase());
 
   useEffect(() => {
     setNewPlayer(prev => ({ ...prev, tag: `G${roster.length + 1}` }));
   }, [roster.length]);
 
-  // Wrapper per il cambio ruolo (Impedisce la creazione di cloni R5)
   const handleRoleChange = (playerId, newRole) => {
     if (newRole === 'R5') {
       const existingR5 = roster.find(p => p.role === 'R5' && p.id !== playerId);
       if (existingR5) {
-        alert("⚠️ Ci può essere un solo R5 per alleanza. Declassa prima l'R5 attuale (o usa il menu Governo per la cessione formale).");
+        alert("⚠️ Ci può essere un solo R5 per alleanza. Declassa prima l'R5 attuale.");
         return;
       }
     }
     onEdit(playerId, 'role', newRole);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault(); 
-    if (!newPlayer.name || newPlayer.name.trim() === '') return alert(t('roster_table.alert_name_required'));
-
-    // Blocco R5 multiplo in creazione manuale
-    if (newPlayer.role === 'R5') {
-      const existingR5 = roster.find(p => p.role === 'R5');
-      if (existingR5) {
-        alert("⚠️ Ci può essere un solo R5 per alleanza. Seleziona un ruolo diverso (R1-R4).");
-        return;
-      }
-    }
-
-    onAddPlayer({
-      id: `man-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-      tag: newPlayer.tag || `G${roster.length + 1}`, name: newPlayer.name,
-      role: newPlayer.role, level: newPlayer.level, power: Number(newPlayer.power) || 0,
-      marches: Number(newPlayer.marches) || getDefaultMarches(newPlayer.power),
-      x: newPlayer.x === '' ? '' : Number(newPlayer.x), y: newPlayer.y === '' ? '' : Number(newPlayer.y),
-      isParticipating: newPlayer.isParticipating
-    });
-
-    setNewPlayer({ tag: `G${roster.length + 2}`, name: '', role: 'R1', level: '1', power: 0, marches: 4, x: '', y: '', isParticipating: false });
-  };
-
-  const toggleSort = () => {
-    if (sortOrder === 'default') setSortOrder('asc');
-    else if (sortOrder === 'asc') setSortOrder('desc');
-    else setSortOrder('default');
   };
 
   const handleClearRoster = () => {
@@ -112,13 +77,12 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
       return (player.name || '').toLowerCase().includes(term) || (player.tag || '').toLowerCase().includes(term);
     })
     .sort((a, b) => {
-      // 📌 NUOVA LOGICA: Ordinamento Alfabetico (A-Z e Z-A) e Ordinamento Ruolo (R5->R1)
       if (sortOrder === 'asc') return (a.name || '').localeCompare(b.name || '');
       if (sortOrder === 'desc') return (b.name || '').localeCompare(a.name || '');
       if (sortOrder === 'role') {
-         const diff = getRoleWeight(b.role) - getRoleWeight(a.role); // R5 vince su R1 (Discendente)
+         const diff = getRoleWeight(b.role) - getRoleWeight(a.role); 
          if (diff !== 0) return diff;
-         return (a.name || '').localeCompare(b.name || ''); // A parità di ruolo, ordina per nome
+         return (a.name || '').localeCompare(b.name || ''); 
       }
       return 0; 
     });
@@ -141,7 +105,6 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
                 <option value="default">{t('roster_table.sort_default')}</option>
                 <option value="asc">{t('roster_table.sort_asc')}</option>
                 <option value="desc">{t('roster_table.sort_desc')}</option>
-                {/* 📌 NUOVA OPZIONE NEL MENU */}
                 <option value="role">{t('roster_table.sort_role', '↕ Ordine: Ruolo (R5 ➝ R1)')}</option>
               </select>
             </div>
@@ -157,56 +120,10 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
             )}
 
             <button type="button" onClick={() => setIsExcelOpen(true)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all flex items-center gap-1.5">
-              <span className="text-sm"></span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
+              <span className="text-sm">📊</span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
             </button>
           </div>
         </div>
-
-        {showAddForm && (
-          <form onSubmit={handleSubmit} className="bg-slate-800 p-4 rounded-lg border border-cyan-700/50 flex flex-wrap gap-3 items-end shadow-inner animate-in slide-in-from-top-4 fade-in duration-300">
-            <div className="flex flex-col gap-1 w-14">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.tag')}</label>
-              <input type="text" maxLength="4" value={newPlayer.tag} onChange={e => setNewPlayer({...newPlayer, tag: e.target.value.toUpperCase()})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 font-bold text-center text-sm" />
-            </div>
-            <div className="flex flex-col gap-1 flex-1 min-w-[100px]">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.name')} *</label>
-              <input type="text" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm" placeholder={t('roster_table.name_placeholder')} />
-            </div>
-            <div className="flex flex-col gap-1 w-16">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.role')}</label>
-              <select value={newPlayer.role} onChange={e => setNewPlayer({...newPlayer, role: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-1 py-2 rounded focus:outline-none focus:border-cyan-500 cursor-pointer text-sm">
-                {roleOptions.map(opt => <option key={`new-role-${opt}`} value={opt}>{opt}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1 w-16">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.level')}</label>
-              <select value={newPlayer.level} onChange={e => setNewPlayer({...newPlayer, level: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-1 py-2 rounded focus:outline-none focus:border-cyan-500 cursor-pointer text-sm">
-                {levelOptions.map(opt => <option key={`new-${opt}`} value={opt}>{opt}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1 w-16">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.power')}</label>
-              <input type="number" min="0" value={newPlayer.power} onChange={e => setNewPlayer({...newPlayer, power: e.target.value, marches: getDefaultMarches(e.target.value)})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm text-center" />
-            </div>
-            <div className="flex flex-col gap-1 w-14">
-              <label className="text-[10px] text-slate-400 uppercase font-bold">{t('roster_table.marches')}</label>
-              <input type="number" min="1" value={newPlayer.marches} onChange={e => setNewPlayer({...newPlayer, marches: e.target.value})} className="bg-slate-900 border border-slate-600 text-slate-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-500 text-sm text-center" />
-            </div>
-            
-            <div className="flex flex-col gap-1 w-16 border-l border-slate-600 pl-3 ml-1">
-              <label className="text-[10px] text-cyan-400 uppercase font-bold">{t('roster_table.map_x')}</label>
-              <input type="number" value={newPlayer.x} onChange={e => setNewPlayer({...newPlayer, x: e.target.value})} placeholder="---" className="bg-slate-950 border border-cyan-800 text-cyan-200 px-2 py-2 rounded focus:outline-none focus:border-cyan-400 text-sm text-center" />
-            </div>
-            <div className="flex flex-col gap-1 w-14">
-              <label className="text-[10px] text-amber-400 uppercase font-bold">{t('roster_table.map_y')}</label>
-              <input type="number" value={newPlayer.y} onChange={e => setNewPlayer({...newPlayer, y: e.target.value})} placeholder="---" className="bg-slate-950 border border-amber-800 text-amber-200 px-2 py-2 rounded focus:outline-none focus:border-amber-400 text-sm text-center" />
-            </div>
-
-            <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-bold transition-colors h-[38px] text-sm ml-auto shadow-lg">
-              {t('roster_table.save')}
-            </button>
-          </form>
-        )}
       </div>
 
       <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-y-auto max-h-[60vh] relative z-10 shadow-inner custom-scrollbar">
@@ -215,37 +132,22 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
             <tr className="border-b border-slate-700">
               <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">{t('roster_table.tag')}</th>
               
-              <th 
-                className="px-2 py-3 text-cyan-400 font-bold text-[10px] uppercase w-auto cursor-pointer hover:text-cyan-300 transition-colors select-none"
-                onClick={toggleSort}
-                title={t('roster_table.sort_tooltip', "Clicca per cambiare ordine")}
-              >
-                <div className="flex items-center gap-1">
-                   {t('roster_table.name')}
-                   <span className="text-slate-500 text-[14px]">
-                     {sortOrder === 'asc' ? '▲' : sortOrder === 'desc' ? '▼' : '↕'}
-                   </span>
-                </div>
+              <th className="px-2 py-3 text-cyan-400 font-bold text-[10px] uppercase w-auto cursor-pointer hover:text-cyan-300 transition-colors select-none" onClick={() => toggleSort()}>
+                <div className="flex items-center gap-1">{t('roster_table.name')}<span className="text-slate-500 text-[14px]">{sortOrder === 'asc' ? '▲' : sortOrder === 'desc' ? '▼' : '↕'}</span></div>
               </th>
               
-              {/* 📌 INTESTAZIONE CLICCABILE PER ORDINARE SUBITO PER RUOLO */}
-              <th 
-                className="px-1 py-3 text-amber-400 font-bold text-[10px] uppercase w-16 text-center cursor-pointer hover:text-amber-300 transition-colors select-none"
-                onClick={() => setSortOrder(sortOrder === 'role' ? 'default' : 'role')}
-                title={t('roster_table.sort_tooltip', "Clicca per cambiare ordine")}
-              >
-                <div className="flex items-center justify-center gap-1">
-                   {t('roster_table.role')}
-                   {sortOrder === 'role' && <span className="text-slate-500 text-[14px]">▼</span>}
-                </div>
+              <th className="px-1 py-3 text-amber-400 font-bold text-[10px] uppercase w-16 text-center cursor-pointer hover:text-amber-300 transition-colors select-none" onClick={() => setSortOrder(sortOrder === 'role' ? 'default' : 'role')}>
+                <div className="flex items-center justify-center gap-1">{t('roster_table.role')}{sortOrder === 'role' && <span className="text-slate-500 text-[14px]">▼</span>}</div>
               </th>
               
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-16 text-center">{t('roster_table.level')}</th>
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-24 text-center">{t('roster_table.power')}</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">{t('roster_table.level')}</th>
+              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-16 text-center">{t('roster_table.power')}</th>
               <th className="px-1 py-3 text-cyan-400 font-bold text-[10px] uppercase w-16 text-center border-l border-slate-700/50">{t('roster_table.coord_x')}</th>
               <th className="px-1 py-3 text-amber-400 font-bold text-[10px] uppercase w-16 text-center">{t('roster_table.coord_y')}</th>
               <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center border-l border-slate-700/50">{t('roster_table.marches')}</th>
-              <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">{t('roster_table.in_use')}</th>
+              
+              <th className="px-1 py-3 text-fuchsia-400 font-bold text-[10px] uppercase w-12 text-center border-l border-slate-700/50" title="Assegna a Bear Trap 1 o 2">TRAP</th>
+              
               <th className="px-1 py-3 text-slate-400 font-semibold text-xs w-8 text-center"></th>
             </tr>
           </thead>
@@ -285,17 +187,24 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
                     <td className="px-1 py-2 border-l border-slate-700/50">
                       <EditableInput type="number" initialValue={player.marches || 4} onSave={(val) => onEdit(player.id, 'marches', val)} className="bg-transparent text-slate-300 w-full outline-none focus:border-b focus:border-cyan-500 text-center px-1 py-1 text-xs" />
                     </td>
-                    <td className="px-1 py-2 flex justify-center">
-                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); onEdit(player.id, 'isParticipating', !player.isParticipating); }} className={`px-2 py-1 rounded font-bold w-full text-center text-white transition-colors text-[10px] ${player.isParticipating ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}>
-                        {player.isParticipating ? t('roster_table.yes') : t('roster_table.no')}
-                      </button>
+
+                    <td className="px-1 py-2 border-l border-slate-700/50 bg-fuchsia-950/10">
+                      <select 
+                        value={player.assignedTrap || 1} 
+                        onChange={(e) => onEdit(player.id, 'assignedTrap', Number(e.target.value))} 
+                        className="bg-slate-900 border border-transparent hover:border-fuchsia-900/50 rounded text-fuchsia-400 w-full outline-none focus:border-fuchsia-500 px-0 py-1 cursor-pointer text-center text-xs font-black"
+                      >
+                        <option value={1}>T1</option>
+                        <option value={2}>T2</option>
+                      </select>
                     </td>
-                    <td className="px-1 py-2 text-center">
+                    
+                    <td className="px-1 py-2 text-center border-l border-slate-700/50">
                       {canKick ? (
                         <button type="button" onMouseDown={(e) => e.preventDefault()} 
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm("Vuoi espellere " + player.name + " dall'Alleanza?\nIl suo account non verrà cancellato, tornerà semplicemente a essere un giocatore 'Singolo'.")) {
+                            if (window.confirm("Vuoi espellere " + player.name + " dall'Alleanza?")) {
                               if (onDelete) onDelete(player.id || player.uniqueKey || player.playerId);
                             }
                           }} 
@@ -303,7 +212,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
                           ✕
                         </button>
                       ) : (
-                        <button type="button" className="text-slate-700 cursor-not-allowed font-black px-2 py-1 text-lg" title="Solo l'R5 può espellere i membri">
+                        <button type="button" className="text-slate-700 cursor-not-allowed font-black px-2 py-1 text-lg" title="Solo l'R5 può espellere">
                           ✕
                         </button>
                       )}
@@ -316,27 +225,73 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
         </table>
       </div>
 
+      {/* MODALE EXCEL CON CONSOLE LOG AGGIUNTI */}
       <RosterExcelModal 
         isOpen={isExcelOpen} 
         onClose={() => setIsExcelOpen(false)} 
         onImport={(importedPlayers) => {
+          console.log("=========================================");
+          console.log("📥 INIZIO IMPORTAZIONE EXCEL (SMART MERGE)");
+          console.log(`👤 Giocatori estratti dall'Excel: ${importedPlayers.length}`);
+          
           let hasR5inImport = false;
           let currentR5Exists = roster.some(p => p.role === 'R5');
+          const updatedRoster = [...roster];
 
-          importedPlayers.forEach((player, index) => {
-            let assignedRole = player.role || 'R1';
+          importedPlayers.forEach((importedPlayer, index) => {
+            let assignedRole = importedPlayer.role || 'R1';
             if (assignedRole === 'R5') {
                if (currentR5Exists || hasR5inImport) assignedRole = 'R4'; 
                else hasR5inImport = true;
             }
 
-            onAddPlayer({
-              id: `excel-${Date.now()}-${Math.floor(Math.random() * 10000)}-${index}`,
-              tag: '', name: player.name, role: assignedRole,
-              level: player.level || '1', power: player.power, marches: player.marches,
-              x: '', y: '', isParticipating: false
+            // Pulizia aggressiva del nome per evitare mancati match dovuti a spazi
+            const rawImportName = String(importedPlayer.name || '');
+            const targetName = rawImportName.trim().toLowerCase().replace(/\s+/g, ' ');
+            
+            const existingIndex = updatedRoster.findIndex(p => {
+               const pName = String(p.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+               return pName === targetName;
             });
+
+            if (existingIndex !== -1) {
+              const oldPower = updatedRoster[existingIndex].power;
+              const newPower = importedPlayer.power;
+              
+              console.log(`✅ MATCH TROVATO: [${rawImportName}]`);
+              console.log(`   - Potenza Vecchia: ${oldPower} -> Nuova Potenza: ${newPower}`);
+              console.log(`   - Livello Vecchio: ${updatedRoster[existingIndex].level} -> Nuovo: ${importedPlayer.level}`);
+              
+              updatedRoster[existingIndex] = {
+                ...updatedRoster[existingIndex],
+                role: assignedRole,
+                level: importedPlayer.level || updatedRoster[existingIndex].level,
+                // Aggiornamento sicuro dei numeri (evita falsi negativi se è 0)
+                power: (importedPlayer.power !== undefined && importedPlayer.power !== null) ? Number(importedPlayer.power) : oldPower,
+                marches: (importedPlayer.marches !== undefined && importedPlayer.marches !== null) ? Number(importedPlayer.marches) : updatedRoster[existingIndex].marches
+              };
+            } else {
+              console.log(`➕ NESSUN MATCH: Aggiungo [${rawImportName}] come nuovo giocatore.`);
+              updatedRoster.push({
+                id: `excel-${Date.now()}-${Math.floor(Math.random() * 10000)}-${index}`,
+                tag: '', 
+                name: rawImportName, 
+                role: assignedRole,
+                level: importedPlayer.level || '1', 
+                power: Number(importedPlayer.power) || 0, 
+                marches: Number(importedPlayer.marches) || 4,
+                x: '', y: '', 
+                assignedTrap: 1
+              });
+            }
           });
+
+          console.log("💾 Salvataggio nel Roster Globale...", updatedRoster);
+          console.log("=========================================");
+          
+          if (onBulkUpdate) {
+             onBulkUpdate(updatedRoster);
+          }
           setIsExcelOpen(false);
         }} 
         t={t} 

@@ -50,18 +50,30 @@ export default function AdminDBTools({ t }) {
         }
 
         let normalizedMembers = [];
-        const extractMember = (m) => {
+      const extractMember = (m) => {
            if(!m || typeof m !== 'object') return;
            const id = String(m.id || m.playerId || m.uid || '').trim();
            const name = String(m.name || m.playerName || m.nickname || '').trim();
+           
            if(id && id !== 'undefined') {
               let memAlliance = String(m.allianceCode || m.alliance || finalAlliance).trim().toUpperCase();
               let memRealm = String(m.realm || m.regno || m.server || finalRealm).trim();
+              
               if (memAlliance.includes('_')) {
                   const parts = memAlliance.split('_');
                   if (!isNaN(parts[0])) { memRealm = parts[0]; memAlliance = parts.slice(1).join('_'); }
               }
-              normalizedMembers.push({ id, name, allianceCode: memAlliance, realm: memRealm, role: m.role || 'R1' });
+              
+              // 📌 FIX: Usiamo "...m" per mantenere INTATTI potere, livello, coordinate, ecc.
+              // Inoltre controlliamo varie casistiche per il ruolo (role, Role, rank)
+              normalizedMembers.push({ 
+                  ...m, 
+                  id, 
+                  name, 
+                  allianceCode: memAlliance, 
+                  realm: memRealm, 
+                  role: m.role || m.Role || m.rank || 'R1' 
+              });
            }
         };
 

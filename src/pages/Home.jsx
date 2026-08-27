@@ -10,7 +10,8 @@ import { RosterTable } from '../components/RosterTable';
 import SystemAnnouncement from '../components/SystemAnnouncement';
 import AuthModal from '../components/AuthModal';
 import GovernancePanel from '../components/GovernancePanel';
-
+import BearTrapManager from '../components/beartrap/BearTrapManager';
+const ENABLE_BEAR_TRAP = false;
 export default function Home({ auth, setAuth, roster, setRoster }) {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -267,17 +268,17 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                       )}
 
                      <div className="border-t border-rose-900/50 pt-4 flex justify-end relative">
-  <button onClick={() => navigate('/admin')} className="relative px-6 py-2 bg-slate-900 hover:bg-indigo-900 text-indigo-400 font-black text-xs uppercase tracking-widest rounded-xl border border-indigo-500/30 transition-all flex items-center gap-2 shadow-lg">
-     {t('home.god_room')}
-     
-     {/* 📌 BADGE DI NOTIFICA SUL BOTTONE */}
-     {openTicketsCount > 0 && (
-        <span className="absolute -top-2 -right-2 bg-rose-600 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(225,29,72,1)] animate-pulse border border-white/20">
-           {openTicketsCount}
-        </span>
-     )}
-  </button>
-</div>
+                        <button onClick={() => navigate('/admin')} className="relative px-6 py-2 bg-slate-900 hover:bg-indigo-900 text-indigo-400 font-black text-xs uppercase tracking-widest rounded-xl border border-indigo-500/30 transition-all flex items-center gap-2 shadow-lg">
+                           {t('home.god_room')}
+                           
+                           {/* 📌 BADGE DI NOTIFICA SUL BOTTONE */}
+                           {openTicketsCount > 0 && (
+                              <span className="absolute -top-2 -right-2 bg-rose-600 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(225,29,72,1)] animate-pulse border border-white/20">
+                                 {openTicketsCount}
+                              </span>
+                           )}
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -357,6 +358,12 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                             <button onClick={() => setHubView('governance')} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-amber-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]"><span className="text-5xl mb-4 group-hover:scale-110 transition-transform">🏛️</span><span className="text-2xl font-black text-white">{t('governance.title', 'Governo Alleanza')}</span></button>
                             <button onClick={() => setIsRosterOpen(true)} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-indigo-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]"><span className="text-5xl mb-4 group-hover:scale-110 transition-transform">📋</span><span className="text-2xl font-black text-white">{t('home.roster_db')}</span></button>
                             <button onClick={() => navigate('/map', { state: { initialView: 'alliance' }})} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-blue-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]"><span className="text-5xl mb-4 group-hover:scale-110 transition-transform">📍</span><span className="text-2xl font-black text-white">{t('home.territory')}</span></button>
+                            {ENABLE_BEAR_TRAP && (
+  <button onClick={() => setHubView('beartrap')} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-fuchsia-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+    <span className="text-5xl mb-4 group-hover:scale-110 transition-transform">🐻</span>
+    <span className="text-2xl font-black text-white">Bear Trap</span>
+  </button>
+)}
                           </>
                         )}
                         <button onClick={() => navigate('/march-builder')} className="group flex flex-col items-center justify-center py-12 bg-slate-900/90 border border-slate-700/50 hover:border-emerald-500/50 rounded-[2rem] shadow-[0_10px_30px_rgba(0,0,0,0.3)]"><span className="text-5xl mb-4 group-hover:scale-110 transition-transform">⚙️</span><span className="text-2xl font-black text-white">{t('home.my_marches_title')}</span></button>
@@ -368,6 +375,14 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                      <GovernancePanel auth={auth} roster={roster} setRoster={setRoster} onBack={() => setHubView('alliance')} allianceDbData={allianceDbData} setAllianceDbData={setAllianceDbData} />
                   )}
 
+                {ENABLE_BEAR_TRAP && hubView === 'beartrap' && (
+   <BearTrapManager 
+     roster={roster} 
+     setRoster={setRoster} 
+     onBack={() => setHubView('alliance')} 
+     allianceDbData={allianceDbData} 
+   />
+)}
                 </div>
               ) : (
                 <div className="bg-slate-900/50 backdrop-blur-2xl p-6 md:p-12 rounded-3xl border border-white/5 border-t-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] flex flex-col items-center gap-6 md:gap-8 animate-in w-[95%] max-w-xl text-center">
@@ -395,6 +410,7 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                  onEdit={(id, field, value) => setRoster(prev => prev.map(pl => pl.id === id ? { ...pl, [field]: value } : pl))} 
                  onDelete={handleKickPlayer} 
                  onDeploy={() => setIsRosterOpen(false)} 
+                 onBulkUpdate={(newRoster) => setRoster(newRoster)} 
                />
                
                <div className="mt-4 flex justify-end">
