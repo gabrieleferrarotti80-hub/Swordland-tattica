@@ -15,7 +15,7 @@ export default function EventManagerModal({
   const [newPlanName, setNewPlanName] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [copiedLinkId, setCopiedLinkId] = useState(null); // Nuovo stato per il feedback di copia
+  const [copiedLinkId, setCopiedLinkId] = useState(null); 
   
   const fileInputRef = useRef(null);
 
@@ -34,6 +34,7 @@ export default function EventManagerModal({
 
       try {
         for (const legacyId of legacyIds) {
+          if(!legacyId) continue;
           const legacyRef = doc(db, legacyCollection, legacyId);
           const legacySnap = await getDoc(legacyRef);
           
@@ -53,12 +54,23 @@ export default function EventManagerModal({
             break; 
           }
         }
-      } catch (error) {}
+      } catch (error) {
+         console.error("Errore recupero salvataggio legacy:", error);
+      }
       
-      loadedPlans.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      // Ordinamento sicuro protetto da eventuali delay nei Timestamp di Firebase
+      loadedPlans.sort((a, b) => {
+         const timeA = a.createdAt?.seconds || 0;
+         const timeB = b.createdAt?.seconds || 0;
+         return timeB - timeA;
+      });
+      
       setSavedPlans(loadedPlans);
       setIsFetching(false);
     }, (error) => {
+      // ⚠️ GESTIONE ERRORI SBLOCCATA: Ora Firebase comunicherà il motivo esatto
+      console.error("🔥 ERRORE FIREBASE ONSNAPSHOT:", error);
+      alert(`Errore di lettura dal Database. Se usi un AdBlocker o Brave, disattivalo per questo sito.\n\nDettaglio tecnico: ${error.message}`);
       setIsFetching(false);
     });
 
@@ -77,7 +89,6 @@ export default function EventManagerModal({
     }
   }, [isOpen, allianceCode, currentPlanId, currentPlanName, t]);
 
-  // Funzione per copiare il link spettatore
   const handleCopyLink = (planId) => {
     const spectatorUrl = `${window.location.origin}/swordland/view/${planId}`;
     navigator.clipboard.writeText(spectatorUrl).then(() => {
@@ -126,6 +137,7 @@ export default function EventManagerModal({
       }
       alert(t('event_manager.save_success', 'Salvataggio completato!'));
     } catch (error) {
+      console.error("🔥 ERRORE SALVATAGGIO:", error);
       alert(t('event_manager.save_error', 'Errore durante il salvataggio.'));
     } finally {
       setIsSaving(false);
@@ -248,7 +260,6 @@ export default function EventManagerModal({
                         {plan.id === currentPlanId ? t('event_manager.active', 'Attivo') : t('event_manager.load_btn', 'Carica')}
                       </button>
                       
-                      {/* BOTTONE COPIA LINK */}
                       {!plan.isLegacy && (
                         <button 
                           onClick={() => handleCopyLink(plan.id)}
