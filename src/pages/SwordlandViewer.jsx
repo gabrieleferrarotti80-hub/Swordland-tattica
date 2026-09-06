@@ -39,9 +39,9 @@ export default function SwordlandViewer() {
         if (!snap.exists()) snap = await getDoc(doc(db, 'projects', planId));
         
         if (snap.exists()) setPlanData(snap.data());
-        else setError(t('viewer.not_found', 'Piano strategico non trovato.'));
+        else setError(t('viewer.not_found', 'Strategic plan not found.'));
       } catch (err) {
-        setError(t('viewer.error_loading', 'Errore di connessione.'));
+        setError(t('viewer.error_loading', 'Connection error.'));
       } finally {
         setIsLoading(false);
       }
@@ -82,8 +82,8 @@ export default function SwordlandViewer() {
     return () => clearInterval(interval);
   }, [isPlaying, playbackSpeed, planData]);
 
-  if (isLoading) return <div className="h-[100dvh] flex items-center justify-center bg-slate-950 text-cyan-400 font-black animate-pulse">Caricamento in corso...</div>;
-  if (error) return <div className="h-[100dvh] flex flex-col items-center justify-center bg-slate-950 text-rose-500 font-black gap-4">{error}<button onClick={() => navigate('/')} className="px-4 py-2 bg-slate-800 text-white rounded-lg">Torna alla Home</button></div>;
+  if (isLoading) return <div className="h-[100dvh] flex items-center justify-center bg-slate-950 text-cyan-400 font-black animate-pulse">Loading...</div>;
+  if (error) return <div className="h-[100dvh] flex flex-col items-center justify-center bg-slate-950 text-rose-500 font-black gap-4">{error}<button onClick={() => navigate('/')} className="px-4 py-2 bg-slate-800 text-white rounded-lg">Back to Home</button></div>;
   if (!planData) return null;
 
   const tacticalData = planData.data || planData;
@@ -105,12 +105,12 @@ export default function SwordlandViewer() {
           
           <div className="flex justify-center items-center gap-6 mt-4 bg-slate-900/80 p-4 rounded-3xl border border-slate-800 shadow-xl">
             <div className="flex flex-col items-center">
-              <span className="text-[10px] text-cyan-400 font-black uppercase tracking-widest mb-1">Team Blu</span>
+              <span className="text-[10px] text-cyan-400 font-black uppercase tracking-widest mb-1">Blue Team</span>
               <span className="text-3xl font-black text-white drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">{Math.floor(teamScores.blue)}</span>
             </div>
             <div className="text-slate-600 font-black text-xl">VS</div>
             <div className="flex flex-col items-center">
-              <span className="text-[10px] text-rose-400 font-black uppercase tracking-widest mb-1">Team Rosso</span>
+              <span className="text-[10px] text-rose-400 font-black uppercase tracking-widest mb-1">Red Team</span>
               <span className="text-3xl font-black text-white drop-shadow-[0_0_10px_rgba(244,63,94,0.5)]">{Math.floor(teamScores.red)}</span>
             </div>
           </div>
@@ -123,8 +123,8 @@ export default function SwordlandViewer() {
             className="w-full bg-slate-900 hover:bg-cyan-950/40 border border-cyan-900/50 hover:border-cyan-500 text-left p-5 rounded-2xl transition-all shadow-lg flex items-center justify-between group"
           >
             <div className="flex flex-col">
-              <span className="text-cyan-400 font-black uppercase tracking-widest text-sm mb-1">🗺️ Mappa Tattica</span>
-              <span className="text-slate-400 text-xs">Esplora posizioni e spostamenti.</span>
+              <span className="text-cyan-400 font-black uppercase tracking-widest text-sm mb-1">🗺️ Tactical Map</span>
+              <span className="text-slate-400 text-xs">Explore positions and movements.</span>
             </div>
             <span className="text-cyan-500 opacity-50 group-hover:opacity-100 transition-opacity text-xl">➔</span>
           </button>
@@ -134,8 +134,8 @@ export default function SwordlandViewer() {
             className="w-full bg-slate-900 hover:bg-emerald-950/40 border border-emerald-900/50 hover:border-emerald-500 text-left p-5 rounded-2xl transition-all shadow-lg flex items-center justify-between group"
           >
             <div className="flex flex-col">
-              <span className="text-emerald-400 font-black uppercase tracking-widest text-sm mb-1">👥 Giocatori ({deployedPlayers.length})</span>
-              <span className="text-slate-400 text-xs">Vedi chi partecipa e le squadre.</span>
+              <span className="text-emerald-400 font-black uppercase tracking-widest text-sm mb-1">👥 Players ({deployedPlayers.length})</span>
+              <span className="text-slate-400 text-xs">View participants and their tags.</span>
             </div>
             <span className="text-emerald-500 opacity-50 group-hover:opacity-100 transition-opacity text-xl">➔</span>
           </button>
@@ -145,8 +145,8 @@ export default function SwordlandViewer() {
             className="w-full bg-slate-900 hover:bg-indigo-950/40 border border-indigo-900/50 hover:border-indigo-500 text-left p-5 rounded-2xl transition-all shadow-lg flex items-center justify-between group"
           >
             <div className="flex flex-col">
-              <span className="text-indigo-400 font-black uppercase tracking-widest text-sm mb-1">📋 Ordini di Battaglia</span>
-              <span className="text-slate-400 text-xs">Consulta la lista dei compiti assegnati.</span>
+              <span className="text-indigo-400 font-black uppercase tracking-widest text-sm mb-1">📋 Battle Orders</span>
+              <span className="text-slate-400 text-xs">Check the list of assigned tasks.</span>
             </div>
             <span className="text-indigo-500 opacity-50 group-hover:opacity-100 transition-opacity text-xl">➔</span>
           </button>
@@ -171,25 +171,40 @@ export default function SwordlandViewer() {
           ⬅️
         </button>
         <div>
-          <h2 className="text-emerald-400 font-black uppercase tracking-widest text-sm">Giocatori Schierati</h2>
-          <p className="text-slate-400 text-[10px] uppercase">{deployedPlayers.length} Partecipanti Attivi</p>
+          <h2 className="text-emerald-400 font-black uppercase tracking-widest text-sm">Deployed Players</h2>
+          <p className="text-slate-400 text-[10px] uppercase">{deployedPlayers.length} Active Participants</p>
         </div>
       </div>
 
       {/* Lista */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 flex flex-col gap-2">
         {deployedPlayers.map(p => (
-          <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black uppercase border ${p.squad === 'Assalto' ? 'bg-rose-950/50 text-rose-400 border-rose-900/50' : p.squad === 'Difesa' ? 'bg-blue-950/50 text-blue-400 border-blue-900/50' : p.squad === 'Supporto' ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900/50' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+          <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-sm hover:border-slate-700 transition-colors">
+            
+            <div className="flex items-center gap-3 min-w-0">
+              
+              {/* Icona Squadra */}
+              <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black uppercase border ${p.squad === 'Assalto' ? 'bg-rose-950/50 text-rose-400 border-rose-900/50' : p.squad === 'Difesa' ? 'bg-blue-950/50 text-blue-400 border-blue-900/50' : p.squad === 'Supporto' ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900/50' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                 {p.squad ? p.squad.substring(0, 2) : '-'}
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-slate-200">{p.name || p.tag}</span>
-                <span className="text-[10px] text-slate-500 uppercase tracking-widest">{p.squad || 'Nessuna Squadra'}</span>
+              
+              {/* Dettagli Giocatore */}
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-cyan-300 bg-cyan-950/50 px-1.5 py-0.5 rounded border border-cyan-800/50 shrink-0 shadow-sm">
+                    {p.tag || p.originalTag || p.id}
+                  </span>
+                  <span className="text-sm font-bold text-slate-200 truncate">{p.name || 'Unknown'}</span>
+                </div>
+                <span className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 truncate">{p.squad || 'No Squad'}</span>
               </div>
+              
             </div>
-            <span className="text-xs font-mono font-bold text-slate-400 bg-slate-950 px-2 py-1 rounded-md border border-slate-800">{p.power}M</span>
+
+            {/* Potere */}
+            <span className="text-xs font-mono font-bold text-slate-400 bg-slate-950 px-2 py-1 rounded-md border border-slate-800 shrink-0 ml-2">
+              {p.power}M
+            </span>
           </div>
         ))}
       </div>
@@ -241,12 +256,12 @@ export default function SwordlandViewer() {
         {/* Punteggi Fluttuanti */}
         <div className="pointer-events-auto bg-slate-950/85 backdrop-blur-md border border-slate-700/50 rounded-2xl px-4 py-2 shadow-xl flex items-center gap-4">
           <div className="flex flex-col items-center">
-              <span className="text-[9px] text-cyan-400 font-black uppercase">Blu</span>
+              <span className="text-[9px] text-cyan-400 font-black uppercase">Blue</span>
               <span className="text-lg lg:text-xl font-black text-white leading-none drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]">{Math.floor(teamScores.blue)}</span>
           </div>
           <div className="w-px h-6 bg-slate-600"></div>
           <div className="flex flex-col items-center">
-              <span className="text-[9px] text-rose-400 font-black uppercase">Rosso</span>
+              <span className="text-[9px] text-rose-400 font-black uppercase">Red</span>
               <span className="text-lg lg:text-xl font-black text-white leading-none drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]">{Math.floor(teamScores.red)}</span>
           </div>
         </div>
@@ -265,7 +280,7 @@ export default function SwordlandViewer() {
           
           <div className="flex-1 flex flex-col gap-2">
               <div className="flex justify-between items-end mb-1">
-                <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Minuto Gioco</span>
+                <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Game Minute</span>
                 <span className="text-2xl font-black text-white font-mono leading-none drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]">{String(currentTime).padStart(2, '0')}'</span>
               </div>
               <input
