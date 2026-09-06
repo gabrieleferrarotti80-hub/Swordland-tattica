@@ -252,7 +252,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
             newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
             newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: true }; 
         } else {
-            newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetX, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
+            newPositions[currentTime] = { isMarching: true, startTime: draft.startTime, startX: draft.startX, startY: draft.startY, targetX: draft.targetX, targetY: draft.targetY, targetName: draft.targetName, targetBuildingId: draft.targetBuildingId, arrivalTime: draft.arrivalTime, marchType: draft.marchType };
             newPositions[draft.arrivalTime] = { x: draft.targetX, y: draft.targetY, removed: false, isGarrison: draft.isGarrison, marchType: draft.marchType, targetBuildingId: draft.targetBuildingId };
         }
       } else {
@@ -298,26 +298,61 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     setDraftPositions({});
   }, [draftPositions, currentTime, setActiveDeployment]);
 
+  // --- MACCHINA DEL TEMPO: Resetta il minuto, gestisce le cure passate e taglia il futuro ---
   const handleCancelMinute = useCallback((targetMinute = null) => {
     const minToCancel = targetMinute !== null ? targetMinute : currentTime;
     setDraftPositions({});
+
+    // 1. Pulizia Giocatori: Cancella tutte le posizioni da questo minuto in poi
     setActiveDeployment(prev => prev.map(player => {
-      if (player.positions && player.positions[minToCancel]) {
+      if (player.positions) {
         const updatedPositions = { ...player.positions };
-        delete updatedPositions[minToCancel];
-        return { ...player, positions: updatedPositions };
+        let hasChanges = false;
+        Object.keys(updatedPositions).forEach(minKey => {
+          if (Number(minKey) >= minToCancel) {
+            delete updatedPositions[minKey];
+            hasChanges = true;
+          }
+        });
+        return hasChanges ? { ...player, positions: updatedPositions } : player;
       }
       return player;
     }));
-    setMarches(prevMarches => prevMarches.map(march => {
-      if (march.positions && march.positions[minToCancel]) {
-        const updatedPositions = { ...march.positions };
-        delete updatedPositions[minToCancel];
-        return { ...march, positions: updatedPositions };
-      }
-      return march;
-    }));
-  }, [currentTime, setActiveDeployment]);
+
+    // 2. Pulizia Marce: Cancella il futuro e distrugge le marce "orfane"
+    setMarches(prevMarches => {
+      const cleanedMarches = prevMarches.map(march => {
+        if (march.positions) {
+          const updatedPositions = { ...march.positions };
+          Object.keys(updatedPositions).forEach(minKey => {
+            if (Number(minKey) >= minToCancel) {
+              delete updatedPositions[minKey];
+            }
+          });
+          return { ...march, positions: updatedPositions };
+        }
+        return march;
+      });
+
+      return cleanedMarches.filter(march => 
+        Object.keys(march.positions || {}).some(k => Number(k) < minToCancel)
+      );
+    });
+
+    // 3. Pulizia Ospedale: Mantiene intatte le cure iniziate PRIMA del minuto resettato
+    setHealingEvents(prev => {
+      const updatedHeals = { ...prev };
+      let hasChanges = false;
+      Object.entries(updatedHeals).forEach(([playerId, healStartMin]) => {
+        if (Number(healStartMin) >= minToCancel) {
+          delete updatedHeals[playerId];
+          hasChanges = true;
+        }
+      });
+      return hasChanges ? updatedHeals : prev;
+    });
+
+  }, [currentTime, setActiveDeployment, setMarches, setHealingEvents]);
 
   const handleWithdraw = useCallback((id) => setDraftPositions(prev => ({ ...prev, [id]: { removed: true } })), []);
   
@@ -390,22 +425,27 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
   
   const handleCancelHeal = useCallback((e, playerId) => { 
     e.stopPropagation(); 
+    const strId = String(playerId);
+    const basePos = getBasePositionApp(strId, teamBase);
+    
     setHealingEvents(prev => { 
         const newHeals = { ...prev }; 
         delete newHeals[playerId]; 
         return newHeals; 
     }); 
-    const strId = String(playerId);
-    const basePos = getBasePositionApp(strId, teamBase);
+
     setActiveDeployment(prev => prev.map(p => {
         if (String(p.id) === strId) {
-            return {
-                ...p,
-                positions: {
-                    ...(p.positions || {}),
-                    [currentTime]: { x: basePos.x, y: basePos.y, removed: false, isGarrison: false, targetBuildingId: null, marchType: '' }
-                }
+            const newPositions = { ...(p.positions || {}) };
+            newPositions[currentTime] = { 
+                x: basePos.x, 
+                y: basePos.y, 
+                removed: false, 
+                isGarrison: false, 
+                targetBuildingId: null, 
+                marchType: '' 
             };
+            return { ...p, positions: newPositions };
         }
         return p;
     }));
@@ -456,10 +496,8 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
 
     if (window.confirm(isDefeat ? t('hooks.confirm_defeat') : t('hooks.confirm_withdraw'))) {
        
-       // Imposta la ritirata fisica del singolo giocatore o di tutti
        setActiveDeployment(prev => prev.map(p => processEntityRetreat(p, false)));
        
-       // Gestione del passaggio della leadership in caso di ritiro mirato
        setMarches(prevMarches => {
           let updatedMarches = [];
           let newLeaders = new Set();
@@ -476,7 +514,6 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
             if (targetPlayerId) {
               if (String(march.leader) === String(targetPlayerId)) {
                  if (march.marchType !== 'rally_join' && march.members && march.members.length > 0) {
-                    // Passa la leadership al secondo
                     const newLeader = String(march.members[0]);
                     newLeaders.add(newLeader);
                     updatedMarches.push({
@@ -485,11 +522,9 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
                        members: march.members.slice(1)
                     });
                  } else {
-                    // Nessun membro: l'intera marcia si ritira
                     updatedMarches.push(processEntityRetreat(march, true));
                  }
               } else if (march.members && march.members.map(String).includes(String(targetPlayerId))) {
-                 // Rimuove solo un membro dalla lista
                  updatedMarches.push({
                     ...march,
                     members: march.members.filter(mId => String(mId) !== String(targetPlayerId))
@@ -498,12 +533,10 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
                  updatedMarches.push(march);
               }
             } else {
-              // Target nullo: Ritira tutti
               updatedMarches.push(processEntityRetreat(march, true));
             }
           }
 
-          // Elimina l'ordine "rally_join" obsoleto per i nuovi capopresidio
           return updatedMarches.map(m => {
             if (newLeaders.has(String(m.leader)) && m.marchType === 'rally_join') {
                return {

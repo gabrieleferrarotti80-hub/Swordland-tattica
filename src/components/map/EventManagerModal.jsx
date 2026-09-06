@@ -58,7 +58,6 @@ export default function EventManagerModal({
          console.error("Errore recupero salvataggio legacy:", error);
       }
       
-      // Ordinamento sicuro protetto da eventuali delay nei Timestamp di Firebase
       loadedPlans.sort((a, b) => {
          const timeA = a.createdAt?.seconds || 0;
          const timeB = b.createdAt?.seconds || 0;
@@ -68,7 +67,6 @@ export default function EventManagerModal({
       setSavedPlans(loadedPlans);
       setIsFetching(false);
     }, (error) => {
-      // ⚠️ GESTIONE ERRORI SBLOCCATA: Ora Firebase comunicherà il motivo esatto
       console.error("🔥 ERRORE FIREBASE ONSNAPSHOT:", error);
       alert(`Errore di lettura dal Database. Se usi un AdBlocker o Brave, disattivalo per questo sito.\n\nDettaglio tecnico: ${error.message}`);
       setIsFetching(false);
@@ -286,8 +284,8 @@ export default function EventManagerModal({
 
           <div className="w-full md:w-[350px] flex flex-col gap-6 shrink-0">
             
-            <div className="bg-emerald-950/20 border border-emerald-900/50 rounded-2xl flex flex-col shadow-inner overflow-hidden">
-              <div className="bg-slate-900/80 p-4 border-b border-emerald-900/30">
+           <div className="bg-emerald-950/20 border border-emerald-900/50 rounded-2xl flex flex-col shadow-inner">
+              <div className="bg-slate-900/80 p-4 border-b border-emerald-900/30 rounded-t-2xl">
                 <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
                   {t('event_manager.save_work', 'Salva il tuo lavoro')}
                 </h3>
