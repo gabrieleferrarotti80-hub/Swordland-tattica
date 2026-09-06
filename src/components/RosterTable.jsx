@@ -64,6 +64,16 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
     onEdit(playerId, 'role', newRole);
   };
 
+  const handleAutoTagAll = () => {
+    if (window.confirm("Vuoi assegnare automaticamente i codici G1, G2, G3... a tutti i giocatori in ordine?")) {
+      const updated = roster.map((p, idx) => ({
+        ...p,
+        tag: `G${idx + 1}`
+      }));
+      if (onBulkUpdate) onBulkUpdate(updated);
+    }
+  };
+
   const handleClearRoster = () => {
     if (window.confirm(t('roster_table.clear_roster_confirm', "⚠️ ATTENZIONE: Sei sicuro di voler ELIMINARE TUTTO IL ROSTER?"))) {
       if (onClearRoster) onClearRoster();
@@ -109,6 +119,15 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
               </select>
             </div>
 
+            <button 
+  type="button" 
+  onClick={handleAutoTagAll} 
+  className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow transition-all flex items-center gap-1.5"
+  title="Numerazione automatica G1, G2..."
+>
+  <span>🏷️</span> <span className="hidden sm:inline">Auto-Tag G1..N</span>
+</button>
+
             {roster.length > 0 && (
               <button 
                 type="button" onClick={handleClearRoster} disabled={!canKick}
@@ -120,7 +139,7 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
             )}
 
             <button type="button" onClick={() => setIsExcelOpen(true)} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] md:text-xs uppercase rounded-lg shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all flex items-center gap-1.5">
-              <span className="text-sm">📊</span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
+              <span className="text-sm"></span> <span className="hidden sm:inline">{t('roster_table.excel_import_btn')}</span>
             </button>
           </div>
         </div>
@@ -130,6 +149,8 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
         <table className="w-full text-left border-collapse table-fixed">
           <thead className="sticky top-0 z-20 bg-slate-900 shadow-md">
             <tr className="border-b border-slate-700">
+              <th className="px-1 py-3 text-emerald-400 font-bold text-[10px] uppercase w-10 text-center" title="Partecipazione">IN</th>
+              
               <th className="px-1 py-3 text-slate-400 font-semibold text-[10px] uppercase w-12 text-center">{t('roster_table.tag')}</th>
               
               <th className="px-2 py-3 text-cyan-400 font-bold text-[10px] uppercase w-auto cursor-pointer hover:text-cyan-300 transition-colors select-none" onClick={() => toggleSort()}>
@@ -153,12 +174,22 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
           </thead>
           <tbody className="divide-y divide-slate-700/50 text-sm">
             {processedRoster.length === 0 ? (
-              <tr><td colSpan="10" className="p-6 text-center text-slate-500 italic">{roster.length === 0 ? t('roster_table.empty_db') : t('roster_table.no_match')}</td></tr>
+              <tr><td colSpan="11" className="p-6 text-center text-slate-500 italic">{roster.length === 0 ? t('roster_table.empty_db') : t('roster_table.no_match')}</td></tr>
             ) : (
               processedRoster.map((player, index) => {
                 const uniqueId = player.id || player.uniqueKey || player.playerId || `temp-${index}-${player.name}`;
                 return (
-                  <tr key={uniqueId} className="hover:bg-slate-700/30 transition-colors">
+                  <tr key={uniqueId} className={`transition-colors ${player.isParticipating ? 'bg-emerald-950/20 hover:bg-emerald-900/40' : 'hover:bg-slate-700/30'}`}>
+                    
+                    <td className="px-1 py-2 text-center border-r border-slate-700/50">
+                      <input 
+                        type="checkbox" 
+                        checked={!!player.isParticipating} 
+                        onChange={(e) => onEdit(player.id, 'isParticipating', e.target.checked)} 
+                        className="w-4 h-4 cursor-pointer accent-emerald-500 rounded" 
+                      />
+                    </td>
+
                     <td className="px-1 py-2">
                       <EditableInput initialValue={player.tag} onSave={(val) => onEdit(player.id, 'tag', val.toUpperCase())} maxLength="4" className="bg-slate-800 text-cyan-400 w-full outline-none focus:border-b focus:border-cyan-500 font-bold text-center rounded px-1 py-1 text-xs" />
                     </td>
@@ -225,7 +256,6 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
         </table>
       </div>
 
-      {/* MODALE EXCEL CON CONSOLE LOG AGGIUNTI */}
       <RosterExcelModal 
         isOpen={isExcelOpen} 
         onClose={() => setIsExcelOpen(false)} 
@@ -245,7 +275,6 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
                else hasR5inImport = true;
             }
 
-            // Pulizia aggressiva del nome per evitare mancati match dovuti a spazi
             const rawImportName = String(importedPlayer.name || '');
             const targetName = rawImportName.trim().toLowerCase().replace(/\s+/g, ' ');
             
@@ -266,15 +295,14 @@ export function RosterTable({ roster, onEdit, onDelete, onAddPlayer, onClearRost
                 ...updatedRoster[existingIndex],
                 role: assignedRole,
                 level: importedPlayer.level || updatedRoster[existingIndex].level,
-                // Aggiornamento sicuro dei numeri (evita falsi negativi se è 0)
                 power: (importedPlayer.power !== undefined && importedPlayer.power !== null) ? Number(importedPlayer.power) : oldPower,
                 marches: (importedPlayer.marches !== undefined && importedPlayer.marches !== null) ? Number(importedPlayer.marches) : updatedRoster[existingIndex].marches
               };
-            } else {
+           } else {
               console.log(`➕ NESSUN MATCH: Aggiungo [${rawImportName}] come nuovo giocatore.`);
               updatedRoster.push({
                 id: `excel-${Date.now()}-${Math.floor(Math.random() * 10000)}-${index}`,
-                tag: '', 
+                tag: `G${updatedRoster.length + 1}`, // 👈 Assegnazione automatica sequenziale (G1, G2, G3...)
                 name: rawImportName, 
                 role: assignedRole,
                 level: importedPlayer.level || '1', 

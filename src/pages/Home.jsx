@@ -11,7 +11,7 @@ import SystemAnnouncement from '../components/SystemAnnouncement';
 import AuthModal from '../components/AuthModal';
 import GovernancePanel from '../components/GovernancePanel';
 import BearTrapManager from '../components/beartrap/BearTrapManager';
-const ENABLE_BEAR_TRAP = false;
+const ENABLE_BEAR_TRAP = true;
 export default function Home({ auth, setAuth, roster, setRoster }) {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();

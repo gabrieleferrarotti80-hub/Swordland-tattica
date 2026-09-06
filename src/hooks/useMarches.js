@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next'; // 🌍 Import i18n
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const getBasePositionApp = (idStr, teamBase) => {
   let hash = 0;
@@ -16,7 +16,7 @@ const getBasePositionApp = (idStr, teamBase) => {
 };
 
 export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buildings, setBuildings, teamBase, currentTime, setManualCaptures, setHealingEvents }) => {
-  const { t } = useTranslation(); // 🌍 Hook in azione
+  const { t } = useTranslation();
   
   const [marches, setMarches] = useState(() => {
     const saved = localStorage.getItem('swordland-marches');
@@ -27,7 +27,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
 
   useEffect(() => { localStorage.setItem('swordland-marches', JSON.stringify(marches)); }, [marches]);
 
-  const getCurrentPosition = (entity) => {
+  const getCurrentPosition = useCallback((entity) => {
     const draftPos = draftPositions[entity.id];
     if (draftPos) return draftPos;
     if (!entity.positions || Object.keys(entity.positions).length === 0) return null;
@@ -36,9 +36,9 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     let lastKnownPos = null;
     for (const min of minutes) { if (min <= currentTime) { lastKnownPos = entity.positions[min]; } }
     return lastKnownPos;
-  };
+  }, [draftPositions, currentTime]);
 
-  const getCityPosition = (playerId) => {
+  const getCityPosition = useCallback((playerId) => {
     const p = activeDeployment.find(x => String(x.id) === String(playerId));
     let lastStatic = null;
     if (p && p.positions) {
@@ -46,37 +46,34 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
       for(const m of mins) { if (m <= currentTime) lastStatic = p.positions[m]; }
     }
     if (lastStatic && !lastStatic.removed && lastStatic.x !== undefined) return { x: lastStatic.x, y: lastStatic.y };
-    
     return getBasePositionApp(playerId, teamBase);
-  };
+  }, [activeDeployment, currentTime, teamBase]);
 
-  const getAvailableMarches = (playerId) => {
-    const player = activeDeployment.find(p => String(p.id) === String(playerId));
+  const getAvailableMarches = useCallback((playerId) => {
+    const strPlayerId = String(playerId);
+    const player = activeDeployment.find(p => String(p.id) === strPlayerId);
     if (!player) return 0;
-    const rosterPlayer = roster.find(p => String(p.id) === String(playerId));
+    
+    const rosterPlayer = roster.find(p => String(p.id) === strPlayerId);
     const capacityRaw = player.marches !== undefined ? player.marches : (rosterPlayer ? rosterPlayer.marches : 1);
     const total = parseInt(capacityRaw, 10) || 1;
     let used = 0;
 
     marches.forEach(m => {
       if (m.marchType === 'rally_join') return; 
-
-      const isLeader = String(m.leader) === String(playerId);
-      const isMember = m.members && m.members.map(String).includes(String(playerId));
+      const isLeader = String(m.leader) === strPlayerId;
+      const isMember = m.members && m.members.map(String).includes(strPlayerId);
 
       if (isLeader || isMember) {
         if (!m.positions || Object.keys(m.positions).length === 0) { used++; return; }
         const minutes = Object.keys(m.positions).map(Number).sort((a, b) => a - b);
-        
         let isActive = false;
         let isDestroyed = false;
 
         for (const min of minutes) { 
             if (min <= currentTime) { 
                 isActive = true;
-                if (m.positions[min].removed !== undefined) {
-                    isDestroyed = m.positions[min].removed;
-                }
+                if (m.positions[min].removed !== undefined) isDestroyed = m.positions[min].removed;
             } 
         }
         if (isActive && !isDestroyed) { used++; }
@@ -84,21 +81,16 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     });
 
     Object.values(draftPositions).forEach(draft => {
-       if (!draft.isNewMarch) return;
-       if (draft.marchType === 'rally_join') return; 
-
-       const isLeader = String(draft.leader) === String(playerId);
-       const isMember = draft.members && draft.members.map(String).includes(String(playerId));
-
-       if (isLeader || isMember) {
-           used++;
-       }
+       if (!draft.isNewMarch || draft.marchType === 'rally_join') return; 
+       const isLeader = String(draft.leader) === strPlayerId;
+       const isMember = draft.members && draft.members.map(String).includes(strPlayerId);
+       if (isLeader || isMember) used++;
     });
 
     return Math.max(0, total - used);
-  };
+  }, [activeDeployment, roster, marches, draftPositions, currentTime]);
 
-  const handleDispatchMarch = (playerId, targetId, marchIndex, rawMarchType = 'attacco', members = [], membersData = [], externalTarget = null) => {
+  const handleDispatchMarch = useCallback((playerId, targetId, marchIndex, rawMarchType = 'attacco', members = [], membersData = [], externalTarget = null) => {
     const availableForLeader = getAvailableMarches(playerId);
     if (availableForLeader <= 0) return;
 
@@ -143,67 +135,103 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     const rallyDelay = marchType === 'rally' ? rallyTime : 0;
     const arrivalTime = currentTime + rallyDelay + travelTime;
     
-    let returnTravelTime = 0;
-    if (marchType === 'raccolta') {
-       returnTravelTime = travelTime; 
-    }
+    setDraftPositions(prev => {
+        let alreadyTargeting = false;
+        const strId = String(playerId);
 
-    const newDrafts = {};
-    const leaderMarchId = `${playerId}-march-${Date.now()}-${marchIndex}`;
-    
-    newDrafts[leaderMarchId] = {
-      isNewMarch: true, leader: playerId, members,
-      startTime: currentTime + rallyDelay, rallyCallTime: currentTime,
-      rallyTime: marchType === 'rally' ? rallyTime : null,
-      startX, startY, targetX, targetY, removed: false,
-      isMarching: travelTime > 0, isGarrison: marchType !== 'raccolta', targetName,
-      targetBuildingId: targetId, arrivalTime, travelTime, marchType,
-      autoReturn: marchType === 'raccolta', 
-      returnTime: marchType === 'raccolta' ? arrivalTime + returnTravelTime : null,
-      returnX: startX, returnY: startY
-    };
+        if (targetBuilding) {
+          const pMain = activeDeployment.find(p => String(p.id) === strId);
+          if (pMain && pMain.positions) {
+             const pMins = Object.keys(pMain.positions).map(Number).sort((a,b)=>a-b);
+             let lastP = null;
+             for (const m of pMins) { if (m <= arrivalTime) lastP = pMain.positions[m]; }
+             if (lastP && !lastP.removed && String(lastP.targetBuildingId) === String(targetId)) alreadyTargeting = true;
+          }
+          
+          marches.forEach(m => {
+             const isLeader = String(m.leader) === strId;
+             const isMember = m.members && m.members.map(String).includes(strId);
+             if (isLeader || isMember) {
+                 if (m.positions) {
+                     const mMins = Object.keys(m.positions).map(Number).sort((a,b)=>a-b);
+                     let lastM = null;
+                     for (const min of mMins) { if (min <= arrivalTime) lastM = m.positions[min]; }
+                     if (lastM && !lastM.removed && String(lastM.targetBuildingId) === String(targetId)) alreadyTargeting = true;
+                 }
+             }
+          });
+          
+          Object.values(prev).forEach(draft => {
+             const isLeader = String(draft.leader) === strId;
+             const isMember = draft.members && draft.members.map(String).includes(strId);
+             if ((isLeader || isMember) && String(draft.targetBuildingId) === String(targetId)) {
+                 if (!draft.autoReturn || draft.returnTime > arrivalTime) alreadyTargeting = true;
+             }
+          });
+        }
 
-    let validMembers = [];
+        const isBounce = alreadyTargeting;
+        const autoReturn = marchType === 'raccolta' || isBounce;
+        const returnTravelTime = autoReturn ? travelTime : 0;
+        const returnTime = autoReturn ? arrivalTime + returnTravelTime : null;
 
-    if (marchType === 'rally' && members.length > 0) {
-      members.forEach((memberId, mIdx) => {
-        if (getAvailableMarches(memberId) <= 0) return;
-        validMembers.push(memberId);
-        const memData = membersData.find(m => (typeof m === 'object' ? m.id : m) === memberId) || {};
-        const speedupsUsed = typeof memData === 'object' ? (memData.speedups || 0) : 0;
-
-        const memCoords = getCityPosition(memberId);
-        const memStartX = memCoords.x;
-        const memStartY = memCoords.y;
-
-        const dxMem = startX - memStartX;
-        const dyMem = startY - memStartY;
-        const memToLeaderDist = Math.sqrt(dxMem * dxMem + dyMem * dyMem);
+        const newDrafts = {};
+        const leaderMarchId = `${playerId}-march-${Date.now()}-${marchIndex}`;
         
-        let memTravelTime = (memToLeaderDist / speed) / 60;
-        if (speedupsUsed > 0) memTravelTime = memTravelTime * Math.pow(0.75, speedupsUsed);
-        
-        if (memTravelTime > rallyTime && speedupsUsed > 0) memTravelTime = rallyTime - 0.01; 
-
-        const memArrivalTime = currentTime + memTravelTime;
-        const memberMarchId = `${memberId}-march-${Date.now()}-join-${mIdx}`;
-        
-        newDrafts[memberMarchId] = {
-          isNewMarch: true, leader: memberId, members: [], 
-          startTime: currentTime, startX: memStartX, startY: memStartY,
-          targetX: startX, targetY: startY, removed: true, 
-          isMarching: true, isGarrison: false, targetBuildingId: null, 
-          arrivalTime: memArrivalTime, travelTime: memTravelTime, 
-          marchType: 'rally_join', speedupsUsed
+        newDrafts[leaderMarchId] = {
+          isNewMarch: true, leader: playerId, members,
+          startTime: currentTime + rallyDelay, rallyCallTime: currentTime,
+          rallyTime: marchType === 'rally' ? rallyTime : null,
+          startX, startY, targetX, targetY, removed: false,
+          isMarching: travelTime > 0, 
+          isGarrison: (marchType !== 'raccolta' && !isBounce), 
+          targetName,
+          targetBuildingId: targetId, arrivalTime, travelTime, marchType,
+          autoReturn, 
+          returnTime,
+          returnX: startX, returnY: startY
         };
-      });
-    }
 
-    newDrafts[leaderMarchId].members = validMembers;
-    setDraftPositions(prev => ({ ...prev, ...newDrafts }));
-  };
+        let validMembers = [];
 
-  const handleConfirmMinute = () => {
+        if (marchType === 'rally' && members.length > 0) {
+          members.forEach((memberId, mIdx) => {
+            validMembers.push(memberId);
+            const memData = membersData.find(m => (typeof m === 'object' ? m.id : m) === memberId) || {};
+            const speedupsUsed = typeof memData === 'object' ? (memData.speedups || 0) : 0;
+
+            const memCoords = getCityPosition(memberId);
+            const memStartX = memCoords.x;
+            const memStartY = memCoords.y;
+
+            const dxMem = startX - memStartX;
+            const dyMem = startY - memStartY;
+            const memToLeaderDist = Math.sqrt(dxMem * dxMem + dyMem * dyMem);
+            
+            let memTravelTime = (memToLeaderDist / speed) / 60;
+            if (speedupsUsed > 0) memTravelTime = memTravelTime * Math.pow(0.75, speedupsUsed);
+            if (memTravelTime > rallyTime && speedupsUsed > 0) memTravelTime = rallyTime - 0.01; 
+
+            const memArrivalTime = currentTime + memTravelTime;
+            const memberMarchId = `${memberId}-march-${Date.now()}-join-${mIdx}`;
+            
+            newDrafts[memberMarchId] = {
+              isNewMarch: true, leader: memberId, members: [], 
+              startTime: currentTime, startX: memStartX, startY: memStartY,
+              targetX: startX, targetY: startY, removed: true, 
+              isMarching: true, isGarrison: false, targetBuildingId: null, 
+              arrivalTime: memArrivalTime, travelTime: memTravelTime, 
+              marchType: 'rally_join', speedupsUsed
+            };
+          });
+        }
+
+        newDrafts[leaderMarchId].members = validMembers;
+        return { ...prev, ...newDrafts };
+    });
+  }, [getAvailableMarches, getCityPosition, currentTime, buildings, teamBase, activeDeployment, marches, t]);
+
+  const handleConfirmMinute = useCallback(() => {
     const applyDraftToEntity = (entity) => {
       const draft = draftPositions[entity.id];
       if (!draft) return entity;
@@ -238,7 +266,6 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     setMarches(prevMarches => {
       let newMarchesToAdd = [];
       let updatedMarches = prevMarches.map(applyDraftToEntity);
-      
       Object.entries(draftPositions).forEach(([id, draft]) => {
         if (draft.isNewMarch && !updatedMarches.find(m => String(m.id) === String(id))) {
           const newPositions = {};
@@ -269,32 +296,122 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
       return [...updatedMarches, ...newMarchesToAdd];
     });
     setDraftPositions({});
-  };
+  }, [draftPositions, currentTime, setActiveDeployment]);
 
-  const handleCancelMinute = () => setDraftPositions({});
-  
-  const handleWithdraw = (id) => setDraftPositions(prev => ({ ...prev, [id]: { removed: true } }));
-  
-  const handleHeal = (playerId) => {
-    if (!window.confirm(t('hooks.confirm_heal', "Confermi di voler mandare in cura questo giocatore?"))) return;
-    setActiveDeployment(prev => prev.map(p => String(p.id) === String(playerId) ? { ...p, positions: { ...(p.positions || {}), [currentTime]: { removed: true } } } : p));
-    setMarches(prevMarches => {
-      const updatedMarches = [];
-      for (const march of prevMarches) {
-        const isLeader = String(march.leader) === String(playerId);
-        const isMember = march.members && march.members.map(String).includes(String(playerId));
-        if (!isLeader && !isMember) { updatedMarches.push(march); continue; }
-        updatedMarches.push({ ...march, members: march.members.filter(mId => String(mId) !== String(playerId)) });
-      }
-      return updatedMarches.filter(m => !(String(m.leader) === String(playerId) && m.marchType === 'rally_join'));
-    });
+  const handleCancelMinute = useCallback((targetMinute = null) => {
+    const minToCancel = targetMinute !== null ? targetMinute : currentTime;
     setDraftPositions({});
-    setHealingEvents(prev => ({ ...prev, [playerId]: currentTime }));
-  };
+    setActiveDeployment(prev => prev.map(player => {
+      if (player.positions && player.positions[minToCancel]) {
+        const updatedPositions = { ...player.positions };
+        delete updatedPositions[minToCancel];
+        return { ...player, positions: updatedPositions };
+      }
+      return player;
+    }));
+    setMarches(prevMarches => prevMarches.map(march => {
+      if (march.positions && march.positions[minToCancel]) {
+        const updatedPositions = { ...march.positions };
+        delete updatedPositions[minToCancel];
+        return { ...march, positions: updatedPositions };
+      }
+      return march;
+    }));
+  }, [currentTime, setActiveDeployment]);
+
+  const handleWithdraw = useCallback((id) => setDraftPositions(prev => ({ ...prev, [id]: { removed: true } })), []);
   
-  const handleCancelHeal = (e, playerId) => { e.stopPropagation(); setHealingEvents(prev => { const newHeals = { ...prev }; delete newHeals[playerId]; return newHeals; }); };
+  const handleHeal = useCallback((playerId) => {
+    if (!window.confirm(t('hooks.confirm_heal', "Confermi di voler mandare in cura questo giocatore?"))) return;
+    
+    const strId = String(playerId);
+    const basePos = getBasePositionApp(strId, teamBase);
+    const HEAL_DURATION = 12; 
+    const returnTime = currentTime + HEAL_DURATION;
+
+    setActiveDeployment(prev => prev.map(p => {
+        if (String(p.id) === strId) {
+            return { 
+                ...p, 
+                positions: { 
+                    ...(p.positions || {}), 
+                    [currentTime]: { removed: true },
+                    [returnTime]: { x: basePos.x, y: basePos.y, removed: false, isGarrison: false, targetBuildingId: null, marchType: '' }
+                } 
+            };
+        }
+        return p;
+    }));
+
+    setMarches(prevMarches => {
+      let updatedMarches = [];
+      let newLeaders = new Set();
+      
+      for (let march of prevMarches) {
+        if (String(march.leader) === strId) {
+          if (march.marchType !== 'rally_join' && march.members && march.members.length > 0) {
+            const newLeader = String(march.members[0]);
+            newLeaders.add(newLeader);
+            updatedMarches.push({
+              ...march,
+              leader: newLeader,
+              members: march.members.slice(1) 
+            });
+          } else {
+            updatedMarches.push({
+              ...march,
+              positions: { ...(march.positions || {}), [currentTime]: { removed: true } }
+            });
+          }
+        } else if (march.members && march.members.map(String).includes(strId)) {
+          updatedMarches.push({
+            ...march,
+            members: march.members.filter(mId => String(mId) !== strId)
+          });
+        } else {
+          updatedMarches.push(march);
+        }
+      }
+      
+      return updatedMarches.map(m => {
+        if (newLeaders.has(String(m.leader)) && m.marchType === 'rally_join') {
+          return {
+            ...m,
+            positions: { ...(m.positions || {}), [currentTime]: { removed: true } }
+          };
+        }
+        return m;
+      });
+    });
+    
+    setDraftPositions({});
+    setHealingEvents(prev => ({ ...prev, [strId]: currentTime }));
+  }, [currentTime, teamBase, setActiveDeployment, setHealingEvents, t]);
   
-  const handleGarrisonAction = (actionType, buildingId, targetPlayerId = null) => {
+  const handleCancelHeal = useCallback((e, playerId) => { 
+    e.stopPropagation(); 
+    setHealingEvents(prev => { 
+        const newHeals = { ...prev }; 
+        delete newHeals[playerId]; 
+        return newHeals; 
+    }); 
+    const strId = String(playerId);
+    const basePos = getBasePositionApp(strId, teamBase);
+    setActiveDeployment(prev => prev.map(p => {
+        if (String(p.id) === strId) {
+            return {
+                ...p,
+                positions: {
+                    ...(p.positions || {}),
+                    [currentTime]: { x: basePos.x, y: basePos.y, removed: false, isGarrison: false, targetBuildingId: null, marchType: '' }
+                }
+            };
+        }
+        return p;
+    }));
+  }, [currentTime, teamBase, setActiveDeployment, setHealingEvents]);
+  
+  const handleGarrisonAction = useCallback((actionType, buildingId, targetPlayerId = null) => {
     const isDefeat = actionType === 'defeat';
     const building = buildings.find(b => String(b.id) === String(buildingId));
     if (!building) return;
@@ -310,12 +427,8 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
 
         const startX = pos.x;
         const startY = pos.y;
-        
         let targetBase = getCityPosition(entId);
-        
-        if (Math.abs(targetBase.x - startX) < 0.1 && Math.abs(targetBase.y - startY) < 0.1) {
-            targetBase = getBasePositionApp(entId, teamBase);
-        }
+        if (Math.abs(targetBase.x - startX) < 0.1 && Math.abs(targetBase.y - startY) < 0.1) targetBase = getBasePositionApp(entId, teamBase);
         
         const dx = startX - targetBase.x;
         const dy = startY - targetBase.y;
@@ -328,78 +441,106 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
         
         const speed = refDist / Math.max(1, baseTableTime);
         const travelTime = (dist / speed) / 60;
-        
         const returnTime = currentTime + travelTime;
 
         const newPositions = { ...(entity.positions || {}) };
+        newPositions[currentTime] = { isMarching: true, startTime: currentTime, startX: startX, startY: startY, targetX: targetBase.x, targetY: targetBase.y, arrivalTime: returnTime, targetBuildingId: null, marchType: 'ritirata' };
         
-        newPositions[currentTime] = { 
-            isMarching: true, 
-            startTime: currentTime, 
-            startX: startX, startY: startY, 
-            targetX: targetBase.x, targetY: targetBase.y, 
-            arrivalTime: returnTime, 
-            targetBuildingId: null, 
-            marchType: 'ritirata' 
-        };
-        
-        if (isMarch) {
-            newPositions[returnTime] = { removed: true };
-        } else {
-            newPositions[returnTime] = { x: targetBase.x, y: targetBase.y, removed: false, isGarrison: false, targetBuildingId: null };
-        }
+        if (isMarch) newPositions[returnTime] = { removed: true };
+        else newPositions[returnTime] = { x: targetBase.x, y: targetBase.y, removed: false, isGarrison: false, targetBuildingId: null };
 
         return { ...entity, positions: newPositions, marchType: 'ritirata' };
       }
       return entity;
     };
 
-    if (window.confirm(isDefeat ? t('hooks.confirm_defeat', "Confermi di voler cedere {{building}}? Le truppe torneranno ai propri segnalini.", { building: building.name }) : t('hooks.confirm_withdraw', "Confermi di voler RITIRARE le truppe da {{building}}?", { building: building.name }))) {
+    if (window.confirm(isDefeat ? t('hooks.confirm_defeat') : t('hooks.confirm_withdraw'))) {
+       
+       // Imposta la ritirata fisica del singolo giocatore o di tutti
        setActiveDeployment(prev => prev.map(p => processEntityRetreat(p, false)));
-       setMarches(prev => prev.map(m => processEntityRetreat(m, true)));
-    }
-  };
+       
+       // Gestione del passaggio della leadership in caso di ritiro mirato
+       setMarches(prevMarches => {
+          let updatedMarches = [];
+          let newLeaders = new Set();
+          
+          for (let march of prevMarches) {
+            const pos = getCurrentPosition(march);
+            const inTargetBuilding = pos && !pos.removed && !pos.isMarching && String(pos.targetBuildingId) === String(buildingId);
 
-  const handleUpdatePosition = (dragData, newX, newY) => {
+            if (!inTargetBuilding) {
+               updatedMarches.push(march);
+               continue;
+            }
+
+            if (targetPlayerId) {
+              if (String(march.leader) === String(targetPlayerId)) {
+                 if (march.marchType !== 'rally_join' && march.members && march.members.length > 0) {
+                    // Passa la leadership al secondo
+                    const newLeader = String(march.members[0]);
+                    newLeaders.add(newLeader);
+                    updatedMarches.push({
+                       ...march,
+                       leader: newLeader,
+                       members: march.members.slice(1)
+                    });
+                 } else {
+                    // Nessun membro: l'intera marcia si ritira
+                    updatedMarches.push(processEntityRetreat(march, true));
+                 }
+              } else if (march.members && march.members.map(String).includes(String(targetPlayerId))) {
+                 // Rimuove solo un membro dalla lista
+                 updatedMarches.push({
+                    ...march,
+                    members: march.members.filter(mId => String(mId) !== String(targetPlayerId))
+                 });
+              } else {
+                 updatedMarches.push(march);
+              }
+            } else {
+              // Target nullo: Ritira tutti
+              updatedMarches.push(processEntityRetreat(march, true));
+            }
+          }
+
+          // Elimina l'ordine "rally_join" obsoleto per i nuovi capopresidio
+          return updatedMarches.map(m => {
+            if (newLeaders.has(String(m.leader)) && m.marchType === 'rally_join') {
+               return {
+                  ...m,
+                  positions: { ...(m.positions || {}), [currentTime]: { removed: true } }
+               };
+            }
+            return m;
+          });
+       });
+    }
+  }, [buildings, teamBase, getCurrentPosition, getCityPosition, currentTime, setActiveDeployment, t]);
+
+  const handleUpdatePosition = useCallback((dragData, newX, newY) => {
      const [type, id] = dragData.split(':');
      if (type === 'building') { 
          setBuildings(prev => prev.map(b => String(b.id) === String(id) ? { ...b, x: newX, y: newY } : b)); 
      }
      else if (type === 'player') {
        setActiveDeployment(prev => prev.map(p => {
-           if (String(p.id) === String(id)) {
-               return { 
-                   ...p, 
-                   positions: { 
-                       ...(p.positions || {}), 
-                       [currentTime]: { x: newX, y: newY, removed: false, isGarrison: false, targetBuildingId: null } 
-                   } 
-               };
-           }
+           if (String(p.id) === String(id)) return { ...p, positions: { ...(p.positions || {}), [currentTime]: { x: newX, y: newY, removed: false, isGarrison: false, targetBuildingId: null } } };
            return p;
        }));
-
        setMarches(prev => prev.map(m => {
-           if (String(m.leader) === String(id)) {
-               return { ...m, positions: { ...(m.positions || {}), [currentTime]: { removed: true } } };
-           }
-           if (m.members && m.members.map(String).includes(String(id))) {
-               return { ...m, members: m.members.filter(mId => String(mId) !== String(id)) };
-           }
+           if (String(m.leader) === String(id)) return { ...m, positions: { ...(m.positions || {}), [currentTime]: { removed: true } } };
+           if (m.members && m.members.map(String).includes(String(id))) return { ...m, members: m.members.filter(mId => String(mId) !== String(id)) };
            return m;
        }));
-
        setDraftPositions(prev => {
           const newDrafts = { ...prev };
-          Object.keys(newDrafts).forEach(draftId => {
-              if (String(newDrafts[draftId].leader) === String(id)) {
-                  delete newDrafts[draftId];
-              }
-          });
+          Object.keys(newDrafts).forEach(draftId => { if (String(newDrafts[draftId].leader) === String(id)) delete newDrafts[draftId]; });
           return newDrafts;
        });
      }
-  };
+  }, [currentTime, setBuildings, setActiveDeployment]);
 
-  return { marches, setMarches, draftPositions, setDraftPositions, getCurrentPosition, handleDispatchMarch, handleConfirmMinute, handleCancelMinute, getAvailableMarches, handleHeal, handleCancelHeal, handleGarrisonAction, handleUpdatePosition, handleWithdraw };
+  return useMemo(() => ({
+    marches, setMarches, draftPositions, setDraftPositions, getCurrentPosition, handleDispatchMarch, handleConfirmMinute, handleCancelMinute, getAvailableMarches, handleHeal, handleCancelHeal, handleGarrisonAction, handleUpdatePosition, handleWithdraw 
+  }), [marches, draftPositions, getCurrentPosition, handleDispatchMarch, handleConfirmMinute, handleCancelMinute, getAvailableMarches, handleHeal, handleCancelHeal, handleGarrisonAction, handleUpdatePosition, handleWithdraw]);
 };

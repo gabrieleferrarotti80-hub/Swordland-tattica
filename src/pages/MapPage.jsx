@@ -11,10 +11,19 @@ import GlobalView from '../components/map/views/GlobalView';
 import TacticalView from '../components/map/views/TacticalView';
 import CastleView from '../components/map/views/CastleView';
 import AllianceView from '../components/map/views/AllianceView';
+import CastleTestView from '../components/map/views/CastleTestView';
 import TacticalExportModal from '../components/map/TacticalExportModal';
 import EventManagerModal from '../components/map/EventManagerModal';
 import MapHelpModal from '../components/map/MapHelpModal';
 import AllianceBuilderModal from '../components/map/AllianceBuilderModal'; 
+import MapSidebarGlobalEditor from '../components/map/sidebars/MapSidebarGlobalEditor';
+import MapSidebarExpansion from '../components/map/sidebars/MapSidebarExpansion';
+import ExpansionView from '../components/map/views/ExpansionView';
+
+import MapSidebarAlliance from '../components/map/sidebars/MapSidebarAlliance';
+import MapSidebarTactical from '../components/map/sidebars/MapSidebarTactical';
+import { AlliancePathfindingSidebar } from '../components/map/AlliancePathfindingSidebar';
+import { PathfindingView } from '../components/map/views/PathfindingView';
 
 import { useMapData } from '../hooks/useMapData';
 import { useMapCamera } from '../hooks/useMapCamera';
@@ -23,10 +32,16 @@ import { useMarches } from '../hooks/useMarches';
 const INITIAL_BUILDINGS = mapBuildings.map(b => ({
   id: b.id, code: b.type ? b.type.substring(0, 3).toUpperCase() : `B${b.id}`,
   name: b.name + (b.level ? ` Lv.${b.level}` : ''), type: b.type || '',
-  x: b.x, y: b.y, minX: b.x - 30, maxX: b.x + 30, minY: b.y - 30, maxY: b.y + 30, occupiedBy: b.occupant || ''
+  x: b.x, y: b.y, minX: b.x - 30, maxX: b.x + 30, minY: b.y - 30, maxY: b.y + 30, occupiedBy: b.occupant || '',
+  buffs: "", rewards: "", level: b.level || 1
 }));
 
-export default function MapPage({ roster, userRole, allianceCode, allianceRole }) {
+const DEMO_STRUCTURES = [];
+const DEMO_OVERRIDES = {};
+const DEMO_ROSTER = [];
+const EMPTY_ARRAY = [];
+
+export default function MapPage({ roster, setRoster, userRole, allianceCode, allianceRole }) {
   const mainRef = useRef(null);
   const location = useLocation();
   const { t } = useTranslation();
@@ -53,19 +68,22 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isEventManagerOpen, setIsEventManagerOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-  
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [isMapUnlocked, setIsMapUnlocked] = useState(false);
 
-  const [currentPlanId, setCurrentPlanId] = useState(null);
-  const [currentPlanName, setCurrentPlanName] = useState('');
-
-  const [popupPlayerId, setPopupPlayerId] = useState(null);
   const [marchAssignments, setMarchAssignments] = useState({});
   const [showLabels, setShowLabels] = useState(false);
   const [currentTime, setCurrentTime] = useState(0); 
 
   const [exportableOrders, setExportableOrders] = useState([]);
   const [isPlacementMode, setIsPlacementMode] = useState(true);
+
+  const [isGlobalEditorMode, setIsGlobalEditorMode] = useState(false);
+  const [globalEditorTool, setGlobalEditorTool] = useState('resources');
+  const [activeZoneId, setActiveZoneId] = useState(null); 
+
+  const [isPathfindingMode, setIsPathfindingMode] = useState(false);
+  const [pathfindingData, setPathfindingData] = useState(null);
 
   const [filters, setFilters] = useState({
     castle: true, santuari: true, fortezze: true, builders: true,
@@ -76,16 +94,19 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   });
   
   const areAllFiltersActive = Object.values(filters).every(Boolean);
-  const toggleFilter = (key) => setFilters(prev => ({ ...prev, [key]: !prev[key] }));
-  const toggleAllFilters = () => {
-    const newValue = !areAllFiltersActive;
-    setFilters(Object.keys(filters).reduce((acc, key) => { acc[key] = newValue; return acc; }, {}));
-  };
+  const toggleFilter = useCallback((key) => setFilters(prev => ({ ...prev, [key]: !prev[key] })), []);
+  const toggleAllFilters = useCallback(() => {
+    setFilters(prev => {
+      const newValue = !Object.values(prev).every(Boolean);
+      return Object.keys(prev).reduce((acc, key) => { acc[key] = newValue; return acc; }, {});
+    });
+  }, []);
 
   const TILE_SF = 550 / 1200;
 
   const {
     effectiveRoster, isLoadingCloud, isSavingSim,
+    globalResourceZones, setGlobalResourceZones,
     fixedBuildings, setFixedBuildings, handleBuildingChange, handleAddBuilding, handleDeleteBuilding,
     allianceStructures, setAllianceStructures, handleAllianceStructureChange,
     enemyHQs, handleAddHQ, handleRemoveHQ,
@@ -96,13 +117,14 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
     loadedMarches, handleSaveMapToCloud, handleSaveSimulation
   } = useMapData({
     roster, allianceCode, userRole, allianceRole, eventMode, targetKingdom,
-    isReadOnly, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES: defaultStructures, DEMO_STRUCTURES: [], DEMO_OVERRIDES: {}, DEMO_ROSTER: []
+    isReadOnly, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES: defaultStructures, 
+    DEMO_STRUCTURES, DEMO_OVERRIDES, DEMO_ROSTER 
   });
 
-  const rosterArray = Array.isArray(effectiveRoster) ? effectiveRoster : (effectiveRoster?.players || []);
+  const rosterArray = useMemo(() => Array.isArray(effectiveRoster) ? effectiveRoster : (effectiveRoster?.players || EMPTY_ARRAY), [effectiveRoster]);
 
   const validPlayers = useMemo(() => {
-    const participants = tacticalMeta?.participants || [];
+    const participants = tacticalMeta?.participants || EMPTY_ARRAY;
     const filteredArr = activeView === 'tactical' ? rosterArray.filter(p => participants.includes(p.id) || eventMode === 'castle_battle') : rosterArray;
     return filteredArr
       .map(p => {
@@ -135,9 +157,7 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   } = useMarches({
     roster: effectiveRoster, activeDeployment: validPlayers, setActiveDeployment: () => {},
     buildings: fixedBuildings, setBuildings: setFixedBuildings,
-    teamBase: 'blue', 
-    currentTime: currentTime / 60, 
-    setManualCaptures, setHealingEvents
+    teamBase: 'blue', currentTime: currentTime / 60, setManualCaptures, setHealingEvents
   });
 
   useEffect(() => {
@@ -196,60 +216,124 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
   }, [isReadOnly, marchAssignments, handleDispatchMarch, currentTime, handleConfirmMinute, t]);
 
   const handleSvgClick = useCallback((e) => {
-    if (selectedTool !== 'distance') { 
-      setSelectedBuilding(null); 
-      setIsRightPanelOpen(false);
-      return; 
-    }
     const svgElement = e.currentTarget;
     const pt = svgElement.createSVGPoint();
     pt.x = e.clientX; pt.y = e.clientY;
     const svgPoint = pt.matrixTransform(svgElement.getScreenCTM().inverse());
     const coords = svgToGameCoordinates(svgPoint.x, svgPoint.y);
+
+    if (activeView === 'alliance' && hiveGridMeta?.isDrawing) {
+      setHiveGridMeta(prev => ({
+        ...prev,
+        territory: [...(prev?.territory || []), { x: coords.x, y: coords.y }]
+      }));
+      return; 
+    }
+
+    if (selectedTool !== 'distance') { 
+      setSelectedBuilding(null); 
+      setIsRightPanelOpen(false);
+      return; 
+    }
+    
     const freePointTarget = { id: `free-${Date.now()}`, code: 'POS', name: t('map_page.map_coords', 'Coordinate Mappa'), x: coords.x, y: coords.y, isCustomPoint: true };
     if (!marchOrigin) setMarchOrigin(freePointTarget);
     else if (!marchDestination) setMarchDestination(freePointTarget);
     else { setMarchOrigin(freePointTarget); setMarchDestination(null); }
-  }, [selectedTool, marchOrigin, marchDestination, t]);
+  }, [selectedTool, marchOrigin, marchDestination, t, activeView, hiveGridMeta?.isDrawing, setHiveGridMeta]);
 
-  const commonProps = useMemo(() => ({
-    validPlayers, fixedBuildings, allianceStructures, filters, scale, inverseScale: 1 / scale, TILE_SF,
-    selectedBuilding, setSelectedBuilding: handleSelectBuilding,
-    marchOrigin, setMarchOrigin, marchDestination, setMarchDestination,
-    selectedTool, showLabels, activeView, setActiveView, enemyHQs,
-    setDraggedPlayerId, setPopupPlayerId, hiveGridMeta, eventMode, tacticalMeta
-  }), [validPlayers, fixedBuildings, allianceStructures, filters, scale, TILE_SF, selectedBuilding, handleSelectBuilding, marchOrigin, marchDestination, selectedTool, showLabels, activeView, enemyHQs, setDraggedPlayerId, hiveGridMeta, eventMode, tacticalMeta]);
+  const patternSize = 2 * TILE_SF;
+  const gridTranslateX = 600 - TILE_SF;
+  const gridTranslateY = 1150 - TILE_SF;
+  
+  const isSplitScreen = isPathfindingMode && pathfindingData?.mode === 'layout' && pathfindingData?.splitScreen;
 
-  const currentEventData = useMemo(() => ({
-    tacticalMeta, playerOverrides, hiveGridMeta, exportableOrders,
-    fixedBuildings, allianceStructures, marches, allianceMeta
-  }), [tacticalMeta, playerOverrides, hiveGridMeta, exportableOrders, fixedBuildings, allianceStructures, marches, allianceMeta]);
+  const renderMapContent = (splitSide = 'full') => {
+    let currentPlayers = validPlayers;
+    let currentStructures = allianceStructures;
+    let currentHiveGridMeta = hiveGridMeta;
 
-  const handleLoadEventData = (data, planId, planName) => {
-    if (window.confirm(t('map_page.confirm_load_plan', `⚠️ Vuoi caricare il piano "{{planName}}"? La mappa attuale verrà sovrascritta.`, { planName }))) {
-      if (data.tacticalMeta) setTacticalMeta(data.tacticalMeta);
-      else setTacticalMeta({ participants: [], draftData: { teams: [], playerMeta: {}, macroGroups: [] } });
-      if (data.playerOverrides) setPlayerOverrides(data.playerOverrides);
-      else setPlayerOverrides({});
-      if (data.hiveGridMeta) setHiveGridMeta(data.hiveGridMeta);
-      if (data.exportableOrders) setExportableOrders(data.exportableOrders);
-      else setExportableOrders([]);
-      if (data.fixedBuildings) setFixedBuildings(data.fixedBuildings);
-      if (data.allianceStructures) setAllianceStructures(data.allianceStructures);
-      if (data.marches) setMarches(data.marches);
-      else setMarches([]);
-      if (data.allianceMeta) setAllianceMeta(data.allianceMeta);
-      setCurrentPlanId(planId || null); setCurrentPlanName(planName || '');
-      setIsEventManagerOpen(false);
+    if (splitSide === 'right' && isSplitScreen && pathfindingData?.placements) {
+      currentStructures = pathfindingData.placements
+        .filter(p => !p.isPlayer)
+        .map((p, i) => {
+           const nx = Number(p.newX);
+           const ny = Number(p.newY);
+           return {
+             ...p,
+             x: nx, y: ny,
+             id: p.id || `gen-struct-${i}`,
+             type: p.type || 'structure'
+           };
+        });
+      
+      currentPlayers = pathfindingData.placements
+        .filter(p => p.isPlayer)
+        .map((p, i) => {
+           const nx = Number(p.newX);
+           const ny = Number(p.newY);
+           return {
+             ...p,
+             numX: nx, numY: ny,
+             x: nx, y: ny,
+             svgX: 600 + (nx - ny) * TILE_SF,
+             svgY: 1150 - (nx + ny) * TILE_SF,
+             id: p.id || `gen-player-${i}`
+           };
+        });
+    } else if (splitSide === 'right' && !isSplitScreen) {
+      currentPlayers = EMPTY_ARRAY;
     }
-  };
 
-  const handleCreateNewPlan = () => {
-    if (window.confirm(t('map_page.confirm_reset_map', "⚠️ Vuoi davvero azzerare la mappa? Perderai tutto il lavoro non salvato su squadre, posizioni e ordini."))) {
-      setTacticalMeta({ participants: [], draftData: { teams: [], playerMeta: {}, macroGroups: [] } });
-      setPlayerOverrides({}); setExportableOrders([]); setMarches([]); setMarchAssignments({});
-      setCurrentPlanId(null); setCurrentPlanName(''); setIsEventManagerOpen(false);
-    }
+    const showPathfinding = isPathfindingMode && (splitSide === 'full' || splitSide === 'right');
+
+    return (
+      <div className="relative w-full h-full bg-slate-900/30 rounded-3xl border border-slate-800/80 overflow-hidden backdrop-blur-sm">
+        {activeView !== 'test' && (
+          <svg id={splitSide === 'full' ? 'map-svg' : `map-svg-${splitSide}`} viewBox="0 0 1200 1200" className="w-full h-full" onClick={handleSvgClick}>
+            <defs>
+              <pattern id="mapGrid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1"/></pattern>
+              <pattern id="subGrid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(34, 211, 238, 0.08)" strokeWidth="0.5"/></pattern>
+              
+              <pattern id="iso-1x1-grid" width={patternSize} height={patternSize} patternUnits="userSpaceOnUse" patternTransform={`translate(${gridTranslateX}, ${gridTranslateY})`}>
+                <path d={`M ${TILE_SF} 0 L ${2 * TILE_SF} ${TILE_SF} L ${TILE_SF} ${2 * TILE_SF} L 0 ${TILE_SF} Z`} fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1/scale} />
+                <path d={`M 0 0 L ${TILE_SF} ${TILE_SF} L 0 ${2 * TILE_SF} M ${2 * TILE_SF} 0 L ${TILE_SF} ${TILE_SF} L ${2 * TILE_SF} ${2 * TILE_SF}`} fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1/scale} />
+              </pattern>
+            </defs>
+            <rect width="1200" height="1200" fill="url(#subGrid)" />
+            <rect width="1200" height="1200" fill="url(#mapGrid)" />
+            <polygon points="600,50 1150,600 600,1150 50,600" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(34, 211, 238, 0.6)" strokeWidth="3" />
+
+            {activeView === 'alliance' && (
+              <rect width="1200" height="1200" fill="url(#iso-1x1-grid)" pointerEvents="none" />
+            )}
+            
+            <g transform={`translate(600, 1150)`}>
+              <circle cx="0" cy="0" r={4 * TILE_SF} fill="#22d3ee" opacity="0.3" className="animate-pulse" />
+              <g transform={`scale(${1/scale})`}><text x="15" y="5" fill="#22d3ee" fontSize="18" fontWeight="bold">{t('map.origin')} (0:0)</text></g>
+            </g>
+
+            {activeView === 'global' && <GlobalView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} enemyHQs={enemyHQs} showLabels={showLabels} isGlobalEditorMode={isGlobalEditorMode} globalEditorTool={globalEditorTool} globalResourceZones={globalResourceZones} setGlobalResourceZones={setGlobalResourceZones} activeZoneId={activeZoneId} />}
+            {((activeView === 'castle') || (activeView === 'tactical' && eventMode === 'castle_battle')) && <CastleView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} tacticalMeta={tacticalMeta} setDraggedPlayerId={setDraggedPlayerId} />}
+            {activeView === 'tactical' && eventMode !== 'castle_battle' && <TacticalView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} tacticalMeta={tacticalMeta} setDraggedPlayerId={setDraggedPlayerId} />}
+            {activeView === 'expansion' && <ExpansionView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} setAllianceStructures={setAllianceStructures} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} setDraggedPlayerId={setDraggedPlayerId} />}
+            
+            {activeView === 'alliance' && (
+              <AllianceView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} hiveGridMeta={currentHiveGridMeta} setHiveGridMeta={setHiveGridMeta} setDraggedPlayerId={setDraggedPlayerId} isEditMode={isMapUnlocked} />
+            )}
+
+            {showPathfinding && (
+              <PathfindingView 
+                pathfindingData={pathfindingData} 
+                TILE_SF={TILE_SF} 
+                inverseScale={1/scale} 
+              />
+            )}
+          </svg>
+        )}
+        {activeView === 'test' && <CastleTestView TILE_SF={TILE_SF} />}
+      </div>
+    );
   };
 
   return (
@@ -259,9 +343,6 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
         <div className="absolute inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-cyan-500/50 rounded-2xl shadow-2xl max-w-2xl w-full p-6 flex flex-col gap-4 animate-fade-in">
             <h2 className="text-2xl font-black text-cyan-400">{t('map_page.demo_title', 'Benvenuto nella Demo di Kingshot! 👑')}</h2>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              {t('map_page.demo_desc', 'Sei in modalità Sandbox. Abbiamo caricato alcuni dati fittizi per te: esplora liberamente tutte le funzionalità della mappa senza paura di intaccare i database reali.')}
-            </p>
             <button onClick={() => setShowDemoWelcome(false)} className="mt-4 w-full bg-cyan-700 hover:bg-cyan-600 text-white font-black tracking-widest uppercase py-3 rounded-lg transition-colors">
               {t('map_page.demo_start', "Inizia l'esplorazione")}
             </button>
@@ -278,92 +359,90 @@ export default function MapPage({ roster, userRole, allianceCode, allianceRole }
         draftData={tacticalMeta?.draftData} 
         onSaveDraft={(data) => { 
           setTacticalMeta({...tacticalMeta, draftData: data}); 
-          alert(t('map_page.draft_saved', "✅ Lavoro memorizzato temporaneamente!\n\nRicordati di cliccare 'SALVA PIANO' per renderlo definitivo su Cloud.")); 
+          alert(t('map_page.draft_saved', "✅ Lavoro memorizzato temporaneamente!")); 
         }} 
       />
 
-      <MapSidebar 
-        isReadOnly={isReadOnly} roster={effectiveRoster} selectedTool={selectedTool} setSelectedTool={setSelectedTool}
-        filters={filters} toggleFilter={toggleFilter} toggleAllFilters={toggleAllFilters} areAllFiltersActive={areAllFiltersActive}
-        showLabels={showLabels} setShowLabels={setShowLabels} marchOrigin={marchOrigin} setMarchOrigin={setMarchOrigin} 
-        marchDestination={marchDestination} setMarchDestination={setMarchDestination} marchResult={marchResult} handleManualCoord={handleManualCoord}
-        fixedBuildings={fixedBuildings} handleBuildingChange={handleBuildingChange} handleAddBuilding={handleAddBuilding} handleDeleteBuilding={handleDeleteBuilding}
-        allianceStructures={allianceStructures} handleAllianceStructureChange={handleAllianceStructureChange}
-        handleSaveToCloud={handleSaveMapToCloud} isLoadingCloud={isLoadingCloud} selectedBuilding={selectedBuilding}
-        userRole={userRole} activeView={activeView} handleSaveSimulation={handleSaveSimulation} isSavingSim={isSavingSim}
-        openExportModal={() => setIsExportModalOpen(true)} openEventManager={() => setIsEventManagerOpen(true)}
-        openBuilder={() => { setIsBuilderOpen(true); setIsRightPanelOpen(false); }} 
-        onOpenHelp={() => setIsHelpModalOpen(true)} 
-        tacticalMeta={tacticalMeta} setTacticalMeta={setTacticalMeta} setSelectedBuilding={handleSelectBuilding}
-        playerOverrides={playerOverrides} setPlayerOverrides={setPlayerOverrides} hiveGridMeta={hiveGridMeta} setHiveGridMeta={setHiveGridMeta}
-        exportableOrders={exportableOrders} setExportableOrders={setExportableOrders}
-      />
+     {isPathfindingMode ? (
+        <AlliancePathfindingSidebar 
+          setPathfindingMode={(val) => { setIsPathfindingMode(val); if (!val) setActiveView('alliance'); }}
+          allianceStructures={allianceStructures} fixedBuildings={fixedBuildings} validPlayers={validPlayers}
+          roster={rosterArray} setPathfindingData={setPathfindingData} setActiveView={setActiveView}
+          userRole={userRole} allianceCode={allianceCode}
+          setRoster={setRoster} // <--- AGGIUNGI QUESTA RIGA
+        />
+      ) : activeView === 'alliance' ? (
+        <MapSidebarAlliance 
+          roster={rosterArray} setRoster={setRoster} isReadOnly={isReadOnly}
+          hiveGridMeta={hiveGridMeta} setHiveGridMeta={setHiveGridMeta}
+          allianceStructures={allianceStructures} setAllianceStructures={setAllianceStructures}
+          handleAllianceStructureChange={handleAllianceStructureChange}
+          playerOverrides={playerOverrides} setPlayerOverrides={setPlayerOverrides}
+          onOpenHelp={() => setIsHelpModalOpen(true)} handleSaveToCloud={handleSaveMapToCloud}
+          isLoadingCloud={isLoadingCloud} isMapUnlocked={isMapUnlocked} setIsMapUnlocked={setIsMapUnlocked}
+          setActiveView={setActiveView} setPathfindingMode={setIsPathfindingMode}userRole={userRole} allianceCode={allianceCode}
+        />
+      ) : activeView === 'expansion' ? (
+        <MapSidebarExpansion allianceStructures={allianceStructures} setAllianceStructures={setAllianceStructures} setActiveView={setActiveView} handleSaveToCloud={handleSaveMapToCloud} isLoadingCloud={isLoadingCloud} />
+      ) : isGlobalEditorMode ? (
+        <MapSidebarGlobalEditor setIsGlobalEditorMode={setIsGlobalEditorMode} globalEditorTool={globalEditorTool} setGlobalEditorTool={setGlobalEditorTool} fixedBuildings={fixedBuildings} handleBuildingChange={handleBuildingChange} handleAddBuilding={handleAddBuilding} handleDeleteBuilding={handleDeleteBuilding} handleSaveToCloud={handleSaveMapToCloud} isLoadingCloud={isLoadingCloud} globalResourceZones={globalResourceZones} setGlobalResourceZones={setGlobalResourceZones} activeZoneId={activeZoneId} setActiveZoneId={setActiveZoneId} />
+      ) : (activeView === 'tactical' || activeView === 'castle' || eventMode === 'castle_battle') ? (
+        <MapSidebarTactical 
+          roster={rosterArray} isReadOnly={isReadOnly} tacticalMeta={tacticalMeta} setTacticalMeta={setTacticalMeta}
+          playerOverrides={playerOverrides} setPlayerOverrides={setPlayerOverrides} allianceStructures={allianceStructures}
+          exportableOrders={exportableOrders} setExportableOrders={setExportableOrders} fixedBuildings={fixedBuildings}
+          onOpenHelp={() => setIsHelpModalOpen(true)} openBuilder={() => { setIsBuilderOpen(true); setIsRightPanelOpen(false); }}
+          openEventManager={() => setIsEventManagerOpen(true)} openExportModal={() => setIsExportModalOpen(true)}
+        />
+      ) : (
+        <MapSidebar 
+          setIsGlobalEditorMode={setIsGlobalEditorMode} setActiveView={setActiveView} isMapUnlocked={isMapUnlocked} setIsMapUnlocked={setIsMapUnlocked} isReadOnly={isReadOnly} roster={effectiveRoster} setRoster={setRoster} selectedTool={selectedTool} setSelectedTool={setSelectedTool} filters={filters} toggleFilter={toggleFilter} toggleAllFilters={toggleAllFilters} areAllFiltersActive={areAllFiltersActive} showLabels={showLabels} setShowLabels={setShowLabels} marchOrigin={marchOrigin} setMarchOrigin={setMarchOrigin} marchDestination={marchDestination} setMarchDestination={setMarchDestination} marchResult={marchResult} handleManualCoord={handleManualCoord} fixedBuildings={fixedBuildings} handleBuildingChange={handleBuildingChange} handleAddBuilding={handleAddBuilding} handleDeleteBuilding={handleDeleteBuilding} allianceStructures={allianceStructures} setAllianceStructures={setAllianceStructures} handleAllianceStructureChange={handleAllianceStructureChange} handleSaveToCloud={handleSaveMapToCloud} isLoadingCloud={isLoadingCloud} selectedBuilding={selectedBuilding} userRole={userRole} activeView={activeView} handleSaveSimulation={handleSaveSimulation} isSavingSim={isSavingSim} openExportModal={() => setIsExportModalOpen(true)} openEventManager={() => setIsEventManagerOpen(true)} openBuilder={() => { setIsBuilderOpen(true); setIsRightPanelOpen(false); }} onOpenHelp={() => setIsHelpModalOpen(true)} tacticalMeta={tacticalMeta} setTacticalMeta={setTacticalMeta} setSelectedBuilding={handleSelectBuilding} playerOverrides={playerOverrides} setPlayerOverrides={setPlayerOverrides} hiveGridMeta={hiveGridMeta} setHiveGridMeta={setHiveGridMeta} exportableOrders={exportableOrders} setExportableOrders={setExportableOrders} allianceMeta={allianceMeta} setAllianceMeta={setAllianceMeta} 
+        />
+      )}
+      
       <main 
         ref={mainRef} onDragOver={handleDragOver} onDrop={handleDrop}
         className={`flex-1 bg-slate-950 relative flex flex-col items-center justify-center overflow-hidden transition-all duration-300 ${isDragging || draggedPlayerId ? 'cursor-grabbing' : 'cursor-grab'}`}
         onWheel={activeView === 'tactical' && isPlacementMode ? undefined : handleWheel} 
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
       >
-        
-        {activeView === 'tactical' && !isBuilderOpen && (
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-full border border-slate-700/50 shadow-2xl flex items-center gap-1">
-            <button onClick={() => setIsPlacementMode(true)} className={`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-colors shadow-lg ${isPlacementMode ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>{t('map_page.static_mode', '📍 Solo Segnalini (Mappa Statica)')}</button>
-            <button onClick={() => setIsPlacementMode(false)} className={`px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase transition-colors shadow-lg ${!isPlacementMode ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>{t('map_page.dynamic_mode', '🏰 Ordini & Edifici (Mappa Dinamica)')}</button>
-          </div>
-        )}
-        
-        {activeView === 'tactical' && (
-          <div className="absolute bottom-6 left-6 z-50 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700/50 shadow-2xl flex items-center gap-3" onMouseDown={e => e.stopPropagation()}>
-            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-wider">⏱️ {t('map_page.time', 'TEMPO')}</span>
-            <button onClick={() => setCurrentTime(Math.max(0, currentTime - 10))} className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors border border-slate-700">-</button>
-            <input type="range" min="0" max="14400" step="10" value={currentTime} onChange={(e) => setCurrentTime(Number(e.target.value))} className="w-48 accent-cyan-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg appearance-none"/>
-            <button onClick={() => setCurrentTime(Math.min(14400, currentTime + 10))} className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center text-xs transition-colors border border-slate-700">+</button>
-            <span className="bg-slate-950 px-2.5 py-1 rounded border border-slate-800 text-white font-mono font-bold text-xs min-w-[70px] text-center">{Math.floor(currentTime / 60)}' {(currentTime % 60).toString().padStart(2, '0')}"</span>
-          </div>
-        )}
         <div className="absolute bottom-6 right-6 z-30 flex flex-col gap-2 bg-slate-900/90 p-2 rounded-xl border border-slate-800 shadow-2xl backdrop-blur-md">
           <button onClick={() => handleWheel({ preventDefault: ()=>{}, deltaY: -100, currentTarget: mainRef.current, clientX: window.innerWidth/2, clientY: window.innerHeight/2 })} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg flex items-center justify-center text-lg cursor-pointer">+</button>
           <button onClick={() => handleWheel({ preventDefault: ()=>{}, deltaY: 100, currentTarget: mainRef.current, clientX: window.innerWidth/2, clientY: window.innerHeight/2 })} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg flex items-center justify-center text-lg cursor-pointer">-</button>
           <button onClick={handleResetView} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold rounded-lg flex items-center justify-center text-xs cursor-pointer">1:1</button>
         </div>
-        <div className={`absolute top-0 left-0 w-[1200px] h-[1200px] ${!isDragging && !draggedPlayerId ? 'transition-all duration-700 ease-in-out' : ''}`} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
-          <div className="relative w-full h-full bg-slate-900/30 rounded-3xl border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-sm">
-            <svg id="map-svg" viewBox="0 0 1200 1200" className="w-full h-full drop-shadow-[0_0_25px_rgba(0,0,0,0.9)]" onClick={handleSvgClick}>
-              <defs>
-                <pattern id="mapGrid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1"/></pattern>
-                <pattern id="subGrid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(34, 211, 238, 0.08)" strokeWidth="0.5"/></pattern>
-              </defs>
-              <rect width="1200" height="1200" fill="url(#subGrid)" />
-              <rect width="1200" height="1200" fill="url(#mapGrid)" />
-              <polygon points="600,50 1150,600 600,1150 50,600" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(34, 211, 238, 0.6)" strokeWidth="3" />
-              <g transform={`translate(600, 1150)`}>
-                <circle cx="0" cy="0" r={4 * TILE_SF} fill="#22d3ee" opacity="0.3" className="animate-pulse" />
-                <g transform={`scale(${1/scale})`}><text x="15" y="5" fill="#22d3ee" fontSize="18" fontWeight="bold">{t('map.origin')} (0:0)</text></g>
-              </g>
-              {activeView === 'global' && <GlobalView {...commonProps} />}
-              {activeView === 'tactical' && eventMode !== 'castle_battle' && <TacticalView {...commonProps} />}
-              {activeView === 'tactical' && eventMode === 'castle_battle' && <CastleView {...commonProps} />}
-              {activeView === 'alliance' && <AllianceView {...commonProps} />}
-            </svg>
+
+        {isSplitScreen ? (
+          <div className="w-full h-full flex relative">
+             <div className="flex-1 relative overflow-hidden border-r-2 border-indigo-500/50">
+                <div className="absolute bottom-6 left-6 z-50 bg-slate-900/90 border border-slate-500 text-slate-200 px-4 py-2 rounded-xl font-black shadow-lg backdrop-blur-md pointer-events-none">
+                  <span className="text-[10px] uppercase tracking-widest block opacity-70">Disposizione</span>
+                  ATTUALE
+                </div>
+                <div className={`absolute top-0 left-0 w-[1200px] h-[1200px] ${!isDragging && !draggedPlayerId ? 'transition-all duration-700 ease-in-out' : ''}`} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
+                   {renderMapContent('left')}
+                </div>
+             </div>
+             <div className="flex-1 relative overflow-hidden">
+                <div className="absolute bottom-6 left-6 z-50 bg-emerald-900/90 border border-emerald-500 text-emerald-200 px-4 py-2 rounded-xl font-black shadow-lg backdrop-blur-md pointer-events-none">
+                  <span className="text-[10px] uppercase tracking-widest block opacity-70">Disposizione</span>
+                  OTTIMIZZATA
+                </div>
+                <div className={`absolute top-0 left-0 w-[1200px] h-[1200px] ${!isDragging && !draggedPlayerId ? 'transition-all duration-700 ease-in-out' : ''}`} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
+                   {renderMapContent('right')}
+                </div>
+             </div>
           </div>
-        </div>
+        ) : (
+          <div className={`absolute top-0 left-0 w-[1200px] h-[1200px] ${!isDragging && !draggedPlayerId ? 'transition-all duration-700 ease-in-out' : ''}`} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
+             {renderMapContent('full')}
+          </div>
+        )}
       </main>
-      <MapDetails 
-        isReadOnly={isReadOnly} selectedBuilding={selectedBuilding} onClose={() => setIsRightPanelOpen(false)}
-        enemyHQs={enemyHQs} onAddHQ={handleAddHQ} onRemoveHQ={handleRemoveHQ} allianceMeta={allianceMeta} setAllianceMeta={setAllianceMeta}
-        activeView={activeView} isOpen={isRightPanelOpen} setIsOpen={setIsRightPanelOpen} currentTime={currentTime} 
-        marchAssignments={marchAssignments} setMarchAssignments={setMarchAssignments} handleConfirmDispatch={handleConfirmTacticalDispatch} 
-        buildings={fixedBuildings} getAvailableMarches={getAvailableMarches} activeDeployment={validPlayers}
-        roster={effectiveRoster} allianceStructures={allianceStructures} tacticalMeta={tacticalMeta} eventMode={eventMode} playerOverrides={playerOverrides}
-      />
-      <TacticalExportModal 
-        isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} playerOverrides={playerOverrides} roster={effectiveRoster} targetBuilding={selectedBuilding}
-        exportableOrders={exportableOrders} activeDeployment={validPlayers} buildings={fixedBuildings} tacticalMeta={tacticalMeta}
-      />
-      <EventManagerModal 
-        isOpen={isEventManagerOpen} onClose={() => setIsEventManagerOpen(false)} currentData={currentEventData} onLoadData={handleLoadEventData} onCreateNewPlan={handleCreateNewPlan}
-        allianceCode={allianceCode} currentPlanId={currentPlanId} currentPlanName={currentPlanName} onPlanSaved={(id, name) => { setCurrentPlanId(id); setCurrentPlanName(name); }}
-      />
+      
+      {activeView !== 'alliance' && activeView !== 'expansion' && !isGlobalEditorMode && !isPathfindingMode && (
+        <MapDetails isReadOnly={isReadOnly} selectedBuilding={selectedBuilding} onClose={() => setIsRightPanelOpen(false)} enemyHQs={enemyHQs} onAddHQ={handleAddHQ} onRemoveHQ={handleRemoveHQ} allianceMeta={allianceMeta} setAllianceMeta={setAllianceMeta} activeView={activeView} isOpen={isRightPanelOpen} setIsOpen={setIsRightPanelOpen} currentTime={currentTime} marchAssignments={marchAssignments} setMarchAssignments={setMarchAssignments} handleConfirmDispatch={handleConfirmTacticalDispatch} buildings={fixedBuildings} getAvailableMarches={getAvailableMarches} activeDeployment={validPlayers} roster={effectiveRoster} allianceStructures={allianceStructures} tacticalMeta={tacticalMeta} eventMode={eventMode} playerOverrides={playerOverrides} />
+      )}
     </div>
   );
 }

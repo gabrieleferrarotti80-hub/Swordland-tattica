@@ -239,20 +239,49 @@ export default function Swordland({ roster, setRoster, allianceCode, userRole })
   const handleTimeChange = (newTime) => { if (Object.keys(draftPositions).length === 0) { setIsPlaying(false); if (newTime >= 0 && newTime <= 60) setCurrentTime(newTime); } };
   const togglePlay = () => { if (Object.keys(draftPositions).length === 0) { if (!isPlaying && currentTime >= 60) setCurrentTime(0); setIsPlaying(!isPlaying); } };
 
+  // Inclusione del roster nel pacchetto dati per il cloud[cite: 6, 8]
   const currentEventData = useMemo(() => ({
-    version: '1.5', teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures
-  }), [teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures]);
+    version: '1.5', teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures, roster
+  }), [teamBase, buildings, activeDeployment, marches, healingEvents, manualCaptures, roster]);
 
+  // Sincronizzazione automatica dei tag (G1, G2...) e dei dati aggiornati del roster al caricamento del piano[cite: 6, 8]
   const handleLoadData = (data, planId, planName) => {
     if (window.confirm(t('swordland.confirm_load_plan', `⚠️ Vuoi caricare il piano "{{planName}}"? I dati non salvati andranno persi.`, { planName }))) {
       if (data.teamBase) setTeamBase(data.teamBase);
       if (data.buildings) setBuildings(data.buildings);
-      if (data.activeDeployment) setActiveDeployment(data.activeDeployment);
+      
+      if (data.activeDeployment) {
+        const syncedDeployment = data.activeDeployment.map(deployedPlayer => {
+          const globalMatch = roster.find(r => 
+            r.id === deployedPlayer.id || 
+            (r.name && deployedPlayer.name && r.name.toLowerCase() === deployedPlayer.name.toLowerCase())
+          );
+          
+          if (globalMatch) {
+            return {
+              ...deployedPlayer,
+              tag: globalMatch.tag || deployedPlayer.tag,
+              name: globalMatch.name || deployedPlayer.name,
+              power: globalMatch.power !== undefined ? globalMatch.power : deployedPlayer.power,
+              role: globalMatch.role || globalMatch.role
+            };
+          }
+          return deployedPlayer;
+        });
+        setActiveDeployment(syncedDeployment);
+      }
+
       if (data.marches) setMarches(data.marches);
       if (data.healingEvents) setHealingEvents(data.healingEvents);
       if (data.manualCaptures) setManualCaptures(data.manualCaptures);
-      setCurrentTime(0); setDraftPositions({}); setIsPlaying(false);
-      setCurrentPlanId(planId); setCurrentPlanName(planName); setIsEventManagerOpen(false);
+      if (data.roster) setRoster(data.roster);
+      
+      setCurrentTime(0); 
+      setDraftPositions({}); 
+      setIsPlaying(false);
+      setCurrentPlanId(planId); 
+      setCurrentPlanName(planName); 
+      setIsEventManagerOpen(false);
     }
   };
 
@@ -358,9 +387,18 @@ export default function Swordland({ roster, setRoster, allianceCode, userRole })
                 <button onClick={() => setIsPlayerManagerOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:bg-rose-900 hover:text-rose-400 transition-colors font-bold sm:ml-2">✕</button>
               </div>
             </div>
-            {playerManagerTab === 'roster' ? (
+           {playerManagerTab === 'roster' ? (
               <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                <RosterTable roster={roster} onAddPlayer={() => {}} onEdit={handleEditPlayer} onDelete={() => {}} onDeploy={handleDeploy} userRole={userRole} />
+                <RosterTable 
+                  roster={roster} 
+                  onAddPlayer={() => {}} 
+                  onEdit={(id, field, value) => {
+                     handleEditPlayer(id, field, value);
+                  }} 
+                  onDelete={() => {}} 
+                  onDeploy={handleDeploy} 
+                  userRole={userRole} 
+                />
               </div>
             ) : (
               <div className="flex-1 p-4 grid grid-cols-4 gap-4 overflow-hidden bg-slate-950/50">
@@ -481,10 +519,20 @@ export default function Swordland({ roster, setRoster, allianceCode, userRole })
         </div>
         
         <div className={`w-full shrink-0 flex flex-col gap-3 xl:gap-4 z-10 transition-all duration-300 ease-in-out ${popupPlayerId ? 'h-full lg:w-[320px] xl:w-[380px]' : 'h-[350px] lg:h-full lg:w-36 xl:w-44'}`}>
-          <div className="relative w-full z-[120] shrink-0">
+          <div className="relative w-full z-[120] shrink-0 flex flex-col gap-2">
             <button onClick={() => setShowManualPanel(!showManualPanel)} className="w-full shrink-0 bg-slate-800 hover:bg-slate-700 border border-slate-700/50 text-cyan-400 font-black py-3 rounded-2xl xl:rounded-3xl text-[9px] xl:text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg backdrop-blur-xl transition-colors">
               📍 {showManualPanel ? t('interactive_map.close_panel', 'Chiudi') : t('interactive_map.move_marker', 'Sposta')}
             </button>
+            
+            {/* Pulsante rapido per resettare/cancellare le modifiche del minuto corrente */}
+            <button 
+              onClick={() => handleCancelMinute(currentTime)} 
+              className="w-full bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 font-black py-2.5 px-2 rounded-2xl xl:rounded-3xl text-[9px] xl:text-[10px] uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-1"
+              title={`Cancella le modifiche del minuto ${currentTime} e riprendi dal precedente`}
+            >
+              🗑️ Reset Min {currentTime}
+            </button>
+
             {showManualPanel && (
               <div className="absolute top-full mt-2 right-0 bg-slate-800/95 p-4 rounded-xl border border-slate-600 shadow-2xl flex flex-col gap-3 w-56 sm:w-64 backdrop-blur-sm z-[150]">
                 <h3 className="text-cyan-400 font-bold text-xs uppercase border-b border-slate-700 pb-1 tracking-wider">{t('interactive_map.manual_coords', 'Coordinate Manuali')}</h3>

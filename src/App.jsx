@@ -7,6 +7,7 @@ import MapPage from './pages/MapPage';
 import MarchBuilder from './pages/MarchBuilder'; // Aggiungi l'import in alto
 import AdminPanel from './pages/AdminPanel';
 import TriAlliance from './pages/TriAlliance';
+import SwordlandViewer from './pages/SwordlandViewer';
 
 function App() {
   // Lo stato del roster vive qui ed è l'unica cosa condivisa globalmente
@@ -77,6 +78,7 @@ function App() {
           path="/march-builder" 
           element={<MarchBuilder auth={auth} />} 
         />
+        <Route path="/swordland/view/:planId" element={<SwordlandViewer />} />
       </Routes>
     </Router>
   );

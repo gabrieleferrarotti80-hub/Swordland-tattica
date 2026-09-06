@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { svgToGameCoordinates } from '../utils/marchUtils';
 
 export function useMapCamera({
@@ -11,17 +11,78 @@ export function useMapCamera({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [draggedPlayerId, setDraggedPlayerId] = useState(null);
+  
+  const lastFramedKey = useRef(null);
+
+  const getClampedPosition = useCallback((newPos, currentScale) => {
+    if (!mainRef.current) return newPos;
+    const rect = mainRef.current.getBoundingClientRect();
+    
+    if (activeView === 'alliance') {
+      const centerTarget = allianceStructures?.find(s => s.id === 'alliance-bear-1') 
+                        || allianceStructures?.find(s => s.type === 'beartrap') 
+                        || allianceStructures?.find(s => s.type === 'headquarters') 
+                        || { x: 500, y: 500 };
+      
+      let effX = Number(centerTarget.x);
+      let effY = Number(centerTarget.y);
+      if (centerTarget.type === 'headquarters' || centerTarget.type === 'beartrap') {
+        effX += 0.5;
+        effY += 0.5;
+      }
+
+      const targetX = 600 + (effX - effY) * TILE_SF;
+      const targetY = 1150 - (effX + effY) * TILE_SF;
+      
+      const centerX = (rect.width / 2) - (targetX * currentScale);
+      const centerY = (rect.height / 2) - (targetY * currentScale);
+      
+      // Limite di trascinamento ampliato per zoom molto spinti
+      const maxDragDistance = 2500 * currentScale;
+
+      return {
+        x: Math.max(centerX - maxDragDistance, Math.min(centerX + maxDragDistance, newPos.x)),
+        y: Math.max(centerY - maxDragDistance, Math.min(centerY + maxDragDistance, newPos.y))
+      };
+    }
+    
+    return {
+      x: Math.max(-10000 * currentScale, Math.min(10000 * currentScale, newPos.x)),
+      y: Math.max(-10000 * currentScale, Math.min(10000 * currentScale, newPos.y))
+    };
+  }, [activeView, allianceStructures, TILE_SF, mainRef]);
 
   useEffect(() => {
     const mapNode = mainRef.current;
     if (!mapNode) return;
 
-    const updateCamera = () => {
+    let isDataLoaded = false;
+    let targetCoordsForMemory = "0,0";
+
+    if (activeView === 'global') {
+      isDataLoaded = allianceCode === 'DEMO' || (fixedBuildings && fixedBuildings.length > 0);
+    } else if (activeView === 'alliance') {
+      isDataLoaded = allianceStructures && allianceStructures.length > 0;
+      
+      const centerTarget = allianceStructures?.find(s => s.id === 'alliance-bear-1') 
+                        || allianceStructures?.find(s => s.type === 'beartrap') 
+                        || allianceStructures?.find(s => s.type === 'headquarters');
+                        
+      if (centerTarget) {
+        targetCoordsForMemory = `${centerTarget.x},${centerTarget.y}`;
+      }
+    } else {
+      isDataLoaded = true;
+    }
+
+    const currentKey = `${activeView}-${selectedBuilding?.id || 'none'}-${eventMode}-${isDataLoaded}-${targetCoordsForMemory}`;
+
+    const doFrame = () => {
       const rect = mapNode.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
+      if (rect.width === 0 || rect.height === 0) return false;
 
       if (activeView === 'global') {
-        const castle = fixedBuildings.find(b => b.type?.toLowerCase() === 'castle' || b.name?.toLowerCase().includes('castello'));
+        const castle = fixedBuildings?.find(b => b.type?.toLowerCase() === 'castle' || b.name?.toLowerCase().includes('castello'));
         let targetX = 600, targetY = 600;
         
         if (allianceCode === 'DEMO') {
@@ -37,28 +98,35 @@ export function useMapCamera({
         setScale(targetScale);
 
       } else if (activeView === 'alliance') {
-        const allElements = [...validPlayers];
-        allianceStructures.forEach(struct => {
-          allElements.push({ svgX: 600 + (Number(struct.x) - Number(struct.y)) * TILE_SF, svgY: 1150 - (Number(struct.x) + Number(struct.y)) * TILE_SF });
-        });
+        const centerTarget = allianceStructures?.find(s => s.id === 'alliance-bear-1') 
+                          || allianceStructures?.find(s => s.type === 'beartrap') 
+                          || allianceStructures?.find(s => s.type === 'headquarters') 
+                          || { x: 500, y: 500 };
         
-        if (allElements.length > 0) {
-          const minX = Math.min(...allElements.map(p => p.svgX));
-          const maxX = Math.max(...allElements.map(p => p.svgX));
-          const minY = Math.min(...allElements.map(p => p.svgY));
-          const maxY = Math.max(...allElements.map(p => p.svgY));
-
-          const centerX = (minX + maxX) / 2;
-          const centerY = (minY + maxY) / 2;
-          const width = Math.max(maxX - minX, 50);
-          const height = Math.max(maxY - minY, 50);
-          
-          let targetScale = Math.min(rect.width / (width * 1.5), rect.height / (height * 1.5));
-          targetScale = Math.max(15.0, targetScale); 
-
-          setPosition({ x: (rect.width / 2) - (centerX * targetScale), y: (rect.height / 2) - (centerY * targetScale) });
-          setScale(targetScale);
+        let effX = Number(centerTarget.x);
+        let effY = Number(centerTarget.y);
+        
+        if (centerTarget.type === 'headquarters' || centerTarget.type === 'beartrap') {
+          effX += 0.5;
+          effY += 0.5;
         }
+
+        const targetX = 600 + (effX - effY) * TILE_SF;
+        const targetY = 1150 - (effX + effY) * TILE_SF;
+        
+        // 🎯 FOCUS RISTRETTO: Inquadriamo un'area di soli 10 rombi (zoom 2.5x più vicino rispetto a prima)
+        const viewSizeSvg = 10 * TILE_SF; 
+
+        let targetScale = Math.min(
+          (rect.width * 0.8) / viewSizeSvg,
+          (rect.height * 0.8) / viewSizeSvg
+        );
+
+        // Aumentato il tetto massimo dello scale iniziale per permettere zoom più spinti
+        targetScale = Math.max(5, Math.min(targetScale, 150));
+
+        setPosition({ x: (rect.width / 2) - (targetX * targetScale), y: (rect.height / 2) - (targetY * targetScale) });
+        setScale(targetScale);
 
       } else if (activeView === 'tactical') {
         const radiusInTiles = 14;
@@ -79,13 +147,17 @@ export function useMapCamera({
           setScale(targetScale);
         }
       }
+      return true;
     };
 
-    const resizeObserver = new ResizeObserver(() => { updateCamera(); });
-    resizeObserver.observe(mapNode); 
-    updateCamera(); 
-    return () => { resizeObserver.disconnect(); };
-  }, [activeView, selectedBuilding, fixedBuildings, validPlayers, allianceStructures, allianceCode, eventMode, TILE_SF]);
+    if (lastFramedKey.current !== currentKey) {
+      const success = doFrame();
+      if (success) {
+        lastFramedKey.current = currentKey;
+      }
+    }
+
+  }, [activeView, selectedBuilding, fixedBuildings, allianceStructures, allianceCode, eventMode, TILE_SF]);
 
   useEffect(() => {
     const mapNode = mainRef.current;
@@ -97,16 +169,26 @@ export function useMapCamera({
 
   const handleWheel = (e) => {
     if (!mainRef.current) return;
-    const zoomFactor = 1.15;
+    
+    const zoomFactor = 1.1; 
     const direction = e.deltaY < 0 ? 1 : -1;
     let newScale = direction > 0 ? scale * zoomFactor : scale / zoomFactor;
-    newScale = Math.max(0.1, Math.min(newScale, 250));
+    
+    // Tetto dello zoom incrementato a 250 per permettere primi piani estremi
+    newScale = Math.max(0.2, Math.min(newScale, 250));
     
     const rect = mainRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
+    
     const scaleRatio = newScale / scale;
-    setPosition(prev => ({ x: mouseX - (mouseX - prev.x) * scaleRatio, y: mouseY - (mouseY - prev.y) * scaleRatio }));
+    
+    const newRawPosition = { 
+      x: mouseX - (mouseX - position.x) * scaleRatio, 
+      y: mouseY - (mouseY - position.y) * scaleRatio 
+    };
+
+    setPosition(getClampedPosition(newRawPosition, newScale));
     setScale(newScale);
   };
 
@@ -116,7 +198,6 @@ export function useMapCamera({
   };
   
   const handleMouseMove = (e) => { 
-    // SBLOCCATO: Rimosso il blocco eventMode === 'castle_battle' per permettere la simulazione
     if (draggedPlayerId && !isReadOnly) {
       const svgElement = document.getElementById('map-svg');
       if (!svgElement) return;
@@ -135,7 +216,8 @@ export function useMapCamera({
       }
     } 
     else if (isDragging) {
-      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); 
+      const newRawPosition = { x: e.clientX - dragStart.x, y: e.clientY - dragStart.y };
+      setPosition(getClampedPosition(newRawPosition, scale));
     }
   };
   
@@ -162,8 +244,28 @@ export function useMapCamera({
         targetX = 600 + (Number(focusX) - Number(focusY)) * TILE_SF;
         targetY = 1150 - (Number(focusX) + Number(focusY)) * TILE_SF;
       }
+    } else if (activeView === 'alliance') {
+      const centerTarget = allianceStructures?.find(s => s.id === 'alliance-bear-1') 
+                        || allianceStructures?.find(s => s.type === 'beartrap') 
+                        || allianceStructures?.find(s => s.type === 'headquarters') 
+                        || { x: 500, y: 500 };
+                        
+      let effX = Number(centerTarget.x);
+      let effY = Number(centerTarget.y);
+      if (centerTarget.type === 'headquarters' || centerTarget.type === 'beartrap') {
+        effX += 0.5;
+        effY += 0.5;
+      }
+      
+      targetX = 600 + (effX - effY) * TILE_SF;
+      targetY = 1150 - (effX + effY) * TILE_SF;
+      
+      const viewSizeSvg = 10 * TILE_SF; 
+      targetScale = Math.min((rect.width * 0.8) / viewSizeSvg, (rect.height * 0.8) / viewSizeSvg);
+      targetScale = Math.max(5, Math.min(targetScale, 150));
+
     } else {
-      const castle = fixedBuildings.find(b => b.type?.toLowerCase() === 'castle' || b.name?.toLowerCase().includes('castello'));
+      const castle = fixedBuildings?.find(b => b.type?.toLowerCase() === 'castle' || b.name?.toLowerCase().includes('castello'));
       if (allianceCode === 'DEMO') { targetX = 600; targetY = 1150 - 1600 * TILE_SF; } 
       else if (castle) {
         targetX = 600 + (Number(castle.x) - Number(castle.y)) * TILE_SF;
@@ -171,13 +273,13 @@ export function useMapCamera({
       }
       targetScale = Math.max(rect.width / 1000, rect.height / 1000);
     }
+    
     setPosition({ x: (rect.width / 2) - (targetX * targetScale), y: (rect.height / 2) - (targetY * targetScale) });
     setScale(targetScale);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    // SBLOCCATO: Rimosso il blocco eventMode === 'castle_battle' per permettere la simulazione
     if (isReadOnly) return alert(t('map.read_only_alert'));
 
     const dragData = e.dataTransfer.getData('text/plain');

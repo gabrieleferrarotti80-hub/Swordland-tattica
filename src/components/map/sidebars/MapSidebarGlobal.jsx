@@ -8,16 +8,13 @@ export default function MapSidebarGlobal({
   showLabels, setShowLabels,
   marchOrigin, setMarchOrigin, marchDestination, setMarchDestination,
   marchResult, handleManualCoord,
-  userRole, onOpenHelp
+  userRole, onOpenHelp,
+  setIsGlobalEditorMode
 }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
-  const handleSettingsClick = () => {
-    const code = window.prompt(t('map.secret_code_prompt'));
-    if (code === "ADMIN") setSelectedTool('settings');
-    else if (code !== null) alert(t('map.wrong_code'));
-  };
+  const isAdminOrConsultant = userRole === 'admin' || userRole === 'consultant';
 
   return (
     <aside className="w-[340px] bg-slate-900 border-r border-slate-800 flex flex-col p-6 gap-6 z-20 shadow-2xl shrink-0 overflow-y-auto custom-scrollbar">
@@ -28,14 +25,20 @@ export default function MapSidebarGlobal({
         </div>
         <button onClick={() => navigate('/')} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700">🏠</button>
       </div>
-      
+
+      {isAdminOrConsultant && (
+        <button 
+          onClick={() => setIsGlobalEditorMode(true)}
+          className="w-full py-3 bg-rose-900/30 hover:bg-rose-900/50 border border-rose-500/50 text-rose-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-sm shrink-0"
+        >
+          🛠️ Apri Editor Mappa Base
+        </button>
+      )}
+
       <div className="flex flex-col gap-3 shrink-0">
         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Seleziona Azione</span>
-        <button onClick={() => setSelectedTool('buildings')} className={`p-3 rounded-xl font-bold text-left transition-all flex items-center gap-3 ${selectedTool === 'buildings' ? 'bg-cyan-600 text-white' : 'bg-slate-800/50 text-slate-300'}`}>🏰 {t('map.building_filters')}</button>
-        <button onClick={() => setSelectedTool('distance')} className={`p-3 rounded-xl font-bold text-left transition-all flex items-center gap-3 ${selectedTool === 'distance' ? 'bg-amber-600 text-white' : 'bg-slate-800/50 text-slate-300'}`}>📏 {t('map.march_time')}</button>
-        {userRole === 'admin' && (
-          <button onClick={handleSettingsClick} className={`p-3 rounded-xl font-bold text-left transition-all flex items-center gap-3 ${selectedTool === 'settings' ? 'bg-rose-600 text-white' : 'bg-slate-800/50 text-slate-300'}`}>⚙️ {t('map.fixed_db')}</button>
-        )}
+        <button onClick={() => setSelectedTool('buildings')} className={`p-3 rounded-xl font-bold text-left transition-all flex items-center gap-3 ${selectedTool === 'buildings' ? 'bg-cyan-600 text-white' : 'bg-slate-800/50 text-slate-300'}`}>🎯 {t('map.building_filters')}</button>
+        <button onClick={() => setSelectedTool('distance')} className={`p-3 rounded-xl font-bold text-left transition-all flex items-center gap-3 ${selectedTool === 'distance' ? 'bg-amber-600 text-white' : 'bg-slate-800/50 text-slate-300'}`}>⏱️ {t('map.march_time')}</button>
       </div>
 
       {selectedTool === 'buildings' && (

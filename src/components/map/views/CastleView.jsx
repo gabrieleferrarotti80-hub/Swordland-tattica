@@ -14,44 +14,54 @@ const getPlayerRank = (player) => {
 export default React.memo(function CastleView(props) {
   const { t } = useTranslation();
   const { 
-    fixedBuildings, validPlayers, inverseScale, TILE_SF,tacticalMeta,
-    selectedBuilding, setSelectedBuilding, marchOrigin, setMarchOrigin,
-    marchDestination, setMarchDestination, selectedTool, showLabels, setDraggedPlayerId
+    fixedBuildings, 
+    validPlayers, 
+    inverseScale, 
+    TILE_SF, 
+    tacticalMeta,
+    selectedBuilding, 
+    setSelectedBuilding, 
+    marchOrigin, 
+    setMarchOrigin,
+    marchDestination, 
+    setMarchDestination, 
+    selectedTool, 
+    showLabels, 
+    setDraggedPlayerId 
   } = props;
 
   const [gridCenter, setGridCenter] = useState(null);
 
   useEffect(() => {
-    const castle = fixedBuildings.find(b => {
-      const type = (b.type || '').toLowerCase();
-      const name = (b.name || '').toLowerCase();
+    const castle = (fixedBuildings || []).find(b => {
+      const type = String(b.type || '').toLowerCase();
+      const name = String(b.name || '').toLowerCase();
       return type === 'castle' || name.includes('castello');
     });
     if (castle) setGridCenter(castle);
   }, [fixedBuildings]); 
 
-  const shapeCastle = getTacticalShapePts(GRID_SIZES.CASTLE, TILE_SF);
-  const shapeTurret = getTacticalShapePts(1.5, TILE_SF);
-  const shapePlayer = getTacticalShapePts(GRID_SIZES.PLAYER, TILE_SF);
-
-  const castleBuildings = fixedBuildings.filter(b => {
+  // Filtro edifici di battaglia (Castello e Torrette)
+  const battleBuildings = (fixedBuildings || []).filter(b => {
     if (!b) return false;
-    const bType = (b.type || '').toLowerCase();
-    const bName = (b.name || '').toLowerCase();
-    const bId = (b.id || '').toLowerCase();
+    const bType = String(b.type || '').toLowerCase();
+    const bName = String(b.name || '').toLowerCase();
+    const bId = String(b.id || '').toLowerCase();
     
-    return bType === 'castle' || 
-           bName.includes('castello') || 
-           bType === 'turret' || 
-           bName.includes('torretta') ||
-           bId.includes('turret');
+    return bType === 'castle' || bName.includes('castello') || 
+           bType === 'turret' || bName.includes('torretta') || bId.includes('turret');
   });
+
+  const shapePlayer = getTacticalShapePts(GRID_SIZES?.PLAYER || 2, TILE_SF);
 
   return (
     <g>
+      {/* GRIGLIA TATTICA LOCALIZZATA */}
       {gridCenter && (() => {
-        const cx = 600 + (Number(gridCenter.x) - Number(gridCenter.y)) * TILE_SF;
-        const cy = 1150 - (Number(gridCenter.x) + Number(gridCenter.y)) * TILE_SF;
+        const effX = Number(gridCenter.x) + 2;
+        const effY = Number(gridCenter.y) + 2;
+        const cx = 600 + (effX - effY) * TILE_SF;
+        const cy = 1150 - (effX + effY) * TILE_SF;
         const radius = 22; 
 
         const gridLines = [];
@@ -69,7 +79,7 @@ export default React.memo(function CastleView(props) {
           gridLines.push(<line key={`y-${i}`} x1={startX2} y1={startY2} x2={endX2} y2={endY2} stroke="rgba(34, 211, 238, 0.15)" strokeWidth={1 * inverseScale} />);
         }
 
-        const borderPts = `0,${2 * radius * TILE_SF} ${2 * radius * TILE_SF},0 0,${-2 * radius * TILE_SF} ${-2 * radius * TILE_SF},0`;
+        const borderPts = `0,${2 * radius * TILE_SF} ${2 * radius * TILE_SF},0 0,${-2 * radius * TILE_SF} -${2 * radius * TILE_SF},0`;
 
         return (
           <g transform={`translate(${cx}, ${cy})`} className="animate-fade-in pointer-events-none">
@@ -79,31 +89,51 @@ export default React.memo(function CastleView(props) {
         );
       })()}
 
-      {castleBuildings.map(building => {
-        const bType = (building.type || '').toLowerCase();
-        const bName = (building.name || '').toLowerCase();
+      {/* EDIFICI (Logica strutturale identica a GlobalView) */}
+      {battleBuildings.map(building => {
+        const bType = String(building.type || '').toLowerCase();
+        const bName = String(building.name || '').toLowerCase();
         const isCastle = bType === 'castle' || bName.includes('castello');
-        const buildingShape = isCastle ? shapeCastle : shapeTurret;
         
-        let fillColor = isCastle ? "rgba(250, 204, 21, 0.5)" : "rgba(239, 68, 68, 0.9)"; 
-        let strokeColor = isCastle ? "#facc15" : "#ff0000";
+        let sizeNum = isCastle ? 14 : 3;
+        if (building.size && !isNaN(building.size) && building.size !== "") {
+          sizeNum = Number(building.size);
+        }
+        
+        const S = sizeNum * TILE_SF;
+        const buildingShape = `0,-${S} ${S},0 0,${S} -${S},0`;
 
-        const cx = 600 + (Number(building.x) - Number(building.y)) * TILE_SF;
-        const cy = 1150 - (Number(building.x) + Number(building.y)) * TILE_SF;
+        let fillColor = "rgba(239, 68, 68, 0.7)"; 
+        let strokeColor = "#ef4444";
+        if (isCastle) { 
+          fillColor = "rgba(250, 204, 21, 0.7)"; 
+          strokeColor = "#facc15"; 
+        }
+
+        let effectiveX = Number(building.x);
+        let effectiveY = Number(building.y);
+
+        if (isCastle) {
+          effectiveX += 2;
+          effectiveY += 2;
+        }
+
+        const cx = 600 + (effectiveX - effectiveY) * TILE_SF;
+        const cy = 1150 - (effectiveX + effectiveY) * TILE_SF;
 
         const isSelected = selectedBuilding?.id === building.id;
         const isOrigin = marchOrigin?.id === building.id;
         const isDestination = marchDestination?.id === building.id;
 
-        let currentStrokeWidth = isCastle ? 2 : 3; 
-        if (isOrigin) { fillColor = "rgba(6, 182, 212, 0.6)"; strokeColor = "#22d3ee"; currentStrokeWidth = 3; }
-        else if (isDestination) { currentStrokeWidth = 3; }
-        if (isSelected) { strokeColor = "#ffffff"; currentStrokeWidth = 4; }
+        let currentStrokeWidth = 1.5 * inverseScale;
+        if (isOrigin) { fillColor = "rgba(6, 182, 212, 0.8)"; strokeColor = "#22d3ee"; currentStrokeWidth = 2.5 * inverseScale; }
+        else if (isDestination) { currentStrokeWidth = 2.5 * inverseScale; }
+        if (isSelected) { strokeColor = "#ffffff"; currentStrokeWidth = 3 * inverseScale; }
 
         return (
           <g
             key={building.id}
-            className="cursor-pointer group"
+            className="cursor-pointer group animate-fade-in"
             transform={`translate(${cx}, ${cy})`}
             onClick={(e) => {
               e.stopPropagation();
@@ -116,21 +146,32 @@ export default React.memo(function CastleView(props) {
               }
             }}
           >
-            <polygon points={buildingShape} fill={fillColor} stroke={strokeColor} strokeWidth={currentStrokeWidth * inverseScale} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
+            <polygon
+              points={buildingShape}
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth={currentStrokeWidth}
+              className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`}
+            />
+
             <g transform={`scale(${inverseScale})`} className="pointer-events-none z-50">
-              {!isCastle && !showLabels && !isSelected && <text x="0" y="5" fill="#ffffff" fontSize="14" fontWeight="black" textAnchor="middle" className="drop-shadow-md">T</text>}
+              {!isCastle && !showLabels && !isSelected && (
+                <text x="0" y="5" fill="#ffffff" fontSize="16" fontWeight="black" textAnchor="middle" className="drop-shadow-md">T</text>
+              )}
               {isOrigin && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🛫</text>}
               {isDestination && <text x="-12" y="24" fill="#ffffff" fontSize="12" fontWeight="black">🎯</text>}
+
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
-                <rect x="20" y="-12" width="140" height="28" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
-                <text x="26" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{building.code}] {building.name}</text>
-                <text x="26" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.occupiedBy ? ` | ${t('alliance_view.occupied', 'Occupato: ')}${building.occupiedBy}` : ''}</text>
+                <rect x="15" y="-15" width="160" height="32" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" className="shadow-lg" />
+                <text x="21" y="0" fill="#ffffff" fontSize="11" fontWeight="bold">[{building.code || 'BLD'}] {building.name}</text>
+                <text x="21" y="12" fill="#94a3b8" fontSize="9" fontWeight="bold">({building.x}, {building.y}){building.size ? ` | ${building.size}` : ''}</text>
               </g>
             </g>
           </g>
         );
       })}
 
+      {/* GIOCATORI TATTICI (Logica originale intatta con svgX, svgY e Team Draft) */}
       {validPlayers && validPlayers.map(player => {
         const isSelected = selectedBuilding?.id === player.id;
         const isOrigin = marchOrigin?.id === player.id;
@@ -138,7 +179,7 @@ export default React.memo(function CastleView(props) {
 
         let polyFill = "rgba(100, 116, 139, 0.3)"; 
         let polyStroke = "rgba(100, 116, 139, 0.6)";
-        let polyStrokeW = 1;
+        let polyStrokeW = 1 * inverseScale;
         let isLeader = false;
         let roleText = player.role || player.rank || 'Membro';
 
@@ -152,14 +193,14 @@ export default React.memo(function CastleView(props) {
             isLeader = (meta.role === 'Rally Leader' || meta.role === 'Capitano Difesa');
             if (meta.role) roleText = meta.role; 
             
-            if (isLeader) { polyFill = baseColor; polyStroke = "#ffffff"; polyStrokeW = 3; } 
-            else { polyFill = `${baseColor}60`; polyStroke = baseColor; polyStrokeW = 1.5; }
+            if (isLeader) { polyFill = baseColor; polyStroke = "#ffffff"; polyStrokeW = 3 * inverseScale; } 
+            else { polyFill = `${baseColor}60`; polyStroke = baseColor; polyStrokeW = 1.5 * inverseScale; }
           }
         }
 
-        if (isOrigin) { polyFill = "rgba(6, 182, 212, 0.9)"; polyStroke = "#22d3ee"; polyStrokeW = 3; } 
-        else if (isDestination) { polyStrokeW = 3; }
-        if (isSelected) { polyStroke = "#ffffff"; polyStrokeW = 4; }
+        if (isOrigin) { polyFill = "rgba(6, 182, 212, 0.9)"; polyStroke = "#22d3ee"; polyStrokeW = 3 * inverseScale; } 
+        else if (isDestination) { polyStrokeW = 3 * inverseScale; }
+        if (isSelected) { polyStroke = "#ffffff"; polyStrokeW = 4 * inverseScale; }
 
         return (
           <g 
@@ -171,14 +212,16 @@ export default React.memo(function CastleView(props) {
               e.stopPropagation(); 
               const target = { ...player, isPlayer: true, code: player.originalTag || player.tag || 'PLY', type: t('alliance_view.member_type', 'Membro Alleanza'), x: player.numX, y: player.numY }; 
               if (selectedTool === 'distance') { 
-                if (!marchOrigin) setOrigin(target); 
+                if (!marchOrigin) setMarchOrigin(target); 
                 else if (!marchDestination) setMarchDestination(target); 
                 else { setMarchOrigin(target); setMarchDestination(null); } 
               } else { setSelectedBuilding(target); } 
             }}
           >
-            <polygon points={shapePlayer} fill={polyFill} stroke={polyStroke} strokeWidth={polyStrokeW * inverseScale} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
+            <polygon points={shapePlayer} fill={polyFill} stroke={polyStroke} strokeWidth={polyStrokeW} className={`transition-colors duration-300 ${!isSelected && "group-hover:opacity-80"}`} />
             <g transform={`scale(${inverseScale})`} className="pointer-events-none">
+              {isOrigin && <text x="-10" y="20" fill="#ffffff" fontSize="12" fontWeight="black">🛫</text>}
+              {isDestination && <text x="-10" y="20" fill="#ffffff" fontSize="12" fontWeight="black">🎯</text>}
               <g className={`${showLabels || isSelected || isOrigin || isDestination ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
                 <rect x="15" y="-12" width="130" height="32" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
                 <text x="21" y="2" fill="#ffffff" fontSize="11" fontWeight="bold">[{player.originalTag || player.tag || 'PLY'}] {player.name}</text>

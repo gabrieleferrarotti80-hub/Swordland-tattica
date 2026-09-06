@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+const getBuffLabel = (b) => {
+  if (!b || !b.type) return "";
+  const isPercent = b.type.includes('%');
+  const name = b.type.replace(/\s?%\s?/, '').trim();
+  return `⚡ ${name}: ${b.value || 0}${isPercent ? '%' : ''}`;
+};
+
+const getRewardLabel = (r) => {
+  if (!r || !r.type) return "";
+  const map = { gems: 'Gemme / Ora', alliance_pts: 'Punti Alleanza / Ora', resources: 'Risorse / Ora', hero_fragments: 'Frammenti Eroe', teleports: 'Teletrasporti', mythic_expedition: 'Istruzioni Spedizioni Mitiche', skill_books: 'Libri Abilità', speedups: 'Acceleratori', equip_xp: 'XP Miglioramento Equip.', hero_xp: 'XP Eroe' };
+  const name = map[r.type] || r.type;
+  return `🎁 ${name}: +${r.value || 0}`;
+};
+
 export default function MapDetails({ 
   selectedBuilding, onClose, enemyHQs = [], onAddHQ, onRemoveHQ,
   allianceMeta, setAllianceMeta, activeView, isOpen, setIsOpen,
@@ -170,7 +184,16 @@ export default function MapDetails({
                 <div className="flex flex-col gap-4 animate-fade-in">
                   <div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isPlayerSelected ? t('map.player_name') : t('map.id_name')}</span>
-                    <h3 className="text-xl font-black text-white leading-tight mt-1">{selectedBuilding.code && <span className="text-cyan-400 mr-2">[{selectedBuilding.code}]</span>}{selectedBuilding.name}</h3>
+                    <h3 className="text-xl font-black text-white leading-tight mt-1 flex items-center flex-wrap gap-2">
+                      {selectedBuilding.code && <span className="text-cyan-400">[{selectedBuilding.code}]</span>}
+                      {selectedBuilding.name}
+                      {/* AGGIUNTA BADGE DEL LIVELLO */}
+                      {!isPlayerSelected && selectedBuilding.level && (
+                        <span className="bg-indigo-900/80 text-indigo-300 text-[10px] uppercase font-black px-1.5 py-0.5 rounded border border-indigo-700/50">
+                          Lv. {selectedBuilding.level}
+                        </span>
+                      )}
+                    </h3>
                   </div>
                   <div className="flex gap-3">
                     <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 flex-1 shadow-inner">
@@ -182,6 +205,27 @@ export default function MapDetails({
                       <span className="text-base font-mono font-bold text-amber-400">{selectedBuilding.y}</span>
                     </div>
                   </div>
+
+                  {!isPlayerSelected && (selectedBuilding.buffs?.type || selectedBuilding.rewards?.type) && (
+                    <div className="flex flex-col gap-2 mt-2 pt-4 border-t border-slate-800">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Statistiche Base</span>
+                      
+                      {selectedBuilding.buffs?.type && (
+                        <div className="bg-slate-950 px-3 py-2 rounded-lg border border-amber-900/50 shadow-inner flex flex-col">
+                          <span className="text-[9px] text-amber-600 font-black uppercase">Potenziamento</span>
+                          <span className="text-xs font-bold text-amber-400 mt-0.5">{getBuffLabel(selectedBuilding.buffs)}</span>
+                        </div>
+                      )}
+                      
+                      {selectedBuilding.rewards?.type && (
+                        <div className="bg-slate-950 px-3 py-2 rounded-lg border border-emerald-900/50 shadow-inner flex flex-col">
+                          <span className="text-[9px] text-emerald-600 font-black uppercase">Ricompensa</span>
+                          <span className="text-xs font-bold text-emerald-400 mt-0.5">{getRewardLabel(selectedBuilding.rewards)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center text-center gap-3 mt-4 mb-4 opacity-50">

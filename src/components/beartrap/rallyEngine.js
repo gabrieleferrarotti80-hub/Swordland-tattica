@@ -1,14 +1,11 @@
 // src/components/beartrap/rallyEngine.js
 
-/**
- * Calcola la distanza geometrica e la converte in secondi (es. 4 secondi per casella).
- */
 export function calculateTravelSeconds(x1, y1, x2, y2) {
-  if (x1 === '' || y1 === '' || x2 === '' || y2 === '') return 60; // Default di sicurezza
+  if (x1 === '' || y1 === '' || x2 === '' || y2 === '') return 60;
   const dx = Number(x1) - Number(x2);
   const dy = Number(y1) - Number(y2);
   const distance = Math.sqrt(dx * dx + dy * dy);
-  return Math.round(distance * 4); // 4 secondi per casella
+  return Math.round(distance * 4); // 4 secondi a casella
 }
 
 export function formatTime(seconds) {
@@ -19,23 +16,25 @@ export function formatTime(seconds) {
 
 export function generateBearTrapWaves(onlinePlayers, troopCap, trapX = 500, trapY = 500) {
   const TOTAL_TIME = 1800; // 30 minuti
-  const PREP_TIME = 240;   // 4 minuti di preparazione fissa del raduno
-  const BUFFER = 10;       // 10s di margine di sicurezza al rientro
+  const PREP_TIME = 240;   // 4 minuti di preparazione raduno
+  const COMBAT_TIME = 10;  // 10 secondi stimati di combattimento
+  const BUFFER = 10;       // 10s di margine per il rientro
 
-  // Calcolo dinamico joiners necessari per 1M (assumendo ~50k del leader)
-  const REQUIRED_JOINERS = Math.max(1, Math.min(14, Math.ceil(950000 / troopCap)));
+  // Formula esatta: 1M truppe / Cap, con limite rigido a 15 Joiner massimi
+  const REQUIRED_JOINERS = Math.min(15, Math.ceil(1000000 / (troopCap || 1)));
 
   if (!onlinePlayers || onlinePlayers.length === 0) return "❌ Nessun giocatore online.";
 
-  // 1. Inizializzazione code separate (1 Leader + N Joiners)
+  // 1. Inizializzazione code
   const players = onlinePlayers.map(p => {
-    const numJoinerMarches = Number(p.marches) || 5; 
+    // p.marches definisce ESCLUSIVAMENTE gli slot da joiner. Il ruolo leader ha una coda dedicata a sé stante.
+    const numJoinerMarches = Number(p.marches) || 4; 
     return {
       id: p.id,
       name: p.name,
       x: p.x,
       y: p.y,
-      travelToTrap: calculateTravelSeconds(p.x, p.y, trapX, trapY), // Tempo base casa -> trappola
+      travelToTrap: calculateTravelSeconds(p.x, p.y, trapX, trapY),
       leaderFreeAt: 0, 
       joinerFreeAt: Array(numJoinerMarches).fill(0), 
       ledCount: 0
@@ -44,55 +43,44 @@ export function generateBearTrapWaves(onlinePlayers, troopCap, trapX = 500, trap
 
   const timeline = [];
 
-  // 2. Risolutore Temporale (Avanza di 5 secondi in 5 secondi)
+  // 2. Risolutore (Scorre di 5 secondi in 5 secondi)
   for (let t = 0; t <= TOTAL_TIME; t += 5) {
     
-    // Leader idonei: Coda leader libera e tempo totale d'impatto entro i 30 min
+    // Il Leader deve avere la coda Leader libera e l'impatto deve avvenire prima della fine
     const potentialLeaders = [...players]
       .filter(p => p.leaderFreeAt <= t && (t + PREP_TIME + p.travelToTrap) <= (TOTAL_TIME - 2))
-      .sort((a, b) => a.travelToTrap - b.travelToTrap); // Chi è più vicino alla trappola parte prima
+      .sort((a, b) => a.travelToTrap - b.travelToTrap); 
 
     for (let leader of potentialLeaders) {
-      
-      // Filtriamo i Joiners disponibili in questo secondo (t) rispettando la fisica del gioco:
-      // Il joiner deve avere almeno una marcia libera E deve fare in tempo ad arrivare 
-      // alla CITTA DEL LEADER entro i 240 secondi di preparazione!
       const validJoiners = [];
 
       for (let p of players) {
-        if (p.name === leader.name) continue; // Il leader non può joinare se stesso
+        if (p.name === leader.name) continue; // Non si può joinare da soli
 
-        // Ha almeno una marcia joiner libera?
         const freeJoinerIndex = p.joinerFreeAt.findIndex(time => time <= t);
         if (freeJoinerIndex === -1) continue;
 
-        // Fisica dell'Opzione A: Tempo di viaggio da Casa del Joiner a Casa del Leader
+        // Regola Opzione A: il Joiner fa in tempo ad arrivare alla città del leader?
         const travelToLeader = calculateTravelSeconds(p.x, p.y, leader.x, leader.y);
-        
-        // Se il joiner ci mette più di 240 secondi ad arrivare dal leader, non fa in tempo!
         if (travelToLeader <= PREP_TIME) {
           validJoiners.push({ player: p, freeJoinerIndex });
         }
       }
 
-      // Se abbiamo abbastanza joiners validi che arrivano in tempo dal leader, formiamo il raduno!
       if (validJoiners.length >= REQUIRED_JOINERS) {
         
-        // Calcolo del tempo di ritorno a casa per il leader e i joiners:
-        // Rientro = Tempo attuale + Prep(240s) + Viaggio Leader/Trappola + 10s combattimento + Viaggio ritorno a casa propria
-        const leaderReturnTime = t + PREP_TIME + leader.travelToTrap + 10 + leader.travelToTrap + BUFFER;
-        
-        // 1. Blocchiamo la coda Leader
+        // Calcolo Rientro Leader: 240s prep + (Andata Leader + Combat + Ritorno Leader)
+        const leaderReturnTime = t + PREP_TIME + (leader.travelToTrap * 2) + COMBAT_TIME + BUFFER;
         leader.leaderFreeAt = leaderReturnTime;
         leader.ledCount++;
         
-        // 2. Blocchiamo le marce dei joiners scelti (ognuno torna a casa sua con il proprio tempo di viaggio dalla trappola)
+        // Calcolo Rientro Joiners: 240s prep + Andata Leader + Combat + Ritorno DIRETTO a casa propria
         const selectedJoinerNames = [];
         for (let i = 0; i < REQUIRED_JOINERS; i++) {
           const item = validJoiners[i];
           const joinerPlayer = item.player;
           
-          const joinerReturnTime = t + PREP_TIME + leader.travelToTrap + 10 + joinerPlayer.travelToTrap + BUFFER;
+          const joinerReturnTime = t + PREP_TIME + leader.travelToTrap + COMBAT_TIME + joinerPlayer.travelToTrap + BUFFER;
           joinerPlayer.joinerFreeAt[item.freeJoinerIndex] = joinerReturnTime;
           
           selectedJoinerNames.push(joinerPlayer.name);
@@ -106,7 +94,7 @@ export function generateBearTrapWaves(onlinePlayers, troopCap, trapX = 500, trap
         });
 
       } else {
-        break; // Non ci sono abbastanza joiners validi in questo istante
+        break; // Non ci sono abbastanza joiners validi in questo preciso istante
       }
     }
   }
@@ -117,9 +105,9 @@ export function generateBearTrapWaves(onlinePlayers, troopCap, trapX = 500, trap
 function buildChatOutput(timeline, troopCap, reqJoiners, players) {
   const totalRallies = timeline.length;
   
-  let out = `=== BEAR TRAP - TIMELINE FISICA (OPZIONE A) ===\n`;
-  out += `[Cap Truppe: ${troopCap} | Joiners per Raduno: ${reqJoiners}]\n`;
-  out += `🎯 TOTALE RADUNI: ${totalRallies}\n\n`;
+  let out = `=== BEAR TRAP - TIMELINE FISICA ===\n`;
+  out += `[Cap Truppe: ${troopCap} | Joiners richiesti: ${reqJoiners}]\n`;
+  out += `🎯 TOTALE RADUNI LANCIATI: ${totalRallies}\n\n`;
 
   const timeBlocks = {};
   timeline.forEach(r => {

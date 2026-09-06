@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next'; 
 import { getEntityDisplayState, getBasePosition } from './mapUtils';
 
@@ -9,6 +9,9 @@ export const DispatchModal = ({
   lootDrops = [], marches = [], buildingStates = {} 
 }) => {
   const { t } = useTranslation(); 
+  
+  // Stato per gestire quale menu a tendina delle marce è aperto
+  const [openDropdownIdx, setOpenDropdownIdx] = useState(null);
   
   if (!activePlayer) return null;
 
@@ -423,42 +426,85 @@ export const DispatchModal = ({
                       </div>
                     )}
 
+                    {/* MENU A TENDINA CUSTOM - Selezione Multipla */}
                     {availablePlayers.length > 0 && assignedMembers.length < 9 && (
-                      <div className="flex flex-col gap-1 mt-1">
-                        <select
-                          className="w-full bg-slate-900 border border-slate-700 border-dashed rounded-xl p-2.5 text-[11px] font-bold text-slate-300 outline-none focus:border-cyan-500 cursor-pointer shadow-inner"
-                          value=""
-                          onChange={(e) => {
-                            const targetId = e.target.value;
-                            const leaderEntity = { ...activePlayer, type: 'player' };
-                            const memRaw = activeDeployment.find(ent => String(ent.id) === String(targetId));
-                            if (!memRaw) return; 
-                            const memEntity = { ...memRaw, type: 'player' };
-                            const leaderState = getEntityDisplayState(leaderEntity, currentTime, draftPositions, healingEvents, teamBase, buildings);
-                            const memState = getEntityDisplayState(memEntity, currentTime, draftPositions, healingEvents, teamBase, buildings);
-                            const dist = Math.sqrt(Math.pow(leaderState.x - memState.x, 2) + Math.pow(leaderState.y - memState.y, 2));
-                            
-                            const targetBuilding = buildings.find(b => String(b.id) === String(currentAssign.buildingId));
-                            let calculatedBaseTime = 0;
-                            if (targetBuilding) {
-                              const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
-                              const refPoint = REFERENCE_POINTS[teamBase];
-                              const dxRef = targetBuilding.x - refPoint.x;
-                              const dyRef = targetBuilding.y - refPoint.y;
-                              const refToTargetDist = Math.sqrt(dxRef * dxRef + dyRef * dyRef);
-                              const tableTimeSec = teamBase === 'blue' ? (targetBuilding.travelTimeBlue || 60) : (targetBuilding.travelTimeRed || 60);
-                              const speed = refToTargetDist / Math.max(1, tableTimeSec);
-                              calculatedBaseTime = (dist / speed) / 60;
-                            }
-                            const newMembers = [...assignedMembers, { id: targetId, speedups: 0, baseTime: calculatedBaseTime }];
-                            updateMarchAssignment(marchIdx, 'members', newMembers);
+                      <div className="flex flex-col gap-1 mt-1 pt-2 border-t border-slate-700/50 relative">
+                        <button
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setOpenDropdownIdx(openDropdownIdx === marchIdx ? null : marchIdx); 
                           }}
+                          className="w-full bg-slate-900 border border-slate-700 border-dashed rounded-xl p-2.5 text-[11px] font-bold text-slate-300 hover:text-white hover:border-cyan-500 transition-colors flex items-center justify-between shadow-inner"
                         >
-                          <option value="" disabled>➕ {t('dispatch_modal.join_player')}</option>
-                          {availablePlayers.filter(p => !assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id))).map(p => (
-                              <option key={p.id} value={p.id}>[{p.tag}] {p.name}</option>
-                          ))}
-                        </select>
+                          <span className="flex items-center gap-2">
+                            ➕ {t('dispatch_modal.join_player', 'Aggiungi Partecipanti')}
+                          </span>
+                          <span>{openDropdownIdx === marchIdx ? '▲' : '▼'}</span>
+                        </button>
+
+                        {openDropdownIdx === marchIdx && (
+                          <div className="mt-1 bg-slate-800 border border-slate-600 rounded-xl shadow-inner flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
+                              {availablePlayers.map(p => {
+                                const isSelected = assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id));
+                                return (
+                                  <label 
+                                    key={p.id} 
+                                    className="flex items-center gap-3 p-2.5 hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        e.stopPropagation();
+                                        if (isSelected) {
+                                          // Rimuove il giocatore
+                                          updateMarchAssignment(marchIdx, 'members', assignedMembers.filter(m => String(typeof m === 'object' ? m.id : m) !== String(p.id)));
+                                        } else {
+                                          // Aggiunge il giocatore
+                                          if (assignedMembers.length >= 9) return;
+                                          const leaderEntity = { ...activePlayer, type: 'player' };
+                                          const memEntity = { ...p, type: 'player' };
+                                          const leaderState = getEntityDisplayState(leaderEntity, currentTime, draftPositions, healingEvents, teamBase, buildings);
+                                          const memState = getEntityDisplayState(memEntity, currentTime, draftPositions, healingEvents, teamBase, buildings);
+                                          const dist = Math.sqrt(Math.pow(leaderState.x - memState.x, 2) + Math.pow(leaderState.y - memState.y, 2));
+
+                                          let calculatedBaseTime = 0;
+                                          const targetBuilding = buildings.find(b => String(b.id) === String(currentAssign.buildingId));
+                                          if (targetBuilding) {
+                                            const REFERENCE_POINTS = { blue: { x: 38, y: 200 }, red: { x: 200, y: 38 } };
+                                            const refPoint = REFERENCE_POINTS[teamBase];
+                                            const dxRef = targetBuilding.x - refPoint.x;
+                                            const dyRef = targetBuilding.y - refPoint.y;
+                                            const refToTargetDist = Math.sqrt(dxRef * dxRef + dyRef * dyRef);
+                                            const tableTimeSec = teamBase === 'blue' ? (targetBuilding.travelTimeBlue || 60) : (targetBuilding.travelTimeRed || 60);
+                                            const speed = refToTargetDist / Math.max(1, tableTimeSec);
+                                            calculatedBaseTime = (dist / speed) / 60;
+                                          }
+
+                                          const newMembers = [...assignedMembers, { id: String(p.id), speedups: 0, baseTime: calculatedBaseTime }];
+                                          updateMarchAssignment(marchIdx, 'members', newMembers);
+                                        }
+                                      }}
+                                      className="accent-cyan-500 w-4 h-4 cursor-pointer"
+                                    />
+                                    <span className="text-[11px] text-slate-200 font-bold uppercase tracking-wider flex gap-1.5 items-center">
+                                      <span className="text-slate-500">[{p.tag}]</span> {p.name}
+                                    </span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                            <div className="p-2 border-t border-slate-600 bg-slate-900 shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setOpenDropdownIdx(null); }}
+                                className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs uppercase py-2.5 rounded-lg transition-colors tracking-widest shadow-md"
+                              >
+                                ✅ Conferma
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 

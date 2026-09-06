@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 
@@ -19,6 +19,8 @@ export function useMapData({
   const [tacticalMeta, setTacticalMeta] = useState({ eventName: '', date: '', time: '', targetBuilding: '', notes: '' });
   const [hiveGridMeta, setHiveGridMeta] = useState({ centerX: 500, centerY: 500, radius: 30, showGrid: true, territory: [] });
   const [loadedMarches, setLoadedMarches] = useState(null);
+  
+  const [globalResourceZones, setGlobalResourceZones] = useState([]);
 
   useEffect(() => {
     if (allianceCode === 'DEMO') {
@@ -60,34 +62,28 @@ export function useMapData({
 
           const uniquePlayers = Array.from(new Map(combinedPlayers.map(p => [p.id, p])).values());
           setMegaRoster(uniquePlayers);
-
-          if (!isReadOnly) {
-            alert(t('hooks.castle_sim_started', "⚔️ Modalità Simulatore Castello Avviata!\n\nTutti i {{count}} giocatori del Regno {{kingdom}} sono ora sul tavolo tattico.", { count: uniquePlayers.length, kingdom: targetKingdom }));
-          }
         } catch (error) {
-          console.error("❌ [MEGA-ROSTER] Errore critico durante il caricamento:", error);
+          console.error("❌ [MEGA-ROSTER] Errore critico:", error);
         } finally {
           setIsLoadingCloud(false);
         }
       };
       fetchMegaRoster();
     }
-  }, [eventMode, targetKingdom, isReadOnly, db, t]);
+  }, [eventMode, targetKingdom, isReadOnly, db]);
 
   useEffect(() => {
     const fetchMapData = async () => {
       setIsLoadingCloud(true);
       try {
-        let baseBuildings = [...INITIAL_BUILDINGS];
+        let baseBuildings = [];
         const baseSnap = await getDoc(doc(db, "mapSettings", "fixedBuildings"));
-        if (baseSnap.exists() && baseSnap.data().buildings) {
-          const cloudData = baseSnap.data().buildings;
-          baseBuildings = baseBuildings.map(baseB => {
-            const cb = cloudData.find(c => c.id === baseB.id);
-            return cb ? { ...baseB, ...cb } : baseB;
-          });
-          const customB = cloudData.filter(cb => !INITIAL_BUILDINGS.some(b => b.id === cb.id));
-          baseBuildings = [...baseBuildings, ...customB];
+        
+        if (baseSnap.exists() && baseSnap.data().buildings && baseSnap.data().buildings.length > 0) {
+          baseBuildings = baseSnap.data().buildings;
+          if (baseSnap.data().resourceZones) setGlobalResourceZones(baseSnap.data().resourceZones);
+        } else {
+          baseBuildings = [...INITIAL_BUILDINGS];
         }
 
         if (userRole === 'alliance' || userRole === 'admin' || userRole === 'consulente') {
@@ -95,8 +91,17 @@ export function useMapData({
             const allianceSnap = await getDoc(doc(db, "allianceMapData", allianceCode));
             if (allianceSnap.exists()) {
               const data = allianceSnap.data();
-              if (data.buildings) baseBuildings = baseBuildings.map(baseB => { const ab = data.buildings.find(a => a.id === baseB.id); return ab ? { ...baseB, ...ab } : baseB; });
-              if (data.allianceStructures?.length > 0) setAllianceStructures(data.allianceStructures);
+              
+              if (data.allianceStructures?.length > 0) {
+                setAllianceStructures(prev => {
+                  return data.allianceStructures.map(cloudStruct => {
+                    const localMatch = prev.find(p => p.id === cloudStruct.id);
+                    return localMatch && localMatch.x !== DEFAULT_STRUCTURES.find(d => d.id === localMatch.id)?.x 
+                      ? localMatch : cloudStruct;
+                  });
+                });
+              }
+
               if (data.hivePositions && eventMode !== 'castle_battle') setPlayerOverrides(prev => ({...prev, ...data.hivePositions}));
               if (data.hiveGridMeta) setHiveGridMeta(data.hiveGridMeta);
             }
@@ -107,7 +112,7 @@ export function useMapData({
       finally { setIsLoadingCloud(false); }
     };
     fetchMapData();
-  }, [userRole, allianceCode, INITIAL_BUILDINGS, eventMode]);
+  }, [userRole, allianceCode, INITIAL_BUILDINGS, eventMode, db]);
 
   useEffect(() => {
     if (allianceMeta.kingdom && allianceMeta.tag) {
@@ -126,11 +131,8 @@ export function useMapData({
   useEffect(() => {
     const fetchSimulation = async () => {
       let simDocId = `${allianceCode}_tacticalPlan`;
-      if (eventMode === 'castle_battle' && targetKingdom) {
-        simDocId = `castle_${targetKingdom}_tacticalPlan`;
-      } else if (!allianceCode || allianceCode === 'DEMO') {
-        return;
-      }
+      if (eventMode === 'castle_battle' && targetKingdom) simDocId = `castle_${targetKingdom}_tacticalPlan`;
+      else if (!allianceCode || allianceCode === 'DEMO') return;
 
       try {
         const docSnap = await getDoc(doc(db, "simulations", simDocId));
@@ -145,98 +147,80 @@ export function useMapData({
     fetchSimulation();
   }, [allianceCode, eventMode, targetKingdom]);
 
-  const handleSaveMapToCloud = async (activeView) => {
-    if (isReadOnly || eventMode === 'castle_battle') return alert(t('hooks.save_map_disabled', "Salvataggio Mappa disabilitato durante l'evento Battaglia Castello."));
-    if (userRole === 'guest' || (allianceCode === 'DEMO' && !['admin','consulente'].includes(userRole) && allianceRole !== 'officer')) return alert(t('map.sandbox_action_denied'));
+  // STABILIZZAZIONE DELLE FUNZIONI CON USECALLBACK
+  const handleSaveMapToCloud = useCallback(async (activeView) => {
+    if (isReadOnly || eventMode === 'castle_battle') return;
     setIsLoadingCloud(true);
     try {
       if (activeView === 'alliance' && allianceCode) {
-        await setDoc(doc(db, "allianceMapData", allianceCode), { buildings: fixedBuildings, allianceStructures, hivePositions: playerOverrides, hiveGridMeta }, { merge: true });
-        alert(t('map.alliance_map_saved', { code: allianceCode }));
+        // Salvataggio pulito: solo strutture alleanza e griglia[cite: 1]
+        await setDoc(doc(db, "allianceMapData", allianceCode), { 
+          allianceStructures, 
+          hiveGridMeta 
+        }, { merge: true });
       } else if (userRole === 'admin' || userRole === 'consulente') {
-        await setDoc(doc(db, "mapSettings", "fixedBuildings"), { buildings: fixedBuildings }, { merge: true });
-        alert(t('map.global_map_updated'));
+        // Salvataggio globale admin: edifici fissi e risorse[cite: 1]
+        await setDoc(doc(db, "mapSettings", "fixedBuildings"), { 
+          buildings: fixedBuildings, 
+          resourceZones: globalResourceZones 
+        }, { merge: true });
       }
-    } catch (error) { alert(t('map.map_save_error')); }
+    } catch (error) { console.error(error); }
     setIsLoadingCloud(false);
-  }; 
+  }, [isReadOnly, eventMode, allianceCode, allianceStructures, hiveGridMeta, userRole, fixedBuildings, globalResourceZones]); 
 
- const handleSaveSimulation = async (marches) => {
-    if (isReadOnly) return alert(t('map.read_only_alert'));
-    if (userRole === 'guest' || (allianceCode === 'DEMO' && !['admin','consulente'].includes(userRole) && allianceRole !== 'officer')) return alert(t('map.sandbox_action_denied'));
-    
+  const handleSaveSimulation = useCallback(async (marches) => {
+    if (isReadOnly) return;
     let simDocId = `${allianceCode}_tacticalPlan`;
-    let successMsg = t('map.tactical_plan_saved', { code: allianceCode });
-
-    if (eventMode === 'castle_battle' && targetKingdom) {
-      simDocId = `castle_${targetKingdom}_tacticalPlan`;
-      successMsg = t('hooks.castle_sim_saved', "Simulazione Battaglia Castello (Regno {{kingdom}}) salvata con successo!", { kingdom: targetKingdom });
-    } else if (!allianceCode) {
-      return alert(t('map.no_alliance_selected'));
-    }
+    if (eventMode === 'castle_battle' && targetKingdom) simDocId = `castle_${targetKingdom}_tacticalPlan`;
+    else if (!allianceCode) return;
     
     setIsSavingSim(true);
     try {
-      const payload = JSON.parse(JSON.stringify({ 
-        overrides: playerOverrides || {}, 
-        marches: marches || null, 
-        tacticalMeta: tacticalMeta || {}, 
-        author: (userRole || 'UNKNOWN').toUpperCase(),
-        timestamp: new Date().toISOString()
-      }));
-
+      const payload = JSON.parse(JSON.stringify({ overrides: playerOverrides || {}, marches: marches || null, tacticalMeta: tacticalMeta || {}, author: (userRole || 'UNKNOWN').toUpperCase(), timestamp: new Date().toISOString() }));
       await setDoc(doc(db, "simulations", simDocId), payload, { merge: true });
-      alert(successMsg);
-    } catch (error) { 
-      console.error("🚨 ERRORE CRITICO CLOUD:", error);
-      alert(t('hooks.save_failed', "Salvataggio fallito. Dettaglio:\n\n{{message}}", { message: error.message })); 
-    }
+    } catch (error) {}
     setIsSavingSim(false);
-  };
+  }, [isReadOnly, allianceCode, eventMode, targetKingdom, playerOverrides, tacticalMeta, userRole]);
 
-  const handleBuildingChange = (id, field, value) => {
+  const handleBuildingChange = useCallback((id, field, value) => {
     if (isReadOnly) return;
     const val = (field === 'x' || field === 'y') ? (value === '' ? '' : Number(value)) : value;
     setFixedBuildings(prev => prev.map(b => b.id === id ? { ...b, [field]: val } : b));
-  };
-  const handleAddBuilding = () => {
+  }, [isReadOnly]);
+
+  const handleAddBuilding = useCallback(() => {
     if (isReadOnly) return;
-    setFixedBuildings(prev => [{ id: `custom-${Date.now()}`, code: 'NEW', name: t('hooks.new_building', 'Nuovo Edificio'), type: 'others', x: 500, y: 500, occupiedBy: '' }, ...prev]);
-  };
-  const handleDeleteBuilding = (id) => {
+    setFixedBuildings(prev => [{ id: `custom-${Date.now()}`, code: 'NEW', name: 'Nuovo', type: 'others', x: 500, y: 500, occupiedBy: '' }, ...prev]);
+  }, [isReadOnly]);
+
+  const handleDeleteBuilding = useCallback((id) => {
     if (isReadOnly) return;
     setFixedBuildings(prev => prev.filter(b => b.id !== id));
-  };
-  const handleAllianceStructureChange = (id, field, value) => {
+  }, [isReadOnly]);
+
+  const handleAllianceStructureChange = useCallback((id, field, value) => {
     if (isReadOnly) return;
     setAllianceStructures(prev => prev.map(s => s.id === id ? { ...s, [field]: value === '' ? '' : Number(value) } : s));
-  };
-  const handleAddHQ = async (newHQ) => {
-    if (isReadOnly) return alert(t('map.read_only_alert'));
+  }, [isReadOnly]);
+
+  const handleAddHQ = useCallback(async (newHQ) => {
+    if (isReadOnly) return;
     const updated = [...enemyHQs, { id: `enemy-${Date.now()}`, ...newHQ, type: 'enemyHQ' }];
     setEnemyHQs(updated);
     if (allianceMeta.kingdom && allianceMeta.tag) await setDoc(doc(db, "enemyHQs", `${allianceMeta.kingdom}_${allianceMeta.tag}`), { hqs: updated });
-  };
-  const handleRemoveHQ = async (id) => {
-    if (isReadOnly) return alert(t('map.read_only_alert'));
+  }, [isReadOnly, enemyHQs, allianceMeta]);
+
+  const handleRemoveHQ = useCallback(async (id) => {
+    if (isReadOnly) return;
     const updated = enemyHQs.filter(hq => hq.id !== id);
     setEnemyHQs(updated);
     if (allianceMeta.kingdom && allianceMeta.tag) await setDoc(doc(db, "enemyHQs", `${allianceMeta.kingdom}_${allianceMeta.tag}`), { hqs: updated });
-  };
+  }, [isReadOnly, enemyHQs, allianceMeta]);
 
-  const effectiveRoster = eventMode === 'castle_battle' 
-    ? megaRoster 
-    : (allianceCode === 'DEMO' && (!roster || roster.length === 0) ? DEMO_ROSTER : roster);
+  const effectiveRoster = eventMode === 'castle_battle' ? megaRoster : (allianceCode === 'DEMO' && (!roster || roster.length === 0) ? DEMO_ROSTER : roster);
 
-  return {
-    effectiveRoster, isLoadingCloud, isSavingSim,
-    fixedBuildings, setFixedBuildings, handleBuildingChange, handleAddBuilding, handleDeleteBuilding,
-    allianceStructures, setAllianceStructures, handleAllianceStructureChange,
-    enemyHQs, setEnemyHQs, handleAddHQ, handleRemoveHQ,
-    playerOverrides, setPlayerOverrides,
-    tacticalMeta, setTacticalMeta,
-    hiveGridMeta, setHiveGridMeta,
-    allianceMeta, setAllianceMeta,
-    loadedMarches, handleSaveMapToCloud, handleSaveSimulation
-  };
+  return useMemo(() => ({
+    effectiveRoster, isLoadingCloud, isSavingSim, globalResourceZones, setGlobalResourceZones, fixedBuildings, setFixedBuildings, handleBuildingChange, handleAddBuilding, handleDeleteBuilding, allianceStructures, setAllianceStructures, handleAllianceStructureChange, enemyHQs, setEnemyHQs, handleAddHQ, handleRemoveHQ, playerOverrides, setPlayerOverrides, tacticalMeta, setTacticalMeta, hiveGridMeta, setHiveGridMeta, allianceMeta, setAllianceMeta, loadedMarches, handleSaveMapToCloud, handleSaveSimulation
+  }), [effectiveRoster, isLoadingCloud, isSavingSim, globalResourceZones, fixedBuildings, allianceStructures, enemyHQs, playerOverrides, tacticalMeta, hiveGridMeta, allianceMeta, loadedMarches, handleBuildingChange, handleAddBuilding, handleDeleteBuilding, handleAllianceStructureChange, handleAddHQ, handleRemoveHQ, handleSaveMapToCloud, handleSaveSimulation]);
 }
