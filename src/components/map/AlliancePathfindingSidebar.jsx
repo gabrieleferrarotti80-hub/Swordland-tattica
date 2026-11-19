@@ -25,7 +25,8 @@ export const AlliancePathfindingSidebar = ({
   const hq = validStructures.find(s => s.type === 'headquarters') || { type: 'headquarters', name: t('suite.hq', 'Quartier Generale'), x: 500, y: 500, size: 3 };
   const trap1 = validStructures.find(s => s.code === 'TRP1' || (s.type === 'beartrap' && s.name.includes('1'))) || { type: 'beartrap', name: t('suite.trap1', 'Trappola 1'), x: hq.x ? hq.x - 10 : 490, y: hq.y || 500 };
   const trap2 = validStructures.find(s => s.code === 'TRP2' || (s.type === 'beartrap' && s.name.includes('2'))) || { type: 'beartrap', name: t('suite.trap2', 'Trappola 2'), x: hq.x ? hq.x + 10 : 510, y: hq.y || 500 };
-
+console.log("🟨 [DEBUG 2 - Sidebar] allianceStructures ricevute dal padre:", allianceStructures);
+  console.log("🟨 [DEBUG 2 - Sidebar] trap1 trovata:", trap1, "trap2 trovata:", trap2);
   return (
     <div className="w-[340px] bg-slate-900/95 border-r border-indigo-700/80 backdrop-blur-md flex flex-col h-full shadow-2xl z-20 select-none animate-fade-in">
       <div className="p-4 border-b border-indigo-900/50 flex flex-col gap-3 shrink-0 bg-slate-950/50">
@@ -53,12 +54,13 @@ export const AlliancePathfindingSidebar = ({
             validPlayers={validPlayers} roster={roster} 
           />
         )}
-        {activeTab === 'layout' && (
+       {activeTab === 'layout' && (
           <HiveLayoutTab 
             hq={hq} trap1={trap1} trap2={trap2} 
             roster={roster} setRoster={setRoster} validPlayers={validPlayers} 
             setPathfindingData={setPathfindingData} 
             userRole={userRole} allianceCode={allianceCode} 
+            allianceStructures={allianceStructures} // <--- AGGIUNGI QUESTA RIGA! 🚀
           />
         )}
       </div>

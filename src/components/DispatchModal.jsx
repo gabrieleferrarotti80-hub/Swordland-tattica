@@ -10,7 +10,6 @@ export const DispatchModal = ({
 }) => {
   const { t } = useTranslation(); 
   
-  // Stato per gestire quale menu a tendina delle marce è aperto
   const [openDropdownIdx, setOpenDropdownIdx] = useState(null);
   
   if (!activePlayer) return null;
@@ -129,11 +128,18 @@ export const DispatchModal = ({
       return arrTime < targetB.unlockTime;
   };
 
-  const availablePlayers = activeDeployment.filter(p => 
-    String(p.id) !== String(activePlayer.id) && 
-    getAvailableMarches(p.id) > 0 &&
-    !(healingEvents[p.id] !== undefined && currentTime >= healingEvents[p.id] && currentTime < healingEvents[p.id] + 12)
-  );
+  // NUOVA LOGICA: Prendiamo TUTTI i giocatori eccetto il capitano e li ordiniamo
+  const checkIsHealing = (pid) => healingEvents[pid] !== undefined && currentTime >= healingEvents[pid] && currentTime < healingEvents[pid] + 12;
+  const allOtherPlayers = activeDeployment.filter(p => String(p.id) !== String(activePlayer.id));
+  
+  const sortedOtherPlayers = [...allOtherPlayers].sort((a, b) => {
+     const aAvail = getAvailableMarches(a.id) > 0 && !checkIsHealing(a.id);
+     const bAvail = getAvailableMarches(b.id) > 0 && !checkIsHealing(b.id);
+     
+     if (aAvail && !bAvail) return -1; // Mette i disponibili in cima
+     if (!aAvail && bAvail) return 1;  // Mette i bloccati in fondo
+     return (b.power || 0) - (a.power || 0); // A parità di stato, ordina per forza
+  });
 
   const getActiveTasks = () => {
     const tasks = [];
@@ -426,8 +432,7 @@ export const DispatchModal = ({
                       </div>
                     )}
 
-                    {/* MENU A TENDINA CUSTOM - Selezione Multipla */}
-                    {availablePlayers.length > 0 && assignedMembers.length < 9 && (
+                    {sortedOtherPlayers.length > 0 && assignedMembers.length < 9 && (
                       <div className="flex flex-col gap-1 mt-1 pt-2 border-t border-slate-700/50 relative">
                         <button
                           onClick={(e) => { 
@@ -444,24 +449,31 @@ export const DispatchModal = ({
 
                         {openDropdownIdx === marchIdx && (
                           <div className="mt-1 bg-slate-800 border border-slate-600 rounded-xl shadow-inner flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
-                            <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
-                              {availablePlayers.map(p => {
+                            <div className="max-h-56 overflow-y-auto custom-scrollbar p-1">
+                              
+                              {/* MAPPA DEI GIOCATORI CON LUCCHETTO DINAMICO */}
+                              {sortedOtherPlayers.map(p => {
                                 const isSelected = assignedMembers.some(m => String(typeof m === 'object' ? m.id : m) === String(p.id));
+                                const pIsHealing = checkIsHealing(p.id);
+                                const availableMarchesCount = getAvailableMarches(p.id);
+                                
+                                // È bloccato se non ha marce E non è già selezionato, oppure se è in ospedale
+                                const isUnavailable = pIsHealing || (!isSelected && availableMarchesCount <= 0);
+
                                 return (
                                   <label 
                                     key={p.id} 
-                                    className="flex items-center gap-3 p-2.5 hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                                    className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors ${isUnavailable ? 'opacity-50 cursor-not-allowed bg-slate-900' : 'hover:bg-slate-700 cursor-pointer'}`}
                                   >
                                     <input
                                       type="checkbox"
                                       checked={isSelected}
+                                      disabled={isUnavailable && !isSelected}
                                       onChange={(e) => {
                                         e.stopPropagation();
                                         if (isSelected) {
-                                          // Rimuove il giocatore
                                           updateMarchAssignment(marchIdx, 'members', assignedMembers.filter(m => String(typeof m === 'object' ? m.id : m) !== String(p.id)));
                                         } else {
-                                          // Aggiunge il giocatore
                                           if (assignedMembers.length >= 9) return;
                                           const leaderEntity = { ...activePlayer, type: 'player' };
                                           const memEntity = { ...p, type: 'player' };
@@ -486,10 +498,18 @@ export const DispatchModal = ({
                                           updateMarchAssignment(marchIdx, 'members', newMembers);
                                         }
                                       }}
-                                      className="accent-cyan-500 w-4 h-4 cursor-pointer"
+                                      className="accent-cyan-500 w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
                                     />
-                                    <span className="text-[11px] text-slate-200 font-bold uppercase tracking-wider flex gap-1.5 items-center">
-                                      <span className="text-slate-500">[{p.tag}]</span> {p.name}
+                                    <span className={`text-[11px] font-bold uppercase tracking-wider flex gap-1.5 items-center flex-1 ${isUnavailable ? 'text-slate-500' : 'text-slate-200'}`}>
+                                      <span className="text-slate-500">[{p.tag}]</span> 
+                                      <span className="truncate max-w-[100px]">{p.name}</span>
+                                      
+                                      {/* ETICHETTE DI STATO (Ospedale o Marce Esaurite) */}
+                                      {pIsHealing ? (
+                                        <span className="text-[9px] text-emerald-500 ml-auto bg-emerald-900/30 px-1.5 py-0.5 rounded border border-emerald-800">🏥 In cura</span>
+                                      ) : (!isSelected && availableMarchesCount <= 0) ? (
+                                        <span className="text-[9px] text-rose-400 ml-auto bg-rose-900/30 px-1.5 py-0.5 rounded border border-rose-800">🔒 0 Marce</span>
+                                      ) : null}
                                     </span>
                                   </label>
                                 )

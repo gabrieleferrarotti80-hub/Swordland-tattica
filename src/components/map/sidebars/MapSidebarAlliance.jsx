@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { exportHiveToPdf } from '../../../utils/hivePdfExport';
 
 // SCUDO SUGLI INPUT
 const CoordInput = memo(({ initialValue, onSave, placeholder, disabled, className }) => {
@@ -29,7 +30,8 @@ function MapSidebarAlliance({
   playerOverrides, setPlayerOverrides,
   onOpenHelp, handleSaveToCloud, isLoadingCloud,
   isMapUnlocked, setIsMapUnlocked,
-  setActiveView, setPathfindingMode
+  setActiveView, setPathfindingMode,
+  allianceCode
 }) {
   const navigate = useNavigate();
   const { t } = useTranslation(); 
@@ -77,6 +79,26 @@ function MapSidebarAlliance({
     if (handleAllianceStructureChange) handleAllianceStructureChange(struct.id, field, numVal);
   };
 
+  // Esportazione PDF a 2 pagine (Foglio 1: Mappa con nomi sopra i castelli | Foglio 2: Tabella Coordinate)
+  const handleExportPdf = () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    
+    const effectivePlayers = rosterArray.map(player => {
+      const override = playerOverrides?.[player.id];
+      return {
+        ...player,
+        x: override && override.x !== undefined ? override.x : player.x,
+        y: override && override.y !== undefined ? override.y : player.y
+      };
+    });
+
+    exportHiveToPdf({
+      players: effectivePlayers,
+      structures: allianceStructures || [],
+      allianceCode: allianceCode || 'HIVE'
+    });
+  };
+
   return (
     <aside className="w-[340px] bg-slate-900 border-r border-slate-800 flex flex-col p-5 gap-4 z-20 shadow-2xl shrink-0 overflow-hidden select-none">
       <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
@@ -112,6 +134,13 @@ function MapSidebarAlliance({
           className="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 text-emerald-300 font-black text-[10px] uppercase tracking-widest rounded transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)] flex justify-center items-center gap-2"
         >
           📡 {t('sidebar.tactical_suite_routes', 'Suite Tattica & Percorsi')}
+        </button>
+
+        <button 
+          onClick={handleExportPdf}
+          className="w-full py-2 bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/50 text-cyan-300 font-black text-[10px] uppercase tracking-widest rounded transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)] flex justify-center items-center gap-2"
+        >
+          📄 {t('sidebar.export_hive_pdf', 'Salva PDF (Mappa + Coordinate)')}
         </button>
       </div>
 
@@ -295,8 +324,8 @@ function MapSidebarAlliance({
         </div>
       </div>
 
-     {!isReadOnly && (
-        <div className="pt-4 border-t border-slate-800 shrink-0 mt-auto">
+      {!isReadOnly && (
+        <div className="pt-4 border-t border-slate-800 shrink-0 mt-auto flex flex-col gap-2">
           <button 
             onClick={() => {
               if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -321,5 +350,6 @@ export default memo(MapSidebarAlliance, (prev, next) => {
          prev.playerOverrides === next.playerOverrides &&
          prev.isMapUnlocked === next.isMapUnlocked &&
          prev.isLoadingCloud === next.isLoadingCloud &&
-         prev.isReadOnly === next.isReadOnly;
+         prev.isReadOnly === next.isReadOnly &&
+         prev.allianceCode === next.allianceCode;
 });

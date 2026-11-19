@@ -96,8 +96,8 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
     }
   }, [isLogged, auth.code]);
 
-  const handleLoadAllianceAsAdmin = async (code) => {
-    const cleanCode = code.trim().toUpperCase();
+ const handleLoadAllianceAsAdmin = async (code) => {
+    const cleanCode = code.trim(); // 👈 RIMOSSO .toUpperCase()
     if (!cleanCode) return;
     try {
       let docSnap = await getDoc(doc(db, "rosters", cleanCode));
@@ -375,14 +375,15 @@ export default function Home({ auth, setAuth, roster, setRoster }) {
                      <GovernancePanel auth={auth} roster={roster} setRoster={setRoster} onBack={() => setHubView('alliance')} allianceDbData={allianceDbData} setAllianceDbData={setAllianceDbData} />
                   )}
 
-                {ENABLE_BEAR_TRAP && hubView === 'beartrap' && (
-   <BearTrapManager 
-     roster={roster} 
-     setRoster={setRoster} 
-     onBack={() => setHubView('alliance')} 
-     allianceDbData={allianceDbData} 
-   />
-)}
+              {ENABLE_BEAR_TRAP && hubView === 'beartrap' && (
+                  <BearTrapManager 
+                    roster={roster} 
+                    setRoster={setRoster} 
+                    onBack={() => setHubView('alliance')} 
+                    allianceDbData={allianceDbData} 
+                    allianceCode={auth.code} 
+                  />
+                )}
                 </div>
               ) : (
                 <div className="bg-slate-900/50 backdrop-blur-2xl p-6 md:p-12 rounded-3xl border border-white/5 border-t-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.6)] flex flex-col items-center gap-6 md:gap-8 animate-in w-[95%] max-w-xl text-center">

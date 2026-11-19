@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 // SOSTITUISCI QUESTO BLOCCO CON I TUOI DATI DA FIREBASE
 const firebaseConfig = {
@@ -13,4 +13,8 @@ const firebaseConfig = {
 
 // Inizializza Firebase e Firestore
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// FIX DEFINITIVO: Forza il Long Polling per bypassare il blocco dei WebSocket (Antivirus/VPN)
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true
+});

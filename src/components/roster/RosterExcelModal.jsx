@@ -5,33 +5,33 @@ const VALID_LEVELS = [
   ...Array.from({ length: 11 }, (_, i) => `TG${i + 1}`)
 ];
 
+// 1. Aggiunte Coordinate X e Y ai campi disponibili
 const AVAILABLE_FIELDS = [
   { id: 'ignore', label: '❌ Ignora Colonna' },
   { id: 'name', label: '👤 Nome Giocatore' },
   { id: 'role', label: '🛡️ Ruolo (R1-R5)' },
   { id: 'level', label: '⭐ Livello (Es. 25, TG4)' },
   { id: 'power', label: '⚔️ Potenza (M)' },
-  { id: 'marches', label: '👟 Marce' }
+  { id: 'marches', label: '👟 Marce' },
+  { id: 'assignedTrap', label: '🐻 Trappola Orso (1 o 2)' },
+  { id: 'participation', label: '⏱️ Costanza (1=Bassa, 3=Alta)' },
+  { id: 'coordX', label: '📍 Coord X' },
+  { id: 'coordY', label: '📍 Coord Y' }
 ];
 
 export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
   const [step, setStep] = useState(1);
-  
   const [pastedData, setPastedData] = useState('');
   const [rawLines, setRawLines] = useState([]);
-  
   const [hasHeader, setHasHeader] = useState(true);
   const [columnMapping, setColumnMapping] = useState({});
-  
   const [parsedPlayers, setParsedPlayers] = useState([]);
 
   if (!isOpen) return null;
 
-  // --- FASE 1: Estrazione Grezza ---
   const handleInitialParse = () => {
     if (!pastedData.trim()) return;
     const lines = pastedData.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    
     const parsed = lines.map(line => line.split('\t').map(c => c.trim()));
     if (parsed.length === 0) return;
 
@@ -41,24 +41,23 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
     const maxCols = Math.max(...parsed.map(r => r.length));
     for (let i = 0; i < maxCols; i++) {
        if (i === 0) initialMapping[i] = 'name';
-       else if (i === 1 && maxCols === 5) initialMapping[i] = 'role';
-       else if (i === 2 && maxCols === 5) initialMapping[i] = 'level';
-       else if (i === 3 && maxCols === 5) initialMapping[i] = 'power';
-       else if (i === 4 && maxCols === 5) initialMapping[i] = 'marches';
+       else if (i === 1 && maxCols >= 5) initialMapping[i] = 'role';
+       else if (i === 2 && maxCols >= 5) initialMapping[i] = 'level';
+       else if (i === 3 && maxCols >= 5) initialMapping[i] = 'power';
+       else if (i === 4 && maxCols >= 5) initialMapping[i] = 'marches';
        else initialMapping[i] = 'ignore';
     }
     setColumnMapping(initialMapping);
     setStep(2);
   };
 
-  // --- FASE 2: Mappatura ---
   const applyMappingAndProcess = () => {
     const players = [];
     const startIndex = hasHeader ? 1 : 0;
 
     for (let i = startIndex; i < rawLines.length; i++) {
       const cols = rawLines[i];
-      let pData = { name: '', role: 'R1', level: '1', power: 0, marches: null };
+      let pData = { name: '' };
 
       cols.forEach((colVal, colIdx) => {
         const field = columnMapping[colIdx];
@@ -70,32 +69,68 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
         if (field === 'level') pData.level = val;
         if (field === 'power') pData.power = val;
         if (field === 'marches') pData.marches = val;
+        if (field === 'assignedTrap') pData.assignedTrap = val;
+        if (field === 'participation') pData.participation = val;
+        if (field === 'coordX') pData.x = val;
+        if (field === 'coordY') pData.y = val;
       });
 
       if (!pData.name) continue;
 
-      if (!['R1', 'R2', 'R3', 'R4', 'R5'].includes(pData.role)) pData.role = 'R1';
-
-      let levelRaw = String(pData.level).toUpperCase();
-      let finalLevel = '1';
-      if (VALID_LEVELS.includes(levelRaw)) {
-         finalLevel = levelRaw;
-      } else {
-         const match = levelRaw.match(/\d+/);
-         if (match) {
-            const num = parseInt(match[0], 10);
-            if (levelRaw.includes('TG')) finalLevel = (num >= 1 && num <= 11) ? `TG${num}` : 'TG1';
-            else finalLevel = (num >= 1 && num <= 30) ? String(num) : '30';
-         }
+      if (pData.role !== undefined) {
+        if (!['R1', 'R2', 'R3', 'R4', 'R5'].includes(pData.role)) pData.role = 'R1';
       }
-      pData.level = finalLevel;
 
-      let powerRaw = String(pData.power).replace(',', '.');
-      pData.power = parseFloat(powerRaw) || 0;
+      if (pData.level !== undefined) {
+        let levelRaw = String(pData.level).toUpperCase();
+        let finalLevel = '1';
+        if (VALID_LEVELS.includes(levelRaw)) {
+           finalLevel = levelRaw;
+        } else {
+           const match = levelRaw.match(/\d+/);
+           if (match) {
+              const num = parseInt(match[0], 10);
+              if (levelRaw.includes('TG')) finalLevel = (num >= 1 && num <= 11) ? `TG${num}` : 'TG1';
+              else finalLevel = (num >= 1 && num <= 30) ? String(num) : '30';
+           }
+        }
+        pData.level = finalLevel;
+      }
 
-      let m = parseInt(pData.marches, 10);
-      if (isNaN(m)) m = pData.power >= 180 ? 6 : pData.power >= 90 ? 5 : 4;
-      pData.marches = m;
+      if (pData.power !== undefined) {
+        let powerRaw = String(pData.power).replace(',', '.');
+        pData.power = parseFloat(powerRaw) || 0;
+      }
+
+      if (pData.marches !== undefined) {
+        let m = parseInt(pData.marches, 10);
+        if (isNaN(m)) m = (pData.power || 0) >= 180 ? 6 : (pData.power || 0) >= 90 ? 5 : 4;
+        pData.marches = m;
+      }
+
+      if (pData.assignedTrap !== undefined) {
+         let tVal = String(pData.assignedTrap).trim().toLowerCase();
+         if (tVal.includes('2')) pData.assignedTrap = 2;
+         else if (tVal.includes('1')) pData.assignedTrap = 1;
+         else pData.assignedTrap = '';
+      }
+
+      if (pData.participation !== undefined) {
+         let cVal = parseInt(String(pData.participation).replace(/\D/g, ''), 10);
+         if (cVal >= 1 && cVal <= 3) pData.participation = cVal;
+         else pData.participation = '';
+      }
+
+      // 2. Lettura e validazione Numerica di X e Y
+      if (pData.x !== undefined) {
+         let xVal = parseInt(String(pData.x).replace(/\D/g, ''), 10);
+         pData.x = isNaN(xVal) ? '' : xVal;
+      }
+      
+      if (pData.y !== undefined) {
+         let yVal = parseInt(String(pData.y).replace(/\D/g, ''), 10);
+         pData.y = isNaN(yVal) ? '' : yVal;
+      }
 
       players.push({ id: `excel-${Date.now()}-${Math.random()}`, ...pData });
     }
@@ -104,7 +139,6 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
     setStep(3);
   };
 
-  // --- FASE 3: Modifica Finale ---
   const handleEditPlayer = (id, field, value) => setParsedPlayers(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
   const handleRemovePlayer = (id) => setParsedPlayers(prev => prev.filter(p => p.id !== id));
 
@@ -123,7 +157,7 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
 
   return (
     <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in zoom-in-95 duration-200">
-      <div className="bg-slate-900 border border-emerald-500/50 p-6 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full max-w-5xl flex flex-col max-h-[90vh] relative overflow-hidden">
+      <div className="bg-slate-900 border border-emerald-500/50 p-6 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full max-w-[95vw] flex flex-col max-h-[90vh] relative overflow-hidden">
         
         <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-[50px] pointer-events-none"></div>
 
@@ -161,7 +195,7 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
                 <p className="text-sm text-emerald-200 font-bold">Usa i menu a tendina in cima ad ogni colonna per dire al sistema cosa stai importando.</p>
                 <label className="flex items-center gap-2 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 hover:border-emerald-500/50">
                   <input type="checkbox" checked={hasHeader} onChange={(e) => setHasHeader(e.target.checked)} className="accent-emerald-500 cursor-pointer" />
-                  <span className="text-xs text-white font-bold uppercase tracking-wide">La prima riga è un'intestazione (ignorala)</span>
+                  <span className="text-xs text-white font-bold uppercase tracking-wide">La prima riga è un'intestazione</span>
                 </label>
               </div>
 
@@ -195,7 +229,6 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-500 italic">Anteprima limitata alle prime 4 righe. Le eventuali colonne extra verranno ignorate.</p>
             </div>
           )}
 
@@ -203,21 +236,26 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
             <div className="flex flex-col gap-4 h-full">
               <div className="bg-emerald-950/20 border border-emerald-900/50 p-4 rounded-xl flex justify-between items-center">
                 <p className="text-sm text-emerald-200">
-                  Estratti con successo <strong>{parsedPlayers.length}</strong> giocatori. <br/>
-                  Il sistema riconoscerà automaticamente i nomi già presenti nell'Alleanza e aggiornerà solo le statistiche!
+                  Estratti con successo <strong>{parsedPlayers.length}</strong> giocatori.
                 </p>
                 <button onClick={() => setStep(2)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors border border-slate-700">Torna alla Mappatura</button>
               </div>
 
               <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-y-auto custom-scrollbar flex-1">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-max">
                   <thead className="bg-slate-900 border-b border-slate-700 sticky top-0 z-10 shadow-md">
                     <tr>
                       <th className="px-3 py-2 text-slate-400 font-bold text-[10px] uppercase w-16 text-center">Ruolo</th>
                       <th className="px-3 py-2 text-slate-400 font-bold text-[10px] uppercase">Nome in Gioco</th>
-                      <th className="px-3 py-2 text-slate-400 font-bold text-[10px] uppercase w-20 text-center text-amber-400">Liv. TG</th>
+                      <th className="px-3 py-2 text-slate-400 font-bold text-[10px] uppercase w-20 text-center text-amber-400">Liv.</th>
                       <th className="px-3 py-2 text-slate-400 font-bold text-[10px] uppercase w-24 text-center">Potenza (M)</th>
-                      <th className="px-3 py-2 text-slate-400 font-bold text-[10px] uppercase w-20 text-center">Marce</th>
+                      
+                      {/* Intestazioni per X e Y aggiunte */}
+                      <th className="px-2 py-2 text-rose-400 font-bold text-[10px] uppercase w-16 text-center">Coord X</th>
+                      <th className="px-2 py-2 text-rose-400 font-bold text-[10px] uppercase w-16 text-center border-r border-slate-800">Coord Y</th>
+                      
+                      <th className="px-3 py-2 text-fuchsia-400 font-bold text-[10px] uppercase w-20 text-center">Trappola</th>
+                      <th className="px-3 py-2 text-amber-300 font-bold text-[10px] uppercase w-24 text-center">Costanza</th>
                       <th className="px-3 py-2 w-10"></th>
                     </tr>
                   </thead>
@@ -225,15 +263,37 @@ export default function RosterExcelModal({ isOpen, onClose, onImport, t }) {
                     {parsedPlayers.map(p => (
                       <tr key={p.id} className="hover:bg-slate-900/50 transition-colors">
                         <td className="px-3 py-2 text-center text-indigo-400 font-black text-xs">
-                          <select value={p.role} onChange={e => handleEditPlayer(p.id, 'role', e.target.value)} className="bg-transparent text-center font-black text-emerald-400 outline-none w-full cursor-pointer">
+                          <select value={p.role || ''} onChange={e => handleEditPlayer(p.id, 'role', e.target.value)} className="bg-transparent text-center font-black text-emerald-400 outline-none w-full cursor-pointer">
+                              <option value="" className="bg-slate-900" disabled>-</option>
                               {['R1','R2','R3','R4','R5'].map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
                           </select>
                         </td>
-                        <td className="px-3 py-2"><input type="text" value={p.name} onChange={e => handleEditPlayer(p.id, 'name', e.target.value)} className="w-full bg-transparent text-white font-bold outline-none focus:border-b focus:border-emerald-500" /></td>
-                        <td className="px-3 py-2 text-center"><input type="text" value={p.level} onChange={e => handleEditPlayer(p.id, 'level', e.target.value)} className="w-full bg-transparent text-amber-400 font-black text-center outline-none focus:border-b focus:border-amber-500" /></td>
-                        <td className="px-3 py-2 text-center"><input type="number" value={p.power} onChange={e => handleEditPlayer(p.id, 'power', Number(e.target.value))} className="w-full bg-transparent text-emerald-300 font-mono font-bold text-center outline-none focus:border-b focus:border-emerald-500" /></td>
-                        <td className="px-3 py-2 text-center"><input type="number" value={p.marches} onChange={e => handleEditPlayer(p.id, 'marches', Number(e.target.value))} className="w-full bg-transparent text-cyan-300 font-bold text-center outline-none focus:border-b focus:border-cyan-500" /></td>
-                        <td className="px-3 py-2 text-center"><button onClick={() => handleRemovePlayer(p.id)} className="text-rose-500 hover:text-rose-400 font-black">✕</button></td>
+                        <td className="px-3 py-2"><input type="text" value={p.name || ''} onChange={e => handleEditPlayer(p.id, 'name', e.target.value)} className="w-full bg-transparent text-white font-bold outline-none focus:border-b focus:border-emerald-500" /></td>
+                        <td className="px-3 py-2 text-center"><input type="text" value={p.level || ''} placeholder="-" onChange={e => handleEditPlayer(p.id, 'level', e.target.value)} className="w-full bg-transparent text-amber-400 font-black text-center outline-none focus:border-b focus:border-amber-500" /></td>
+                        <td className="px-3 py-2 text-center"><input type="number" value={p.power ?? ''} placeholder="-" onChange={e => handleEditPlayer(p.id, 'power', Number(e.target.value))} className="w-full bg-transparent text-emerald-300 font-mono font-bold text-center outline-none focus:border-b focus:border-emerald-500" /></td>
+                        
+                        {/* 3. Campi di Modifica per Coordinate X e Y */}
+                        <td className="px-2 py-2 text-center bg-rose-950/10"><input type="number" value={p.x ?? ''} placeholder="X" onChange={e => handleEditPlayer(p.id, 'x', Number(e.target.value))} className="w-full bg-transparent text-rose-300 font-mono font-bold text-center outline-none focus:border-b focus:border-rose-500" /></td>
+                        <td className="px-2 py-2 text-center border-r border-slate-800 bg-rose-950/10"><input type="number" value={p.y ?? ''} placeholder="Y" onChange={e => handleEditPlayer(p.id, 'y', Number(e.target.value))} className="w-full bg-transparent text-rose-300 font-mono font-bold text-center outline-none focus:border-b focus:border-rose-500" /></td>
+                        
+                        <td className="px-3 py-2 text-center">
+                          <select value={p.assignedTrap || ''} onChange={e => handleEditPlayer(p.id, 'assignedTrap', Number(e.target.value))} className="w-full bg-transparent text-fuchsia-400 font-black text-center outline-none cursor-pointer">
+                            <option value="" className="bg-slate-900 text-slate-500">-</option>
+                            <option value={1} className="bg-slate-900">T1</option>
+                            <option value={2} className="bg-slate-900">T2</option>
+                          </select>
+                        </td>
+                        
+                        <td className="px-3 py-2 text-center border-l border-slate-800">
+                          <select value={p.participation || ''} onChange={e => handleEditPlayer(p.id, 'participation', Number(e.target.value))} className="w-full bg-transparent text-amber-300 font-black text-center outline-none cursor-pointer">
+                            <option value="" className="bg-slate-900 text-slate-500">-</option>
+                            <option value={1} className="bg-slate-900">1x (Bassa)</option>
+                            <option value={2} className="bg-slate-900">2x (Media)</option>
+                            <option value={3} className="bg-slate-900">3x (Alta)</option>
+                          </select>
+                        </td>
+
+                        <td className="px-3 py-2 text-center border-l border-slate-800"><button onClick={() => handleRemovePlayer(p.id)} className="text-rose-500 hover:text-rose-400 font-black">✕</button></td>
                       </tr>
                     ))}
                   </tbody>

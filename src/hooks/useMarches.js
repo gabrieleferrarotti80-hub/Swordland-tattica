@@ -298,12 +298,10 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     setDraftPositions({});
   }, [draftPositions, currentTime, setActiveDeployment]);
 
-  // --- MACCHINA DEL TEMPO: Resetta il minuto, gestisce le cure passate e taglia il futuro ---
   const handleCancelMinute = useCallback((targetMinute = null) => {
     const minToCancel = targetMinute !== null ? targetMinute : currentTime;
     setDraftPositions({});
 
-    // 1. Pulizia Giocatori: Cancella tutte le posizioni da questo minuto in poi
     setActiveDeployment(prev => prev.map(player => {
       if (player.positions) {
         const updatedPositions = { ...player.positions };
@@ -319,7 +317,6 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
       return player;
     }));
 
-    // 2. Pulizia Marce: Cancella il futuro e distrugge le marce "orfane"
     setMarches(prevMarches => {
       const cleanedMarches = prevMarches.map(march => {
         if (march.positions) {
@@ -339,7 +336,6 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
       );
     });
 
-    // 3. Pulizia Ospedale: Mantiene intatte le cure iniziate PRIMA del minuto resettato
     setHealingEvents(prev => {
       const updatedHeals = { ...prev };
       let hasChanges = false;
@@ -351,7 +347,6 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
       });
       return hasChanges ? updatedHeals : prev;
     });
-
   }, [currentTime, setActiveDeployment, setMarches, setHealingEvents]);
 
   const handleWithdraw = useCallback((id) => setDraftPositions(prev => ({ ...prev, [id]: { removed: true } })), []);
@@ -495,9 +490,7 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     };
 
     if (window.confirm(isDefeat ? t('hooks.confirm_defeat') : t('hooks.confirm_withdraw'))) {
-       
        setActiveDeployment(prev => prev.map(p => processEntityRetreat(p, false)));
-       
        setMarches(prevMarches => {
           let updatedMarches = [];
           let newLeaders = new Set();
@@ -550,28 +543,139 @@ export const useMarches = ({ roster, activeDeployment, setActiveDeployment, buil
     }
   }, [buildings, teamBase, getCurrentPosition, getCityPosition, currentTime, setActiveDeployment, t]);
 
-  const handleUpdatePosition = useCallback((dragData, newX, newY) => {
+  // LA CALAMITA È QUI: Il segnalino si attacca al bordo azzurro e si scollega forzatamente dalla conquista.
+ const handleUpdatePosition = useCallback((dragData, newX, newY) => {
      const [type, id] = dragData.split(':');
+     
      if (type === 'building') { 
          setBuildings(prev => prev.map(b => String(b.id) === String(id) ? { ...b, x: newX, y: newY } : b)); 
      }
      else if (type === 'player') {
+       let finalX = newX;
+       let finalY = newY;
+       let snapped = false;
+       let isVerticalEdge = false;
+       let anchorX = newX;
+       let anchorY = newY;
+
+       // 1. CALCOLO DELLA CALAMITA
+       for (const b of buildings) {
+           const mLeft = b.magnet?.xMin ?? b.x - 5;
+           const mRight = b.magnet?.xMax ?? b.x + 5;
+           const mTop = b.magnet?.yMin ?? b.y - 5;
+           const mBottom = b.magnet?.yMax ?? b.y + 5;
+
+           const catchLeft = mLeft - 15;
+           const catchRight = mRight + 15;
+           const catchTop = mTop - 15;
+           const catchBottom = mBottom + 15;
+
+           if (newX >= catchLeft && newX <= catchRight && newY >= catchTop && newY <= catchBottom) {
+               const distLeft = Math.abs(newX - mLeft);
+               const distRight = Math.abs(newX - mRight);
+               const distTop = Math.abs(newY - mTop);
+               const distBottom = Math.abs(newY - mBottom);
+
+               const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+
+               if (minDist === distLeft) { anchorX = mLeft; anchorY = Math.max(mTop, Math.min(mBottom, newY)); isVerticalEdge = true; } 
+               else if (minDist === distRight) { anchorX = mRight; anchorY = Math.max(mTop, Math.min(mBottom, newY)); isVerticalEdge = true; } 
+               else if (minDist === distTop) { anchorX = Math.max(mLeft, Math.min(mRight, newX)); anchorY = mTop; isVerticalEdge = false; } 
+               else { anchorX = Math.max(mLeft, Math.min(mRight, newX)); anchorY = mBottom; isVerticalEdge = false; }
+               
+               finalX = anchorX;
+               finalY = anchorY;
+               snapped = true;
+               break; 
+           }
+       }
+
+       // 2. ANTI-SOVRAPPOSIZIONE (SLITTAMENTO)
+       // Raccogliamo le coordinate esatte di tutti gli altri giocatori attualmente sulla mappa
+       const occupiedSpots = [];
+       activeDeployment.forEach(p => {
+           if (String(p.id) === String(id)) return; // Ignora se stesso
+           let px = null, py = null;
+           if (p.positions) {
+               const mins = Object.keys(p.positions).map(Number).sort((a,b)=>a-b);
+               let lastP = null;
+               for (const m of mins) { if (m <= currentTime) lastP = p.positions[m]; }
+               if (lastP && !lastP.removed && !lastP.isMarching && lastP.x !== undefined) {
+                   px = lastP.x; py = lastP.y;
+               }
+           }
+           if (px !== null && py !== null) {
+               occupiedSpots.push({ x: px, y: py });
+           }
+       });
+
+       const MARKER_SIZE = 4
+       
+       ; // Raggio vitale del segnalino aumentato (evita sovrapposizioni visive)
+       let isOccupied = true;
+       let shiftSteps = 0;
+
+       // Controlla se lo spot è libero, altrimenti sposta a destra/sinistra (o su/giù) in modo alternato
+       while (isOccupied && shiftSteps < 30) {
+           isOccupied = false;
+           for (const spot of occupiedSpots) {
+               const dx = finalX - spot.x;
+               const dy = finalY - spot.y;
+               const dist = Math.sqrt(dx*dx + dy*dy);
+               
+               if (dist < MARKER_SIZE) {
+                   isOccupied = true;
+                   shiftSteps++;
+                   
+                   // Genera un offset a fisarmonica: +8, -8, +16, -16...
+                   const offset = Math.ceil(shiftSteps / 2) * MARKER_SIZE * (shiftSteps % 2 === 0 ? -1 : 1);
+                   
+                   if (snapped) {
+                       // Se agganciato alla calamita, slitta lungo il muro
+                       if (isVerticalEdge) finalY = anchorY + offset;
+                       else finalX = anchorX + offset;
+                   } else {
+                       // Se libero nel prato, slitta orizzontalmente
+                       finalX = anchorX + offset;
+                   }
+                   break; // Ricomincia il controllo partendo dalla nuova coordinata calcolata
+               }
+           }
+       }
+
+       // 3. SALVATAGGIO DELLA POSIZIONE
        setActiveDeployment(prev => prev.map(p => {
-           if (String(p.id) === String(id)) return { ...p, positions: { ...(p.positions || {}), [currentTime]: { x: newX, y: newY, removed: false, isGarrison: false, targetBuildingId: null } } };
+           if (String(p.id) === String(id)) {
+               return { 
+                   ...p, 
+                   positions: { 
+                       ...(p.positions || {}), 
+                       [currentTime]: { 
+                           x: finalX, 
+                           y: finalY, 
+                           removed: false, 
+                           isGarrison: false, 
+                           targetBuildingId: null 
+                       } 
+                   } 
+               };
+           }
            return p;
        }));
+       
        setMarches(prev => prev.map(m => {
            if (String(m.leader) === String(id)) return { ...m, positions: { ...(m.positions || {}), [currentTime]: { removed: true } } };
            if (m.members && m.members.map(String).includes(String(id))) return { ...m, members: m.members.filter(mId => String(mId) !== String(id)) };
            return m;
        }));
+       
        setDraftPositions(prev => {
           const newDrafts = { ...prev };
           Object.keys(newDrafts).forEach(draftId => { if (String(newDrafts[draftId].leader) === String(id)) delete newDrafts[draftId]; });
           return newDrafts;
        });
      }
-  }, [currentTime, setBuildings, setActiveDeployment]);
+  }, [currentTime, setBuildings, setActiveDeployment, buildings, activeDeployment]);
 
   return useMemo(() => ({
     marches, setMarches, draftPositions, setDraftPositions, getCurrentPosition, handleDispatchMarch, handleConfirmMinute, handleCancelMinute, getAvailableMarches, handleHeal, handleCancelHeal, handleGarrisonAction, handleUpdatePosition, handleWithdraw 

@@ -78,6 +78,37 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
   const [exportableOrders, setExportableOrders] = useState([]);
   const [isPlacementMode, setIsPlacementMode] = useState(true);
 
+  // --- GESTIONE SALVATAGGI TATTICI ---
+  const [currentPlanId, setCurrentPlanId] = useState(null);
+  const [currentPlanName, setCurrentPlanName] = useState('');
+
+ const handleLoadPlan = (docData, planId, planName) => {
+    if (window.confirm(`⚠️ Vuoi caricare il piano "${planName || planId}"? I dati attuali sulla lavagna andranno persi.`)) {
+      // Intercetta i dati sia che si trovino alla radice, sia incapsulati in "data"
+      const payload = docData.data ? docData.data : docData;
+
+      if (payload.tacticalMeta) setTacticalMeta(payload.tacticalMeta);
+      if (payload.playerOverrides) setPlayerOverrides(payload.playerOverrides);
+      if (payload.exportableOrders) setExportableOrders(payload.exportableOrders);
+      if (payload.allianceStructures) setAllianceStructures(payload.allianceStructures);
+
+      setCurrentPlanId(planId);
+      setCurrentPlanName(planName || '');
+      setIsEventManagerOpen(false);
+    }
+  };
+
+  const handleCreateNewPlan = () => {
+    if (window.confirm("⚠️ Vuoi azzerare la lavagna tattica per creare un nuovo piano?")) {
+      setTacticalMeta({});
+      setPlayerOverrides({});
+      setExportableOrders([]);
+      setCurrentPlanId(null);
+      setCurrentPlanName('');
+      setIsEventManagerOpen(false);
+    }
+  };
+
   const [isGlobalEditorMode, setIsGlobalEditorMode] = useState(false);
   const [globalEditorTool, setGlobalEditorTool] = useState('resources');
   const [activeZoneId, setActiveZoneId] = useState(null); 
@@ -361,6 +392,24 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
           setTacticalMeta({...tacticalMeta, draftData: data}); 
           alert(t('map_page.draft_saved', "✅ Lavoro memorizzato temporaneamente!")); 
         }} 
+      />
+
+   <EventManagerModal 
+        isOpen={isEventManagerOpen} 
+        onClose={() => setIsEventManagerOpen(false)} 
+        currentData={{ tacticalMeta, playerOverrides, exportableOrders, allianceStructures }} 
+        onLoadData={handleLoadPlan}
+        onCreateNewPlan={handleCreateNewPlan}
+        allianceCode={allianceCode} 
+        dbCollection="tactical_plans" 
+      />
+
+      <TacticalExportModal 
+        isOpen={isExportModalOpen} 
+        onClose={() => setIsExportModalOpen(false)} 
+        exportableOrders={exportableOrders} 
+        roster={rosterArray} 
+        fixedBuildings={fixedBuildings}
       />
 
      {isPathfindingMode ? (

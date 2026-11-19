@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-// 📌 Importiamo i tre nuovi sottomoduli
+// 📌 Importiamo i sottomoduli
 import AdminCRM from '../components/admin/AdminCRM';
 import AdminSystem from '../components/admin/AdminSystem';
 import AdminDBTools from '../components/admin/AdminDBTools';
+import KingdomManager from '../components/admin/KingdomManager';
 
 export default function AdminPanel({ auth }) {
   const navigate = useNavigate();
@@ -44,6 +45,12 @@ export default function AdminPanel({ auth }) {
             {t('admin.tickets_reports')}
           </button>
 
+          {/* 📌 NUOVA SEZIONE SERVERS */}
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 ml-2 mt-4">Servers</div>
+          <button onClick={() => setActiveTab('kingdom-manager')} className={`px-4 py-3 rounded-xl text-sm font-bold text-left transition-colors flex items-center gap-3 ${activeTab === 'kingdom-manager' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:bg-slate-800'}`}>
+            🌍 Gestione Regno
+          </button>
+
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 ml-2 mt-4">{t('admin.system')}</div>
           <button onClick={() => setActiveTab('master-panel')} className={`px-4 py-3 rounded-xl text-sm font-bold text-left transition-colors flex items-center gap-3 ${activeTab === 'master-panel' ? 'bg-fuchsia-600/20 text-fuchsia-400 border border-fuchsia-500/30' : 'text-slate-400 hover:bg-slate-800'}`}>
             {t('admin.master_keys')}
@@ -79,6 +86,11 @@ export default function AdminPanel({ auth }) {
 
           {activeTab === 'db-tools' && (
              <AdminDBTools t={t} />
+          )}
+
+          {/* 📌 RENDERIZZAZIONE DEL NUOVO KINGDOM MANAGER */}
+          {activeTab === 'kingdom-manager' && (
+             <KingdomManager />
           )}
 
         </div>

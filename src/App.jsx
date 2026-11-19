@@ -8,6 +8,7 @@ import MarchBuilder from './pages/MarchBuilder'; // Aggiungi l'import in alto
 import AdminPanel from './pages/AdminPanel';
 import TriAlliance from './pages/TriAlliance';
 import SwordlandViewer from './pages/SwordlandViewer';
+import KingdomMapPage from './pages/KingdomMapPage';
 
 function App() {
   // Lo stato del roster vive qui ed è l'unica cosa condivisa globalmente
@@ -65,9 +66,18 @@ function App() {
           element={
             <MapPage 
               roster={roster}
+              setRoster={setRoster} /* 👈 AGGIUNGI QUESTA RIGA! */
               userRole={auth.role}
               allianceCode={auth.code}
               allianceRole={auth.allianceRole}
+            />
+          } 
+        />
+        <Route 
+          path="/kingdom-map/:kingdomId" 
+          element={
+            <KingdomMapPage 
+              auth={auth}
             />
           } 
         />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../firebase'; 
-import { collection, addDoc, deleteDoc, doc, query, where, serverTimestamp, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, query, serverTimestamp, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 
 export default function EventManagerModal({ 
   isOpen, onClose, currentData, onLoadData, onCreateNewPlan, allianceCode, 
@@ -18,22 +18,55 @@ export default function EventManagerModal({
   const [copiedLinkId, setCopiedLinkId] = useState(null); 
   
   const fileInputRef = useRef(null);
+  
+  const legacyIdsString = legacyIds.join(',');
 
   useEffect(() => {
     if (!isOpen || !allianceCode) return;
 
+    console.log(`[DEBUG] 🚀 EventManagerModal aperto!`);
+    console.log(`[DEBUG] 🔍 Cerco l'alleanza esatta: "${allianceCode}"`);
+    console.log(`[DEBUG] 📂 Leggo dalla collezione: "${dbCollection}"`);
+
     setIsFetching(true);
     const plansRef = collection(db, dbCollection);
-    const q = query(plansRef, where('allianceCode', '==', allianceCode));
+    const q = query(plansRef);
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const loadedPlans = [];
+      
+      console.log(`[DEBUG] 📄 Documenti totali trovati nella collezione: ${snapshot.size}`);
+
       snapshot.forEach(document => {
-        loadedPlans.push({ id: document.id, ...document.data() });
+        const d = document.data();
+        const dbCode = d.allianceCode || d.AllianceCode || '';
+        
+        console.log(`[DEBUG] Analizzo Doc ID: ${document.id}`);
+        console.log(`[DEBUG]   -> Codice trovato nel DB: "${dbCode}"`);
+        console.log(`[DEBUG]   -> I due codici sono IDENTICI? ${dbCode === allianceCode}`);
+
+        if (dbCode === allianceCode) {
+          const computedName = d.name 
+                            || d.data?.tacticalMeta?.name 
+                            || d.data?.tacticalMeta?.eventName 
+                            || d.data?.name 
+                            || `Piano ${document.id.substring(0,5)}`;
+
+          console.log(`[DEBUG]   ✅ MATCH TROVATO! Nome assegnato: "${computedName}"`);
+
+          loadedPlans.push({ 
+            id: document.id, 
+            ...d,
+            name: computedName 
+          });
+        } else {
+          console.log(`[DEBUG]   ❌ SCARTATO.`);
+        }
       });
 
       try {
-        for (const legacyId of legacyIds) {
+        const idsToSearch = legacyIdsString ? legacyIdsString.split(',') : [];
+        for (const legacyId of idsToSearch) {
           if(!legacyId) continue;
           const legacyRef = doc(db, legacyCollection, legacyId);
           const legacySnap = await getDoc(legacyRef);
@@ -64,16 +97,18 @@ export default function EventManagerModal({
          return timeB - timeA;
       });
       
+      console.log(`[DEBUG] 🏁 Fine analisi. Piani totali da mostrare: ${loadedPlans.length}`);
+      
       setSavedPlans(loadedPlans);
       setIsFetching(false);
     }, (error) => {
       console.error("🔥 ERRORE FIREBASE ONSNAPSHOT:", error);
-      alert(`Errore di lettura dal Database. Se usi un AdBlocker o Brave, disattivalo per questo sito.\n\nDettaglio tecnico: ${error.message}`);
+      alert(`Errore di lettura dal Database: ${error.message}`);
       setIsFetching(false);
     });
 
     return () => unsubscribe();
-  }, [isOpen, allianceCode, dbCollection, legacyCollection, legacyIds, t]);
+  }, [isOpen, allianceCode, dbCollection, legacyCollection, legacyIdsString, t]);
 
   useEffect(() => {
     if (isOpen) {
@@ -95,7 +130,7 @@ export default function EventManagerModal({
     });
   };
 
-  const saveToFirebase = async (e, isOverwrite = false) => {
+ const saveToFirebase = async (e, isOverwrite = false) => {
     e.preventDefault();
     if (!newPlanName.trim() || !allianceCode) return;
     
@@ -103,31 +138,37 @@ export default function EventManagerModal({
     try {
       const currentPlan = savedPlans.find(p => p.id === currentPlanId);
 
+      // 🚀 FIX: Vaporizza tutti i valori "undefined" nascosti nei meandri dell'array
+      const sanitizedData = JSON.parse(JSON.stringify(currentData));
+
       if (isOverwrite && currentPlanId) {
         if (currentPlan?.isLegacy) {
+          // Se converte un vecchio piano legacy, mantiene la proprietà di chi sta cliccando
           const docRef = await addDoc(collection(db, dbCollection), {
             name: newPlanName.trim(),
-            allianceCode: allianceCode,
-            data: currentData,
+            allianceCode: allianceCode, 
+            data: sanitizedData, // 🛡️ USA IL DATO PULITO
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           });
           await deleteDoc(doc(db, legacyCollection, currentPlanId)); 
           onPlanSaved(docRef.id, newPlanName.trim());
         } else {
+          // 🛡️ AGGIORNAMENTO PIANO ESISTENTE
           const planRef = doc(db, dbCollection, currentPlanId);
           await updateDoc(planRef, {
             name: newPlanName.trim(),
-            data: currentData,
+            data: sanitizedData, // 🛡️ USA IL DATO PULITO
             updatedAt: serverTimestamp()
           });
           onPlanSaved(currentPlanId, newPlanName.trim());
         }
       } else {
+        // ✨ NUOVO PIANO O NUOVA COPIA
         const docRef = await addDoc(collection(db, dbCollection), {
           name: newPlanName.trim(),
-          allianceCode: allianceCode,
-          data: currentData,
+          allianceCode: allianceCode, 
+          data: sanitizedData, // 🛡️ USA IL DATO PULITO
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });

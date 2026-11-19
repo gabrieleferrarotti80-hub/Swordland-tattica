@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next'; 
 import { getBasePosition, checkIsAtBuilding, isMarchGathering, getEntityDisplayState } from './mapUtils';
 
@@ -25,6 +25,7 @@ export const InteractiveMap = ({
   
   const mapRef = useRef(null);
   const [popupBuildingId, setPopupBuildingId] = useState(null);
+  const [dragHoveredBuildingId, setDragHoveredBuildingId] = useState(null);
 
   const handleBuildingClick = (e, buildingId) => { 
     e.stopPropagation(); 
@@ -33,11 +34,44 @@ export const InteractiveMap = ({
     setPopupPlayerId(null); 
   };
   
-  const handleDrop = (e) => { 
+  const handleDragOver = (e) => {
     e.preventDefault(); 
     if (isEditorMode) return; 
+
+    const rect = e.currentTarget.getBoundingClientRect(); 
+    const visX = ((e.clientX - rect.left) / rect.width) * 100; 
+    const visY = ((e.clientY - rect.top) / rect.height) * 100; 
+    const u = (visX - 50) * (MAX_COORD / SCALE_X); 
+    const v = (50 - visY) * (MAX_COORD / SCALE_Y) + CENTER_SUM; 
+    const isoX = (u + v) / 2; 
+    const isoY = (v - u) / 2; 
+
+    let hoveredId = null;
+
+    for (const b of buildings) {
+        const mLeft = b.magnet?.xMin ?? b.x - 5;
+        const mRight = b.magnet?.xMax ?? b.x + 5;
+        const mTop = b.magnet?.yMin ?? b.y - 5;
+        const mBottom = b.magnet?.yMax ?? b.y + 5;
+
+        if (isoX >= mLeft - 15 && isoX <= mRight + 15 && isoY >= mTop - 15 && isoY <= mBottom + 15) {
+            hoveredId = b.id;
+            break;
+        }
+    }
+    setDragHoveredBuildingId(prev => prev !== hoveredId ? hoveredId : prev);
+  };
+
+  const handleDragLeave = () => { setDragHoveredBuildingId(null); };
+
+  const handleDrop = (e) => { 
+    e.preventDefault(); 
+    setDragHoveredBuildingId(null); 
+    if (isEditorMode) return; 
+    
     const dragData = e.dataTransfer.getData('text/plain'); 
     if (!dragData || !onUpdatePosition) return; 
+    
     const rect = e.currentTarget.getBoundingClientRect(); 
     const visX = ((e.clientX - rect.left) / rect.width) * 100; 
     const visY = ((e.clientY - rect.top) / rect.height) * 100; 
@@ -60,7 +94,35 @@ export const InteractiveMap = ({
   const draftedNewMarches = Object.entries(draftPositions).filter(([id, draft]) => draft.isNewMarch).map(([id, draft]) => ({ id, type: 'march', leaderId: draft.leader, positions: {}, isDraft: true, marchType: draft.marchType, members: draft.members, speedupsUsed: draft.speedupsUsed }));
   const allMapEntities = [...(activeDeployment || []).map(p => ({ ...p, type: 'player' })), ...(marches || []).map(m => ({ ...m, type: 'march', leaderId: m.leader })), ...draftedNewMarches];
 
-  const { capturedBuildingIds, buildingGarrisons } = React.useMemo(() => {
+  // 1. TROVA AUTOMATICAMENTE I CAPITANI DELLE SQUADRE
+  const squadCaptains = useMemo(() => {
+    const captains = new Set();
+    const squadsMap = {};
+    
+    (activeDeployment || []).forEach(p => {
+       if (p.squad) {
+          if (!squadsMap[p.squad]) squadsMap[p.squad] = [];
+          squadsMap[p.squad].push(p);
+       }
+    });
+
+    Object.values(squadsMap).forEach(members => {
+       members.sort((a, b) => (Number(b.power) || 0) - (Number(a.power) || 0));
+       if (members.length > 0) captains.add(String(members[0].id));
+    });
+    
+    return captains;
+  }, [activeDeployment]);
+
+ // 2. LOGICA CONTROLLO CAPITANO (Esclusivamente Tattico)
+  const isPlayerCaptain = (playerObj) => {
+    if (!playerObj) return false;
+    
+    // Il triangolo appare SOLO se l'algoritmo ha eletto il giocatore come capitano della sua squadra
+    return squadCaptains.has(String(playerObj.id));
+  };
+
+  const { capturedBuildingIds, buildingGarrisons } = useMemo(() => {
     const captured = new Set(); const garrisons = {}; 
     buildings.forEach(b => garrisons[String(b.id)] = []); 
     
@@ -69,15 +131,6 @@ export const InteractiveMap = ({
       
       let isGarr = state.isGarrisoned;
       let tbId = state.targetBuildingId;
-
-      if (!isGarr && !state.isMarching && !state.isHealing && state.isVisible) {
-         const b = buildings.find(build => {
-            const dx = build.x - state.x;
-            const dy = build.y - state.y;
-            return Math.sqrt(dx * dx + dy * dy) < 12; 
-         });
-         if (b) { isGarr = true; tbId = b.id; }
-      }
 
       if (!state.isHealing && isGarr && tbId && !String(tbId).startsWith('loot_')) {
         const strTbId = String(tbId);
@@ -139,7 +192,8 @@ export const InteractiveMap = ({
       className={`w-full h-full relative overflow-hidden pointer-events-auto bg-[#241a16] ${isEditorMode ? 'border-4 border-amber-500 shadow-[inset_0_0_50px_rgba(245,158,11,0.5)]' : ''}`} 
       onClick={() => { setPopupPlayerId(null); setPopupBuildingId(null); setMarchAssignments({}); if(isEditorMode && setSelectedBuildingForEdit) setSelectedBuildingForEdit(''); }} 
       onDrop={handleDrop} 
-      onDragOver={(e) => e.preventDefault()}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
     >
       <img src="/map-bg.png" alt="Mappa Tattica" className="absolute inset-0 w-full h-full object-fill pointer-events-none block" />
 
@@ -153,6 +207,7 @@ export const InteractiveMap = ({
           {allMapEntities.map((entity, index) => {
             const state = getEntityDisplayState(entity, currentTime, draftPositions, healingEvents, teamBase, buildings);
             if (!state.isVisible || !state.isMarching) return null;
+            
             let strokeColor = '#22d3ee'; 
             if (entity.type === 'march') {
               if (state.marchType === 'difesa') strokeColor = '#3b82f6'; else if (state.marchType === 'supporto') strokeColor = '#10b981'; else if (state.marchType === 'rally' || state.marchType === 'rally_join') strokeColor = '#f59e0b'; else strokeColor = '#ef4444'; 
@@ -185,16 +240,15 @@ export const InteractiveMap = ({
           const isCaptured = capturedBuildingIds.has(String(building.id));
           const garrison = buildingGarrisons[String(building.id)] || [];
           const hasGarrison = garrison.length > 0;
-          const isBottomHalf = building.y && (building.x + building.y) < CENTER_SUM; 
           const isNearTop = topPercent < 30;
           
           const bState = buildingStates[building.id]; 
-          
           const isLocked = (building.unlockTime || 0) > currentTime;
 
           return (
             <div key={building.id} className={`absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer ${isEditorMode ? 'z-[60]' : (popupBuildingId === building.id ? 'z-[70]' : 'z-20 hover:z-40')} pointer-events-auto`} style={{ top: `${topPercent}%`, left: `${leftPercent}%` }} onClick={(e) => handleBuildingClick(e, building.id)}>
               <div className={`transition-all duration-300 ${isEditorMode ? 'scale-100 hover:scale-105' : 'group-hover:scale-110'} relative ${isLocked && !isEditorMode ? 'grayscale opacity-60' : ''}`}>
+                
                 {isEditorMode && <div className="absolute -inset-4 bg-amber-500/20 rounded-full blur-md animate-pulse pointer-events-none"></div>}
                 {isCaptured && !isEditorMode && !isLocked && <div className="absolute inset-0 bg-cyan-500/20 rounded-full blur-md animate-pulse pointer-events-none"></div>}
                 
@@ -220,7 +274,7 @@ export const InteractiveMap = ({
                      <div className={`text-[9px] font-black px-2 py-0.5 rounded shadow border flex items-center gap-1 ${bState.owner === 'blue' ? 'bg-blue-900/90 text-blue-200 border-blue-500' : 'bg-rose-900/90 text-rose-200 border-rose-500'}`}>
                        <span>{t('interactive_map.tot_points', '🏦 Tot: {{points}}', { points: bState.totalPoints[bState.owner] })}</span>
                        <span className="opacity-50">|</span>
-                      <span className="text-amber-400" title={t('interactive_map.loot_drop_tooltip', 'Bottino che cadrà a terra in caso di furto')}>📦 {Math.floor(bState.sessionPoints / 2)}</span>
+                      <span className="text-amber-400">📦 {Math.floor(bState.sessionPoints / 2)}</span>
                      </div>
                    )}
                    {bState.capturingTeam && (
@@ -249,12 +303,10 @@ export const InteractiveMap = ({
                    onClick={(e) => e.stopPropagation()}
                 >
                    <div className={`absolute left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent ${isNearTop ? 'bottom-full border-b-[8px] border-b-slate-700 mb-[1px]' : 'top-full border-t-[8px] border-t-slate-700 -mt-[1px]'}`}></div>
-                   
                    <div className="flex justify-between items-center border-b border-slate-700 pb-2">
                       <span className="text-cyan-400 font-black tracking-widest uppercase text-xs">{building.name}</span>
                       <button onClick={(e) => { e.stopPropagation(); setPopupBuildingId(null); }} className="text-slate-400 hover:text-red-400 font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-800 transition-colors">✕</button>
                    </div>
-                   
                    <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto custom-scrollbar mt-1 pr-1">
                       {getPlayersInBuilding(building.id).map(p => (
                          <div key={p.id} className="flex justify-between items-center bg-slate-800/80 p-2.5 rounded-lg border border-slate-700/50">
@@ -270,7 +322,6 @@ export const InteractiveMap = ({
                          </div>
                       ))}
                    </div>
-                   
                    <div className="flex flex-col mt-2 border-t border-slate-700 pt-3">
                        <button onClick={(e) => { e.stopPropagation(); handleGarrisonAction('withdraw', building.id); setPopupBuildingId(null); }} className="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-black uppercase tracking-wider py-3 rounded-lg text-[10px] shadow-md transition-colors flex items-center justify-center gap-2">
                           🚩 {t('garrison_popup.retreat_all_btn', 'RITIRA TRUPPE')}
@@ -285,13 +336,7 @@ export const InteractiveMap = ({
         {!isEditorMode && allMapEntities.map((entity, index) => {
           const state = getEntityDisplayState(entity, currentTime, draftPositions, healingEvents, teamBase, buildings);
           
-          const isPhysicallyAtBuilding = !state.isMarching && buildings.some(b => {
-             const dx = b.x - state.x;
-             const dy = b.y - state.y;
-             return Math.sqrt(dx * dx + dy * dy) < 12; 
-          });
-
-          if (!state.isVisible || state.isGarrisoned || isPhysicallyAtBuilding) return null; 
+          if (!state.isVisible || state.isGarrisoned) return null; 
 
           const isPlayer = entity.type === 'player';
           const isRallyAmmassamento = !isPlayer && entity.marchType === 'rally' && isMarchGathering(entity, currentTime);
@@ -313,20 +358,29 @@ export const InteractiveMap = ({
             const mIdx = visibleLeaderMarches.findIndex(m => m.id === entity.id);
             if (mIdx !== -1) { const angle = (mIdx * (Math.PI * 2 / 6)) + (Math.PI / 4); offsetX = Math.round(Math.cos(angle) * 18); offsetY = Math.round(Math.sin(angle) * 18); }
           }
+          
+          const isCaptain = isPlayer && isPlayerCaptain(entity); 
+          
+          // GESTIONE COLORI E STILI AVANZATI
+          let fillColor = entity.markerColor || (teamBase === 'red' ? '#e11d48' : '#2563eb');
+          let strokeColor = '#ffffff';
+          let glowClass = '';
+          let tailwindClasses = '';
 
-          let tokenColors = '';
           if (isHealing) {
-            tokenColors = 'bg-emerald-800 border-emerald-400 text-emerald-100';
+             fillColor = '#065f46'; // emerald-800
+             strokeColor = '#34d399'; // emerald-400
           } else if (state.marchType === 'rally_join' || isGatheringLeader || (!isPlayer && state.marchType === 'rally')) {
-            tokenColors = 'bg-amber-600 border-amber-300 text-amber-50 shadow-[0_0_15px_rgba(217,119,6,0.8)]';
+             fillColor = '#d97706'; // amber-600
+             strokeColor = '#fcd34d'; // amber-300
+             glowClass = 'drop-shadow-[0_0_8px_rgba(217,119,6,0.8)]';
           } else if (isPlayer) {
-            const sq = (entity.squad || '').toLowerCase();
-            if (sq.includes('assalt') || sq.includes('attacc')) { tokenColors = 'bg-rose-900 border-rose-500 text-rose-100 shadow-[0_0_12px_rgba(244,63,94,0.6)]'; } 
-            else if (sq.includes('difes')) { tokenColors = 'bg-blue-900 border-blue-400 text-blue-100 shadow-[0_0_12px_rgba(59,130,246,0.6)]'; } 
-            else if (sq.includes('support')) { tokenColors = 'bg-emerald-900 border-emerald-400 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.6)]'; } 
-            else { tokenColors = 'bg-slate-700 border-cyan-400 text-slate-100 shadow-[0_0_10px_rgba(34,211,238,0.5)]'; }
+             fillColor = entity.markerColor || (teamBase === 'red' ? '#e11d48' : '#2563eb');
+             strokeColor = '#ffffff';
+             glowClass = `drop-shadow-[0_0_6px_${fillColor}80]`;
           } else {
-            tokenColors = 'bg-slate-800 border-cyan-500 text-cyan-100 scale-90';
+             fillColor = '#1e293b'; // slate-800
+             strokeColor = '#06b6d4'; // cyan-500
           }
 
           const speedupsUsed = entity.speedupsUsed || 0;
@@ -335,26 +389,59 @@ export const InteractiveMap = ({
           return (
             <div key={`map-entity-${entity.type}-${entity.id}-${index}`} title={hoverTitle} className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-[1000ms] ease-linear group pointer-events-auto ${popupPlayerId === entity.id ? 'z-[60]' : (isPlayer ? 'z-40 hover:z-50' : 'z-20 hover:z-30')}`} style={{ top: `calc(${getVisualTop(state.x, state.y)}% + ${offsetY}px)`, left: `calc(${getVisualLeft(state.x, state.y)}% + ${offsetX}px)` }}>
               <div onClick={(e) => { if(isPlayer && !isHealing) handleOpenPopup(e, entity.id); }} draggable={isPlayer && !isHealing} onDragStart={(e) => { if (isPlayer && !isHealing) e.dataTransfer.setData('text/plain', `player:${entity.id}`); }} className="relative w-12 h-12 flex items-center justify-center cursor-pointer hover:scale-125 transition-transform duration-200">
+                
                 {hasSpeedup && state.isMarching && <div className="absolute inset-0 bg-amber-400/40 rounded-full blur-md animate-ping pointer-events-none scale-75"></div>}
-                <div className={`w-5 h-5 rounded-full border-[2px] flex items-center justify-center shadow-lg relative z-10 pointer-events-none ${tokenColors}`}>
-                  <span className="absolute -top-4 text-[10px] font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,1)] tracking-wider">{isHealing ? '🏥' : tag}</span>
+                {isCaptain && !state.isMarching && !isHealing && <div className="absolute inset-0 bg-amber-400/20 rounded-full blur-md animate-pulse pointer-events-none scale-90"></div>}
+                
+                <div className={`relative flex items-center justify-center ${glowClass}`}>
+                   {isCaptain ? (
+                      // RENDER CAPITANO - Triangolo Vettoriale Perfetto con Bordo
+                      <svg width="28" height="28" viewBox="0 0 26 26" className="relative z-10 pointer-events-none">
+                        <polygon points="13,3 23,23 3,23" fill={fillColor} stroke={strokeColor} strokeWidth="2.5" strokeLinejoin="round" />
+                      </svg>
+                   ) : (
+                      // RENDER SOLDATO - Cerchio Normale
+                      <div 
+                        className="w-6 h-6 rounded-full border-[2.5px] flex items-center justify-center relative z-10 pointer-events-none"
+                        style={{ backgroundColor: fillColor, borderColor: strokeColor }}
+                      >
+                        <span className="absolute -top-4 text-[10px] font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,1)] tracking-wider">{isHealing ? '🏥' : tag}</span>
+                      </div>
+                   )}
                 </div>
+                
+                {isCaptain && <span className="absolute -top-5 text-[10px] font-bold text-amber-400 drop-shadow-[0_2px_2px_rgba(0,0,0,1)] tracking-widest uppercase">👑 {tag}</span>}
               </div>
             </div>
           );
         })}
       </div>
 
-      {isEditorMode && (
+      {(isEditorMode || dragHoveredBuildingId) && (
         <div className="absolute inset-0 pointer-events-none z-[80]">
           <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
             {buildings.map(b => {
-              const currentHitbox = b.hitbox || { xMin: b.x - 2, xMax: b.x + 2, yMin: b.y - 2, yMax: b.y + 2 };
-              const p1 = `${getVisualLeft(currentHitbox.xMin, currentHitbox.yMin)},${getVisualTop(currentHitbox.xMin, currentHitbox.yMin)}`;
-              const p2 = `${getVisualLeft(currentHitbox.xMax, currentHitbox.yMin)},${getVisualTop(currentHitbox.xMax, currentHitbox.yMin)}`;
-              const p3 = `${getVisualLeft(currentHitbox.xMax, currentHitbox.yMax)},${getVisualTop(currentHitbox.xMax, currentHitbox.yMax)}`;
-              const p4 = `${getVisualLeft(currentHitbox.xMin, currentHitbox.yMax)},${getVisualTop(currentHitbox.xMin, currentHitbox.yMax)}`;
-              return <polygon key={`hitbox-overlay-bulk-${b.id}`} points={`${p1} ${p2} ${p3} ${p4}`} fill="rgba(245, 158, 11, 0.4)" stroke="#f59e0b" strokeWidth="0.5" strokeDasharray="1 1" />;
+              const isHovered = dragHoveredBuildingId === b.id;
+              if (!isEditorMode && !isHovered) return null;
+
+              const currentMagnet = b.magnet || { xMin: b.x - 5, xMax: b.x + 5, yMin: b.y - 5, yMax: b.y + 5 };
+              const m1 = `${getVisualLeft(currentMagnet.xMin, currentMagnet.yMin)},${getVisualTop(currentMagnet.xMin, currentMagnet.yMin)}`;
+              const m2 = `${getVisualLeft(currentMagnet.xMax, currentMagnet.yMin)},${getVisualTop(currentMagnet.xMax, currentMagnet.yMin)}`;
+              const m3 = `${getVisualLeft(currentMagnet.xMax, currentMagnet.yMax)},${getVisualTop(currentMagnet.xMax, currentMagnet.yMax)}`;
+              const m4 = `${getVisualLeft(currentMagnet.xMin, currentMagnet.yMax)},${getVisualTop(currentMagnet.xMin, currentMagnet.yMax)}`;
+
+              return (
+                 <g key={`magnet-overlay-bulk-${b.id}`}>
+                    <polygon 
+                      points={`${m1} ${m2} ${m3} ${m4}`} 
+                      fill={isHovered ? "rgba(6, 182, 212, 0.25)" : "rgba(6, 182, 212, 0.1)"} 
+                      stroke="#06b6d4" 
+                      strokeWidth={isHovered ? "0.6" : "0.4"} 
+                      strokeDasharray={isHovered ? "none" : "2 2"} 
+                      className={isHovered ? "animate-pulse" : ""}
+                    />
+                 </g>
+              );
             })}
           </svg>
         </div>

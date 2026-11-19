@@ -133,9 +133,11 @@ function AllianceView({
               onMouseDown={(e) => { if (!isEditMode) return; e.stopPropagation(); setDraggedPlayerId(`${entity.type}:${entity.id}`); }} 
             />
 
-            <g transform={`scale(${safeInvScale})`} className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-              <rect x="-60" y={`-${labelY + 25}`} width="120" height="22" rx="4" fill="rgba(15, 23, 42, 0.95)" stroke="#22d3ee" strokeWidth="1.5" />
-              <text x="0" y={`-${labelY + 14}`} fill="#f8fafc" fontSize="10" fontWeight="bold" textAnchor="middle" alignmentBaseline="middle">
+           <g transform={`scale(${safeInvScale})`} className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+              {/* Ingrandito il box: larghezza 160, altezza 30 */}
+              <rect x="-80" y={`-${labelY + 32}`} width="160" height="30" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="#22d3ee" strokeWidth="2" />
+              {/* Font aumentato a 15 */}
+              <text x="0" y={`-${labelY + 17}`} fill="#f8fafc" fontSize="15" fontWeight="black" textAnchor="middle" alignmentBaseline="middle">
                 {entity.type === 'player' && entity.data.tag ? `[${entity.data.tag}] ` : ''} {entity.data.name}
               </text>
             </g>
