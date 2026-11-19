@@ -4,7 +4,7 @@ import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 
 export function useMapData({
   roster, allianceCode, userRole, allianceRole, eventMode, targetKingdom,
-  isReadOnly, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES, DEMO_STRUCTURES, DEMO_OVERRIDES, DEMO_ROSTER
+  isReadOnly, isSharedLink, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES, DEMO_STRUCTURES, DEMO_OVERRIDES, DEMO_ROSTER
 }) {
   const [megaRoster, setMegaRoster] = useState([]);
   const [sharedRoster, setSharedRoster] = useState([]);
@@ -93,9 +93,9 @@ export function useMapData({
   }, [eventMode, targetKingdom, isReadOnly]);
 
   // Caricamento automatico del roster da Cloud quando si apre un link condiviso senza dati locali
-  useEffect(() => {
+ useEffect(() => {
     const hasLocalRoster = Array.isArray(roster) ? roster.length > 0 : (roster?.players?.length > 0);
-    if (eventMode === 'castle_battle' || hasLocalRoster || !allianceCode || allianceCode === 'DEMO') return;
+    if (eventMode === 'castle_battle' || (!isSharedLink && hasLocalRoster) || !allianceCode || allianceCode === 'DEMO') return;
 
     const fetchSharedRoster = async () => {
       try {
@@ -111,7 +111,7 @@ export function useMapData({
       }
     };
     fetchSharedRoster();
-  }, [allianceCode, roster, eventMode]);
+  }, [allianceCode, roster, eventMode, isSharedLink]);
 
   useEffect(() => {
     const fetchMapData = async () => {
@@ -282,12 +282,14 @@ export function useMapData({
     if (allianceMeta.kingdom && allianceMeta.tag) await setDoc(doc(db, "enemyHQs", `${allianceMeta.kingdom}_${allianceMeta.tag}`), { hqs: updated });
   }, [isReadOnly, enemyHQs, allianceMeta]);
 
-  const hasLocalRoster = Array.isArray(roster) ? roster.length > 0 : (roster?.players?.length > 0);
+ const hasLocalRoster = Array.isArray(roster) ? roster.length > 0 : (roster?.players?.length > 0);
   const effectiveRoster = eventMode === 'castle_battle'
     ? megaRoster
-    : (allianceCode === 'DEMO' && !hasLocalRoster
-        ? DEMO_ROSTER
-        : (hasLocalRoster ? roster : sharedRoster));
+    : isSharedLink
+      ? sharedRoster
+      : (allianceCode === 'DEMO' && !hasLocalRoster
+          ? DEMO_ROSTER
+          : (hasLocalRoster ? roster : sharedRoster));
 
   return useMemo(() => ({
     effectiveRoster, isLoadingCloud, isSavingSim, globalResourceZones, setGlobalResourceZones,

@@ -151,9 +151,9 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
     hiveGridMeta, setHiveGridMeta,
     allianceMeta, setAllianceMeta,
     loadedMarches, handleSaveMapToCloud, handleSaveSimulation
-  } = useMapData({
+ } = useMapData({
     roster, allianceCode: effectiveAllianceCode, userRole, allianceRole, eventMode, targetKingdom,
-    isReadOnly, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES: defaultStructures, 
+    isReadOnly, isSharedLink, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES: defaultStructures, 
     DEMO_STRUCTURES, DEMO_OVERRIDES, DEMO_ROSTER 
   });
 
