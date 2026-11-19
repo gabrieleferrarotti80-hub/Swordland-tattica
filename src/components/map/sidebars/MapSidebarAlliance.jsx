@@ -39,6 +39,7 @@ function MapSidebarAlliance({
   const [searchQuery, setSearchQuery] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const rawArray = Array.isArray(roster) ? roster : (roster?.players || []);
   const rosterArray = rawArray.filter(p => p !== null && p !== undefined);
@@ -47,6 +48,18 @@ function MapSidebarAlliance({
     const term = searchQuery.toLowerCase();
     return (p.name?.toLowerCase().includes(term) || p.tag?.toLowerCase().includes(term) || p.originalTag?.toLowerCase().includes(term));
   });
+
+  const handleCopyTerritoryLink = async () => {
+    if (!allianceCode) return alert("⚠️ Codice alleanza non trovato.");
+    const shareUrl = `${window.location.origin}/map?shared=1&alliance=${encodeURIComponent(allianceCode)}&view=alliance`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    } catch (_) {
+      window.prompt("Copia questo link condivisibile per i giocatori:", shareUrl);
+    }
+  };
 
   const addTerritoryPoint = () => {
     if (isReadOnly) return;
@@ -165,6 +178,14 @@ function MapSidebarAlliance({
               )}
             </div>
           </div>
+
+          <button
+            onClick={handleCopyTerritoryLink}
+            disabled={!allianceCode}
+            className="w-full py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/50 text-indigo-300 font-black text-[9px] uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            {linkCopied ? '✅ Link Territorio Copiato!' : '🔗 Copia Link Condivisibile Territorio'}
+          </button>
           
           {hiveGridMeta?.territory?.length > 0 ? (
             <div className="flex flex-col gap-2 mt-1 animate-fade-in">
