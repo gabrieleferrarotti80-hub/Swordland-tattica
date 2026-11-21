@@ -151,7 +151,7 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
     hiveGridMeta, setHiveGridMeta,
     allianceMeta, setAllianceMeta,
     loadedMarches, handleSaveMapToCloud, handleSaveSimulation
- } = useMapData({
+  } = useMapData({
     roster, allianceCode: effectiveAllianceCode, userRole, allianceRole, eventMode, targetKingdom,
     isReadOnly, isSharedLink, t, INITIAL_BUILDINGS, DEFAULT_STRUCTURES: defaultStructures, 
     DEMO_STRUCTURES, DEMO_OVERRIDES, DEMO_ROSTER 
@@ -176,8 +176,9 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
   }, [rosterArray, playerOverrides, TILE_SF, tacticalMeta?.participants, activeView, eventMode]);
 
   const {
-    scale, position, isDragging, draggedPlayerId, setDraggedPlayerId,
+    scale, position, viewportSize, isDragging, draggedPlayerId, setDraggedPlayerId,
     handleWheel, handleMouseDown, handleMouseMove, handleMouseUp,
+    handleTouchStart, handleTouchMove, handleTouchEnd,
     handleResetView, handleDrop, handleDragOver
   } = useMapCamera({
     mainRef, activeView, selectedBuilding, eventMode, allianceCode: effectiveAllianceCode,
@@ -255,9 +256,11 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
   const handleSvgClick = useCallback((e) => {
     if (isSharedLink) return;
     const svgElement = e.currentTarget;
+    const ctm = svgElement.getScreenCTM();
+    if (!ctm) return;
     const pt = svgElement.createSVGPoint();
     pt.x = e.clientX; pt.y = e.clientY;
-    const svgPoint = pt.matrixTransform(svgElement.getScreenCTM().inverse());
+    const svgPoint = pt.matrixTransform(ctm.inverse());
     const coords = svgToGameCoordinates(svgPoint.x, svgPoint.y);
 
     if (activeView === 'alliance' && hiveGridMeta?.isDrawing) {
@@ -325,17 +328,34 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
 
     const showPathfinding = isPathfindingMode && (splitSide === 'full' || splitSide === 'right');
 
+    // ViewBox dinamico nativo: mantiene l'SVG nitido a qualsiasi zoom su PC e smartphone
+    const safeScale = scale > 0 ? scale : 0.8;
+    const effectiveWidth = (splitSide === 'left' || splitSide === 'right')
+      ? (viewportSize.width / 2)
+      : viewportSize.width;
+    const effectiveHeight = viewportSize.height;
+    const vbX = -position.x / safeScale;
+    const vbY = -position.y / safeScale;
+    const vbW = effectiveWidth / safeScale;
+    const vbH = effectiveHeight / safeScale;
+
     return (
-      <div className="relative w-full h-full bg-slate-900/30 rounded-3xl border border-slate-800/80 overflow-hidden backdrop-blur-sm">
+      <div className="relative w-full h-full bg-slate-950 overflow-hidden">
         {activeView !== 'test' && (
-          <svg id={splitSide === 'full' ? 'map-svg' : `map-svg-${splitSide}`} viewBox="0 0 1200 1200" className="w-full h-full" onClick={handleSvgClick}>
+          <svg
+            id={splitSide === 'full' ? 'map-svg' : `map-svg-${splitSide}`}
+            viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
+            preserveAspectRatio="xMinYMin meet"
+            className="w-full h-full block"
+            onClick={handleSvgClick}
+          >
             <defs>
               <pattern id="mapGrid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1"/></pattern>
               <pattern id="subGrid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(34, 211, 238, 0.08)" strokeWidth="0.5"/></pattern>
               
               <pattern id="iso-1x1-grid" width={patternSize} height={patternSize} patternUnits="userSpaceOnUse" patternTransform={`translate(${gridTranslateX}, ${gridTranslateY})`}>
-                <path d={`M ${TILE_SF} 0 L ${2 * TILE_SF} ${TILE_SF} L ${TILE_SF} ${2 * TILE_SF} L 0 ${TILE_SF} Z`} fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1/scale} />
-                <path d={`M 0 0 L ${TILE_SF} ${TILE_SF} L 0 ${2 * TILE_SF} M ${2 * TILE_SF} 0 L ${TILE_SF} ${TILE_SF} L ${2 * TILE_SF} ${2 * TILE_SF}`} fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1/scale} />
+                <path d={`M ${TILE_SF} 0 L ${2 * TILE_SF} ${TILE_SF} L ${TILE_SF} ${2 * TILE_SF} L 0 ${TILE_SF} Z`} fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1/safeScale} />
+                <path d={`M 0 0 L ${TILE_SF} ${TILE_SF} L 0 ${2 * TILE_SF} M ${2 * TILE_SF} 0 L ${TILE_SF} ${TILE_SF} L ${2 * TILE_SF} ${2 * TILE_SF}`} fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth={1/safeScale} />
               </pattern>
             </defs>
             <rect width="1200" height="1200" fill="url(#subGrid)" />
@@ -348,23 +368,23 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
             
             <g transform={`translate(600, 1150)`}>
               <circle cx="0" cy="0" r={4 * TILE_SF} fill="#22d3ee" opacity="0.3" className="animate-pulse" />
-              <g transform={`scale(${1/scale})`}><text x="15" y="5" fill="#22d3ee" fontSize="18" fontWeight="bold">{t('map.origin')} (0:0)</text></g>
+              <g transform={`scale(${1/safeScale})`}><text x="15" y="5" fill="#22d3ee" fontSize="18" fontWeight="bold">{t('map.origin')} (0:0)</text></g>
             </g>
 
-            {activeView === 'global' && <GlobalView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} enemyHQs={enemyHQs} showLabels={showLabels} isGlobalEditorMode={isGlobalEditorMode} globalEditorTool={globalEditorTool} globalResourceZones={globalResourceZones} setGlobalResourceZones={setGlobalResourceZones} activeZoneId={activeZoneId} />}
-            {((activeView === 'castle') || (activeView === 'tactical' && eventMode === 'castle_battle')) && <CastleView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} tacticalMeta={tacticalMeta} setDraggedPlayerId={setDraggedPlayerId} />}
-            {activeView === 'tactical' && eventMode !== 'castle_battle' && <TacticalView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} tacticalMeta={tacticalMeta} setDraggedPlayerId={setDraggedPlayerId} />}
-            {activeView === 'expansion' && <ExpansionView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} setAllianceStructures={setAllianceStructures} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} setDraggedPlayerId={setDraggedPlayerId} />}
+            {activeView === 'global' && <GlobalView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={safeScale} inverseScale={1/safeScale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} enemyHQs={enemyHQs} showLabels={showLabels} isGlobalEditorMode={isGlobalEditorMode} globalEditorTool={globalEditorTool} globalResourceZones={globalResourceZones} setGlobalResourceZones={setGlobalResourceZones} activeZoneId={activeZoneId} />}
+            {((activeView === 'castle') || (activeView === 'tactical' && eventMode === 'castle_battle')) && <CastleView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={safeScale} inverseScale={1/safeScale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} tacticalMeta={tacticalMeta} setDraggedPlayerId={setDraggedPlayerId} />}
+            {activeView === 'tactical' && eventMode !== 'castle_battle' && <TacticalView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={safeScale} inverseScale={1/safeScale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} tacticalMeta={tacticalMeta} setDraggedPlayerId={setDraggedPlayerId} />}
+            {activeView === 'expansion' && <ExpansionView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} setAllianceStructures={setAllianceStructures} scale={safeScale} inverseScale={1/safeScale} TILE_SF={TILE_SF} setDraggedPlayerId={setDraggedPlayerId} />}
             
             {activeView === 'alliance' && (
-              <AllianceView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={scale} inverseScale={1/scale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} hiveGridMeta={currentHiveGridMeta} setHiveGridMeta={setHiveGridMeta} setDraggedPlayerId={setDraggedPlayerId} isEditMode={isMapUnlocked && !isReadOnly} />
+              <AllianceView validPlayers={currentPlayers} fixedBuildings={fixedBuildings} allianceStructures={currentStructures} filters={filters} scale={safeScale} inverseScale={1/safeScale} TILE_SF={TILE_SF} selectedBuilding={selectedBuilding} setSelectedBuilding={handleSelectBuilding} activeView={activeView} showLabels={showLabels} hiveGridMeta={currentHiveGridMeta} setHiveGridMeta={setHiveGridMeta} setDraggedPlayerId={setDraggedPlayerId} isEditMode={isMapUnlocked && !isReadOnly} />
             )}
 
             {showPathfinding && (
               <PathfindingView 
                 pathfindingData={pathfindingData} 
                 TILE_SF={TILE_SF} 
-                inverseScale={1/scale} 
+                inverseScale={1/safeScale} 
               />
             )}
           </svg>
@@ -459,10 +479,20 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
       )}
       
       <main 
-        ref={mainRef} onDragOver={handleDragOver} onDrop={handleDrop}
-        className={`flex-1 bg-slate-950 relative flex flex-col items-center justify-center overflow-hidden transition-all duration-300 ${isDragging || draggedPlayerId ? 'cursor-grabbing' : 'cursor-grab'}`}
-        onWheel={activeView === 'tactical' && isPlacementMode ? undefined : handleWheel} 
-        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+        ref={mainRef}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        style={{ touchAction: 'none' }}
+        className={`flex-1 bg-slate-950 relative flex flex-col items-center justify-center overflow-hidden touch-none ${isDragging || draggedPlayerId ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onWheel={activeView === 'tactical' && isPlacementMode ? undefined : handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         {isSharedLink && (
           <div className="absolute top-4 left-4 z-30 bg-slate-900/90 border border-indigo-500/40 text-indigo-200 px-3 py-1.5 rounded-xl text-xs font-bold shadow-lg backdrop-blur-md pointer-events-none">
@@ -470,7 +500,11 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
           </div>
         )}
 
-        <div className="absolute bottom-6 right-6 z-30 flex flex-col gap-2 bg-slate-900/90 p-2 rounded-xl border border-slate-800 shadow-2xl backdrop-blur-md">
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          className="absolute bottom-6 right-6 z-30 flex flex-col gap-2 bg-slate-900/90 p-2 rounded-xl border border-slate-800 shadow-2xl backdrop-blur-md"
+        >
           <button onClick={() => handleWheel({ preventDefault: ()=>{}, deltaY: -100, currentTarget: mainRef.current, clientX: window.innerWidth/2, clientY: window.innerHeight/2 })} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg flex items-center justify-center text-lg cursor-pointer">+</button>
           <button onClick={() => handleWheel({ preventDefault: ()=>{}, deltaY: 100, currentTarget: mainRef.current, clientX: window.innerWidth/2, clientY: window.innerHeight/2 })} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg flex items-center justify-center text-lg cursor-pointer">-</button>
           <button onClick={handleResetView} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold rounded-lg flex items-center justify-center text-xs cursor-pointer">1:1</button>
@@ -478,28 +512,24 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
 
         {isSplitScreen ? (
           <div className="w-full h-full flex relative">
-             <div className="flex-1 relative overflow-hidden border-r-2 border-indigo-500/50">
-                <div className="absolute bottom-6 left-6 z-50 bg-slate-900/90 border border-slate-500 text-slate-200 px-4 py-2 rounded-xl font-black shadow-lg backdrop-blur-md pointer-events-none">
-                  <span className="text-[10px] uppercase tracking-widest block opacity-70">Disposizione</span>
-                  ATTUALE
-                </div>
-                <div className={`absolute top-0 left-0 w-[1200px] h-[1200px] ${!isDragging && !draggedPlayerId ? 'transition-all duration-700 ease-in-out' : ''}`} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
-                   {renderMapContent('left')}
-                </div>
-             </div>
-             <div className="flex-1 relative overflow-hidden">
-                <div className="absolute bottom-6 left-6 z-50 bg-emerald-900/90 border border-emerald-500 text-emerald-200 px-4 py-2 rounded-xl font-black shadow-lg backdrop-blur-md pointer-events-none">
-                  <span className="text-[10px] uppercase tracking-widest block opacity-70">Disposizione</span>
-                  OTTIMIZZATA
-                </div>
-                <div className={`absolute top-0 left-0 w-[1200px] h-[1200px] ${!isDragging && !draggedPlayerId ? 'transition-all duration-700 ease-in-out' : ''}`} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
-                   {renderMapContent('right')}
-                </div>
-             </div>
+            <div className="flex-1 relative overflow-hidden border-r-2 border-indigo-500/50">
+              <div className="absolute bottom-6 left-6 z-50 bg-slate-900/90 border border-slate-500 text-slate-200 px-4 py-2 rounded-xl font-black shadow-lg backdrop-blur-md pointer-events-none">
+                <span className="text-[10px] uppercase tracking-widest block opacity-70">Disposizione</span>
+                ATTUALE
+              </div>
+              {renderMapContent('left')}
+            </div>
+            <div className="flex-1 relative overflow-hidden">
+              <div className="absolute bottom-6 left-6 z-50 bg-emerald-900/90 border border-emerald-500 text-emerald-200 px-4 py-2 rounded-xl font-black shadow-lg backdrop-blur-md pointer-events-none">
+                <span className="text-[10px] uppercase tracking-widest block opacity-70">Disposizione</span>
+                OTTIMIZZATA
+              </div>
+              {renderMapContent('right')}
+            </div>
           </div>
         ) : (
-          <div className={`absolute top-0 left-0 w-[1200px] h-[1200px] ${!isDragging && !draggedPlayerId ? 'transition-all duration-700 ease-in-out' : ''}`} style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: '0 0' }}>
-             {renderMapContent('full')}
+          <div className="w-full h-full">
+            {renderMapContent('full')}
           </div>
         )}
       </main>
