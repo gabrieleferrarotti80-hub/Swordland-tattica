@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { exportHiveToPdf } from '../../../utils/hivePdfExport';
+import HiveChatExportModal from '../HiveChatExportModal';
 
 // SCUDO SUGLI INPUT
 const CoordInput = memo(({ initialValue, onSave, placeholder, disabled, className }) => {
@@ -34,24 +35,41 @@ function MapSidebarAlliance({
   allianceCode
 }) {
   const navigate = useNavigate();
-  const { t } = useTranslation(); 
-  
+  const { t } = useTranslation();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   const rawArray = Array.isArray(roster) ? roster : (roster?.players || []);
   const rosterArray = rawArray.filter(p => p !== null && p !== undefined);
+
+  const effectivePlayers = rosterArray.map(player => {
+    const override = playerOverrides?.[player.id];
+    return {
+      ...player,
+      x: override && override.x !== undefined ? override.x : player.x,
+      y: override && override.y !== undefined ? override.y : player.y
+    };
+  });
 
   const filteredRoster = rosterArray.filter(p => {
     const term = searchQuery.toLowerCase();
     return (p.name?.toLowerCase().includes(term) || p.tag?.toLowerCase().includes(term) || p.originalTag?.toLowerCase().includes(term));
   });
 
+  const getDefaultSpawnCoords = () => {
+    const refStruct = (allianceStructures || []).find(
+      s => (s.type === 'headquarters' || s.type === 'beartrap') && s.x !== '' && s.y !== '' && !isNaN(Number(s.x)) && !isNaN(Number(s.y))
+    );
+    return refStruct ? { x: Number(refStruct.x), y: Number(refStruct.y) } : { x: 600, y: 600 };
+  };
+
   const handleCopyTerritoryLink = async () => {
     if (!allianceCode) return alert("⚠️ Codice alleanza non trovato.");
-    const shareUrl = `${window.location.origin}/map?shared=1&alliance=${encodeURIComponent(allianceCode)}&view=alliance`;
+    const shareUrl = window.location.origin + '/map?shared=1&alliance=' + encodeURIComponent(allianceCode) + '&view=alliance';
     try {
       await navigator.clipboard.writeText(shareUrl);
       setLinkCopied(true);
@@ -63,7 +81,7 @@ function MapSidebarAlliance({
 
   const addTerritoryPoint = () => {
     if (isReadOnly) return;
-    setHiveGridMeta({...hiveGridMeta, territory: [...(hiveGridMeta.territory || []), { x: '', y: '' }]});
+    setHiveGridMeta({ ...hiveGridMeta, territory: [...(hiveGridMeta.territory || []), { x: '', y: '' }] });
   };
 
   const updateTerritoryPoint = (index, field, value) => {
@@ -92,19 +110,8 @@ function MapSidebarAlliance({
     if (handleAllianceStructureChange) handleAllianceStructureChange(struct.id, field, numVal);
   };
 
-  // Esportazione PDF a 2 pagine (Foglio 1: Mappa con nomi sopra i castelli | Foglio 2: Tabella Coordinate)
   const handleExportPdf = () => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    
-    const effectivePlayers = rosterArray.map(player => {
-      const override = playerOverrides?.[player.id];
-      return {
-        ...player,
-        x: override && override.x !== undefined ? override.x : player.x,
-        y: override && override.y !== undefined ? override.y : player.y
-      };
-    });
-
     exportHiveToPdf({
       players: effectivePlayers,
       structures: allianceStructures || [],
@@ -130,30 +137,40 @@ function MapSidebarAlliance({
 
       {showHelp && (
         <div className="bg-indigo-950/30 border border-indigo-500/50 rounded-xl p-3 text-xs text-indigo-100 shadow-inner leading-relaxed animate-fade-in shrink-0">
-          <strong>{t('map_sidebar.hive_guide_title', '💡 Guida Alveare:')}</strong> Clicca su "Disegna" per tracciare il territorio principale. Usa il pulsante "+ Stendardo" per creare segnalini con raggio 6x6. Scegli il colore dell'alleanza con lo slider globale.
+          <strong>{t('map_sidebar.hive_guide_title', '💡 Guida Alveare:')}</strong> Clicca su "Disegna" per tracciare il territorio principale. Usa "+ Stendardo" per gli stendardi (1x1) e "+ Risorsa" per segnare le tessere risorse bloccate (2x2, stessa dimensione dei castelli).
         </div>
       )}
 
       <div className="flex flex-col gap-2 shrink-0">
-        <button 
+        <button
           onClick={() => setActiveView('expansion')}
           className="w-full py-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/50 text-blue-300 font-black text-[10px] uppercase tracking-widest rounded transition-all shadow-[0_0_10px_rgba(59,130,246,0.2)] flex justify-center items-center gap-2"
         >
           🗺️ {t('sidebar.global_expansion_planner', 'Pianificatore Espansione Globale')}
         </button>
-        
-        <button 
+
+        <button
           onClick={() => setPathfindingMode && setPathfindingMode(true)}
           className="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 text-emerald-300 font-black text-[10px] uppercase tracking-widest rounded transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)] flex justify-center items-center gap-2"
         >
           📡 {t('sidebar.tactical_suite_routes', 'Suite Tattica & Percorsi')}
         </button>
 
-        <button 
+        <button
           onClick={handleExportPdf}
           className="w-full py-2 bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/50 text-cyan-300 font-black text-[10px] uppercase tracking-widest rounded transition-all shadow-[0_0_10px_rgba(6,182,212,0.2)] flex justify-center items-center gap-2"
         >
           📄 {t('sidebar.export_hive_pdf', 'Salva PDF (Mappa + Coordinate)')}
+        </button>
+
+        <button
+          onClick={() => {
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+            setIsChatModalOpen(true);
+          }}
+          className="w-full py-2 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/50 text-amber-300 font-black text-[10px] uppercase tracking-widest rounded transition-all shadow-[0_0_10px_rgba(245,158,11,0.2)] flex justify-center items-center gap-2"
+        >
+          💬 {t('sidebar.export_hive_chat', 'Coordinate per Chat Kingshot')}
         </button>
       </div>
 
@@ -163,13 +180,13 @@ function MapSidebarAlliance({
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-4">
-        
+
         <div className={`p-3 rounded-xl border flex flex-col gap-2 transition-colors ${hiveGridMeta?.isDrawing ? 'bg-emerald-950/40 border-emerald-500' : 'bg-slate-950 border-emerald-900/50'}`}>
           <div className="flex justify-between items-center">
             <span className={`text-[10px] font-black uppercase tracking-widest ${hiveGridMeta?.isDrawing ? 'text-emerald-300' : 'text-emerald-400'}`}>{t('sidebar.main_territory', 'Territorio Principale')}</span>
             <div className="flex gap-1">
               {!isReadOnly && (
-                <button onClick={() => setHiveGridMeta({...hiveGridMeta, isDrawing: !hiveGridMeta?.isDrawing})} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ${hiveGridMeta?.isDrawing ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.6)]' : 'bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300'}`}>
+                <button onClick={() => setHiveGridMeta({ ...hiveGridMeta, isDrawing: !hiveGridMeta?.isDrawing })} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ${hiveGridMeta?.isDrawing ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.6)]' : 'bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300'}`}>
                   {hiveGridMeta?.isDrawing ? '⏹️ ' + t('sidebar.close', 'Chiudi') : '✏️ ' + t('sidebar.draw', 'Disegna')}
                 </button>
               )}
@@ -186,7 +203,7 @@ function MapSidebarAlliance({
           >
             {linkCopied ? '✅ Link Territorio Copiato!' : '🔗 Copia Link Condivisibile Territorio'}
           </button>
-          
+
           {hiveGridMeta?.territory?.length > 0 ? (
             <div className="flex flex-col gap-2 mt-1 animate-fade-in">
               {hiveGridMeta.territory.map((point, index) => (
@@ -226,66 +243,96 @@ function MapSidebarAlliance({
 
         <div className="flex flex-col gap-2 mt-2">
           <div className="flex flex-col p-3 bg-slate-950 border border-indigo-900/50 rounded-xl gap-2">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{t('sidebar.alliance_structures', 'Strutture Alleanza')}</span>
-              <div className="flex gap-1">
-                <button onClick={() => setHiveGridMeta({...hiveGridMeta, showBanners: hiveGridMeta?.showBanners === false ? true : false})} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ${hiveGridMeta?.showBanners !== false ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                  {hiveGridMeta?.showBanners !== false ? '👁️ ' + t('sidebar.areas_6x6', 'Aree 6x6') : '🙈 ' + t('sidebar.areas_6x6', 'Aree 6x6')}
-                </button>
-                {!isReadOnly && setAllianceStructures && (
-                  <button onClick={() => {
-                      const newBanner = { id: `banner-${Date.now()}`, code: 'BAN', name: 'Stendardo', type: 'banner', x: 600, y: 600 };
-                      setAllianceStructures([...(allianceStructures || []), newBanner]);
-                    }} className="bg-purple-900/50 hover:bg-purple-800 text-purple-300 px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors">
-                    + {t('sidebar.banner', 'Stendardo')}
-                  </button>
-                )}
-              </div>
+            <div className="flex justify-between items-center gap-1 flex-wrap">
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{t('sidebar.alliance_structures', 'Strutture & Ostacoli')}</span>
+              <button onClick={() => setHiveGridMeta({ ...hiveGridMeta, showBanners: hiveGridMeta?.showBanners === false ? true : false })} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ${hiveGridMeta?.showBanners !== false ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                {hiveGridMeta?.showBanners !== false ? '👁️ ' + t('sidebar.areas_6x6', 'Aree 6x6') : '🙈 ' + t('sidebar.areas_6x6', 'Aree 6x6')}
+              </button>
             </div>
-            
+
+            {!isReadOnly && setAllianceStructures && (
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => {
+                    const spawn = getDefaultSpawnCoords();
+                    const newBanner = { id: 'banner-' + Date.now(), code: 'BAN', name: 'Stendardo', type: 'banner', size: 1, x: spawn.x, y: spawn.y };
+                    setAllianceStructures([...(allianceStructures || []), newBanner]);
+                  }}
+                  className="bg-purple-900/50 hover:bg-purple-800 text-purple-300 border border-purple-500/40 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-colors"
+                >
+                  + 🚩 {t('sidebar.banner', 'Stendardo (1x1)')}
+                </button>
+                <button
+                  onClick={() => {
+                    const spawn = getDefaultSpawnCoords();
+                    const resCount = (allianceStructures || []).filter(s => s.type === 'resource').length + 1;
+                    const newResource = { id: 'resource-' + Date.now(), code: 'RES', name: 'Risorsa #' + resCount, type: 'resource', size: 2, x: spawn.x, y: spawn.y };
+                    setAllianceStructures([...(allianceStructures || []), newResource]);
+                  }}
+                  className="bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 border border-amber-500/40 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-colors"
+                >
+                  + ⛏️ {t('sidebar.resource_obstacle', 'Risorsa (2x2)')}
+                </button>
+              </div>
+            )}
+
             {!isReadOnly && (
-              <div className="flex items-center gap-3 pt-2 border-t border-slate-800 mt-2">
+              <div className="flex items-center gap-3 pt-2 border-t border-slate-800 mt-1">
                 <span className="text-[8px] font-bold uppercase text-purple-400 whitespace-nowrap">{t('sidebar.tint', 'Tinta')}</span>
-                <input 
-                  type="range" min="0" max="360" 
-                  value={hiveGridMeta?.bannerHue || 0} 
-                  onChange={(e) => setHiveGridMeta({...hiveGridMeta, bannerHue: Number(e.target.value)})} 
+                <input
+                  type="range" min="0" max="360"
+                  value={hiveGridMeta?.bannerHue || 0}
+                  onChange={(e) => setHiveGridMeta({ ...hiveGridMeta, bannerHue: Number(e.target.value) })}
                   className="flex-1 h-2 rounded-full cursor-pointer outline-none shadow-inner"
                   style={{ background: 'linear-gradient(to right, #fb7185, #fbbf24, #4ade80, #2dd4bf, #60a5fa, #c084fc, #fb7185)', accentColor: '#f8fafc' }}
                 />
-                <div className="w-5 h-5 rounded-full border-2 border-slate-700 shadow-md shrink-0" style={{ backgroundColor: '#fb7185', filter: `hue-rotate(${hiveGridMeta?.bannerHue || 0}deg) saturate(1.2)` }} title="Anteprima Colore"></div>
+                <div className="w-5 h-5 rounded-full border-2 border-slate-700 shadow-md shrink-0" style={{ backgroundColor: '#fb7185', filter: 'hue-rotate(' + (hiveGridMeta?.bannerHue || 0) + 'deg) saturate(1.2)' }} title="Anteprima Colore"></div>
               </div>
             )}
           </div>
-          
+
           {allianceStructures && allianceStructures.length > 0 && (
             allianceStructures.map(struct => {
               const isHQ = struct.type === 'headquarters';
               const isBanner = struct.type === 'banner';
-              const icon = isHQ ? '🏰' : (isBanner ? '🚩' : '🐻');
-              const borderColor = isBanner ? 'border-purple-500' : 'border-indigo-500';
-              const bgColor = isBanner ? 'bg-purple-900/10' : 'bg-indigo-900/20';
+              const isResource = struct.type === 'resource';
+              const isRemovable = isBanner || isResource;
+              const icon = isHQ ? '🏰' : isBanner ? '🚩' : isResource ? '⛏️' : '🐻';
+              const borderColor = isBanner ? 'border-purple-500' : isResource ? 'border-amber-500' : 'border-indigo-500';
+              const bgColor = isBanner ? 'bg-purple-900/10' : isResource ? 'bg-amber-900/15' : 'bg-indigo-900/20';
+              const labelColor = isBanner ? 'text-purple-400' : isResource ? 'text-amber-400' : 'text-indigo-400';
 
               return (
-                <div key={struct.id} draggable={!isReadOnly} onDragStart={(e) => { e.dataTransfer.setData('text/plain', `structure:${struct.id}`); }} className={`${bgColor} border p-2.5 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm ${isReadOnly ? `${borderColor}/20 opacity-80` : `${borderColor}/40 hover:${borderColor} cursor-grab active:cursor-grabbing`}`}>
+                <div
+                  key={struct.id}
+                  draggable={!isReadOnly}
+                  onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'structure:' + struct.id); }}
+                  className={bgColor + ' border p-2.5 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm ' + (isReadOnly ? borderColor + '/20 opacity-80' : borderColor + '/40 hover:' + borderColor + ' cursor-grab active:cursor-grabbing')}
+                >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="text-xl shrink-0 drop-shadow-md">{icon}</span>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-slate-200 text-xs truncate group-hover:text-indigo-300 transition-colors">{struct.name}</div>
-                      <div className="text-[9px] text-slate-500">[{struct.code}]</div>
+                      <div className="text-[9px] text-slate-500">[{struct.code}] {isResource ? '• 2x2' : isBanner ? '• 1x1' : '• 3x3'}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <div className="flex flex-col items-center">
-                      <span className={`text-[8px] font-bold uppercase ${isBanner ? 'text-purple-400' : 'text-indigo-400'}`}>{t('alliance_sidebar.coord_x', 'X')}</span>
-                      <CoordInput disabled={isReadOnly} initialValue={struct.x} placeholder="-" onSave={(val) => handleStructureCoordSave(struct, 'x', val)} className={`w-12 bg-slate-900 border ${isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : 'border-indigo-900/50 focus:border-cyan-400 text-cyan-300'} text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50`} />
+                      <span className={'text-[8px] font-bold uppercase ' + labelColor}>{t('alliance_sidebar.coord_x', 'X')}</span>
+                      <CoordInput disabled={isReadOnly} initialValue={struct.x} placeholder="-" onSave={(val) => handleStructureCoordSave(struct, 'x', val)} className={'w-12 bg-slate-900 border ' + (isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : isResource ? 'border-amber-900/50 focus:border-amber-400 text-amber-300' : 'border-indigo-900/50 focus:border-cyan-400 text-cyan-300') + ' text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50'} />
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className={`text-[8px] font-bold uppercase ${isBanner ? 'text-purple-400' : 'text-indigo-400'}`}>{t('alliance_sidebar.coord_y', 'Y')}</span>
-                      <CoordInput disabled={isReadOnly} initialValue={struct.y} placeholder="-" onSave={(val) => handleStructureCoordSave(struct, 'y', val)} className={`w-12 bg-slate-900 border ${isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : 'border-indigo-900/50 focus:border-amber-400 text-amber-300'} text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50`} />
+                      <span className={'text-[8px] font-bold uppercase ' + labelColor}>{t('alliance_sidebar.coord_y', 'Y')}</span>
+                      <CoordInput disabled={isReadOnly} initialValue={struct.y} placeholder="-" onSave={(val) => handleStructureCoordSave(struct, 'y', val)} className={'w-12 bg-slate-900 border ' + (isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : isResource ? 'border-amber-900/50 focus:border-amber-400 text-amber-300' : 'border-indigo-900/50 focus:border-amber-400 text-amber-300') + ' text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50'} />
                     </div>
-                    {isBanner && !isReadOnly && setAllianceStructures && (
-                      <button onClick={() => setAllianceStructures(prev => prev.filter(s => s.id !== struct.id))} className="w-5 h-5 flex items-center justify-center bg-rose-950/50 text-rose-400 hover:bg-rose-900 rounded border border-rose-900/50 transition-colors ml-1" title="Rimuovi Stendardo">×</button>
+                    {isRemovable && !isReadOnly && setAllianceStructures && (
+                      <button
+                        onClick={() => setAllianceStructures(prev => prev.filter(s => s.id !== struct.id))}
+                        className="w-5 h-5 flex items-center justify-center bg-rose-950/50 text-rose-400 hover:bg-rose-900 rounded border border-rose-900/50 transition-colors ml-1"
+                        title={isResource ? 'Rimuovi Risorsa' : 'Rimuovi Stendardo'}
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
                 </div>
@@ -295,7 +342,7 @@ function MapSidebarAlliance({
         </div>
 
         <div className="flex flex-col mt-2">
-          <div 
+          <div
             className={`flex justify-between items-center cursor-pointer p-2 rounded-lg transition-colors border ${isRosterOpen ? 'bg-slate-800 border-slate-700' : 'bg-slate-900 hover:bg-slate-800 border-slate-800'}`}
             onClick={() => setIsRosterOpen(!isRosterOpen)}
           >
@@ -305,7 +352,7 @@ function MapSidebarAlliance({
               <span className="text-slate-500 text-xs transition-transform duration-200" style={{ transform: isRosterOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
             </div>
           </div>
-          
+
           {isRosterOpen && (
             <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-800 animate-fade-in">
               {filteredRoster.length === 0 ? (
@@ -318,12 +365,12 @@ function MapSidebarAlliance({
                   const hasCoords = currentX !== '' && currentY !== '';
 
                   return (
-                    <div key={player.id} draggable={!isReadOnly} onDragStart={(e) => { e.dataTransfer.setData('text/plain', `player:${player.id}`); }} className={`bg-slate-950/80 border p-2 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm ${isReadOnly ? 'border-slate-800 opacity-80' : 'border-slate-800 hover:border-slate-600 cursor-grab active:cursor-grabbing'}`}>
+                    <div key={player.id} draggable={!isReadOnly} onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'player:' + player.id); }} className={`bg-slate-950/80 border p-2 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm ${isReadOnly ? 'border-slate-800 opacity-80' : 'border-slate-800 hover:border-slate-600 cursor-grab active:cursor-grabbing'}`}>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="bg-indigo-950 border border-indigo-500/40 text-indigo-300 font-bold text-[10px] px-1.5 py-0.5 rounded shrink-0">{player.tag || player.role || 'R1'}</span>
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-200 text-xs truncate group-hover:text-indigo-300 transition-colors">{player.name}</div>
-                          <div className="text-[9px] text-slate-500">{hasCoords ? `(${currentX}, ${currentY})` : t('alliance_sidebar.unpositioned', 'Senza coordinate')}</div>
+                          <div className="text-[9px] text-slate-500">{hasCoords ? '(' + currentX + ', ' + currentY + ')' : t('alliance_sidebar.unpositioned', 'Senza coordinate')}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -347,11 +394,11 @@ function MapSidebarAlliance({
 
       {!isReadOnly && (
         <div className="pt-4 border-t border-slate-800 shrink-0 mt-auto flex flex-col gap-2">
-          <button 
+          <button
             onClick={() => {
               if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
               setTimeout(() => handleSaveToCloud('alliance'), 150);
-            }} 
+            }}
             disabled={isLoadingCloud}
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)] flex justify-center items-center gap-2 disabled:opacity-50"
           >
@@ -359,6 +406,14 @@ function MapSidebarAlliance({
           </button>
         </div>
       )}
+
+      <HiveChatExportModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        players={effectivePlayers}
+        structures={allianceStructures || []}
+        allianceCode={allianceCode || 'HIVE'}
+      />
     </aside>
   );
 }

@@ -1,7 +1,6 @@
 // src/utils/hivePdfExport.js
 
 export function exportHiveToPdf({ players = [], structures = [], allianceCode = 'ALLEANZA' }) {
-  // Normalizza i giocatori con coordinate valide
   const validPlayers = players
     .map(p => ({
       ...p,
@@ -14,12 +13,18 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
     .filter(p => !isNaN(p.coordX) && !isNaN(p.coordY) && p.coordX !== 0 && p.coordY !== 0);
 
   const validStructs = structures
-    .map(s => ({
-      ...s,
-      coordX: Number(s.newX !== undefined ? s.newX : s.x),
-      coordY: Number(s.newY !== undefined ? s.newY : s.y),
-      size: Number(s.size) || (String(s.type).toLowerCase() === 'banner' || s.code === 'BAN' ? 1 : 3)
-    }))
+    .map(s => {
+      const typeLower = String(s.type || '').toLowerCase();
+      const isBanner = typeLower === 'banner' || s.code === 'BAN';
+      const isResource = typeLower === 'resource' || s.code === 'RES';
+      const defaultSize = isBanner ? 1 : isResource ? 2 : 3;
+      return {
+        ...s,
+        coordX: Number(s.newX !== undefined ? s.newX : s.x),
+        coordY: Number(s.newY !== undefined ? s.newY : s.y),
+        size: Number(s.size) || defaultSize
+      };
+    })
     .filter(s => !isNaN(s.coordX) && !isNaN(s.coordY));
 
   if (validPlayers.length === 0 && validStructs.length === 0) {
@@ -27,14 +32,12 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
     return;
   }
 
-  // Proiezione isometrica (stessa formula usata in MapPage.jsx)
-  const STEP = 18; // Dimensione scala per leggibilità perfetta dei nomi
+  const STEP = 18;
   const toIso = (x, y) => ({
     isoX: (x - y) * STEP,
     isoY: -(x + y) * STEP
   });
 
-  // Calcolo Bounding Box automatico per inquadrare solo l'Hive
   let minIsoX = Infinity, maxIsoX = -Infinity, minIsoY = Infinity, maxIsoY = -Infinity;
 
   const registerBounds = (x, y, size = 2) => {
@@ -61,42 +64,57 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
   const viewW = Math.max(400, (maxIsoX - minIsoX) + PADDING * 2);
   const viewH = Math.max(400, (maxIsoY - minIsoY) + PADDING * 2);
 
-  // Funzione che disegna un rombo isometrico di dimensione WxH
   const createDiamondPolygon = (x, y, size) => {
     const p1 = toIso(x, y);
     const p2 = toIso(x + size, y);
     const p3 = toIso(x + size, y + size);
     const p4 = toIso(x, y + size);
-    return `${p1.isoX},${p1.isoY} ${p2.isoX},${p2.isoY} ${p3.isoX},${p3.isoY} ${p4.isoX},${p4.isoY}`;
+    return p1.isoX + ',' + p1.isoY + ' ' + p2.isoX + ',' + p2.isoY + ' ' + p3.isoX + ',' + p3.isoY + ' ' + p4.isoX + ',' + p4.isoY;
   };
 
-  // Costruzione elementi SVG per Strutture (QG, Trappole, Stendardi)
+  // Strutture (QG 3x3, Trappole 3x3, Risorse Bloccate 2x2, Stendardi 1x1)
   const structsSvg = validStructs.map(s => {
     const typeLower = String(s.type || '').toLowerCase();
     const isBanner = typeLower === 'banner' || s.code === 'BAN';
-    const isTrap = typeLower === 'beartrap' || String(s.code).startsWith('TRP');
-    const size = isBanner ? 1 : 3;
+    const isResource = typeLower === 'resource' || s.code === 'RES';
+    const isTrap = typeLower === 'beartrap' || String(s.code || '').startsWith('TRP');
+    const size = isBanner ? 1 : isResource ? 2 : 3;
 
-    const fill = isBanner ? '#581c87' : isTrap ? '#831843' : '#1e3a8a';
-    const stroke = isBanner ? '#c084fc' : isTrap ? '#f472b6' : '#60a5fa';
+    const fill = isBanner ? '#581c87' : isResource ? '#78350f' : isTrap ? '#831843' : '#1e3a8a';
+    const stroke = isBanner ? '#c084fc' : isResource ? '#f59e0b' : isTrap ? '#f472b6' : '#60a5fa';
     const center = toIso(s.coordX + size / 2, s.coordY + size / 2);
-    const label = isBanner ? '🚩' : (s.name || s.code || 'STRUTTURA');
+    const label = s.name || s.code || 'STRUTTURA';
+
+    if (isBanner) {
+      return `
+        <g>
+          <polygon points="${createDiamondPolygon(s.coordX, s.coordY, 1)}" fill="${fill}" fill-opacity="0.85" stroke="${stroke}" stroke-width="2" />
+          <text x="${center.isoX}" y="${center.isoY + 3}" text-anchor="middle" fill="#e9d5ff" font-size="7" font-family="Arial, sans-serif">🚩</text>
+        </g>
+      `;
+    }
+
+    if (isResource) {
+      return `
+        <g>
+          <polygon points="${createDiamondPolygon(s.coordX, s.coordY, 2)}" fill="${fill}" fill-opacity="0.85" stroke="${stroke}" stroke-width="1.8" stroke-dasharray="3,2" />
+          <text x="${center.isoX}" y="${center.isoY + 2}" text-anchor="middle" fill="#fde68a" font-size="9" font-family="Arial, sans-serif">⛏️</text>
+          <text x="${center.isoX}" y="${center.isoY + 13}" text-anchor="middle" fill="#fcd34d" font-size="6.5" font-weight="bold" font-family="monospace">${s.coordX}:${s.coordY}</text>
+        </g>
+      `;
+    }
 
     return `
       <g>
-        <polygon points="${createDiamondPolygon(s.coordX, s.coordY, size)}" fill="${fill}" fill-opacity="0.85" stroke="${stroke}" stroke-width="2" />
-        ${!isBanner ? `
-          <rect x="${center.isoX - 48}" y="${center.isoY - 12}" width="96" height="24" rx="4" fill="#0f172a" stroke="${stroke}" stroke-width="1" />
-          <text x="${center.isoX}" y="${center.isoY + 3}" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="900" font-family="Arial, sans-serif">${label}</text>
-          <text x="${center.isoX}" y="${center.isoY + 18}" text-anchor="middle" fill="${stroke}" font-size="7.5" font-weight="bold" font-family="monospace">(${s.coordX}:${s.coordY})</text>
-        ` : `
-          <text x="${center.isoX}" y="${center.isoY + 3}" text-anchor="middle" fill="#e9d5ff" font-size="7" font-family="Arial, sans-serif">🚩</text>
-        `}
+        <polygon points="${createDiamondPolygon(s.coordX, s.coordY, 3)}" fill="${fill}" fill-opacity="0.85" stroke="${stroke}" stroke-width="2" />
+        <rect x="${center.isoX - 48}" y="${center.isoY - 12}" width="96" height="24" rx="4" fill="#0f172a" stroke="${stroke}" stroke-width="1" />
+        <text x="${center.isoX}" y="${center.isoY + 3}" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="900" font-family="Arial, sans-serif">${label}</text>
+        <text x="${center.isoX}" y="${center.isoY + 18}" text-anchor="middle" fill="${stroke}" font-size="7.5" font-weight="bold" font-family="monospace">(${s.coordX}:${s.coordY})</text>
       </g>
     `;
   }).join('');
 
-  // Costruzione elementi SVG per i Castelli Giocatori (2x2) con Nome sopra il Castello
+  // Castelli Giocatori (2x2)
   const castlesSvg = validPlayers.map(p => {
     const center = toIso(p.coordX + 1, p.coordY + 1);
     const isTrap2 = p.trap === 2;
@@ -109,16 +127,13 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
       <g>
         <polygon points="${createDiamondPolygon(p.coordX, p.coordY, 2)}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" />
         <circle cx="${center.isoX}" cy="${center.isoY + 5}" r="4.5" fill="${stroke}" opacity="0.6" />
-        <!-- Targhetta Nome sopra il Castello -->
         <rect x="${center.isoX - 34}" y="${center.isoY - 17}" width="68" height="14" rx="3" fill="${badgeBg}" fill-opacity="0.92" stroke="${stroke}" stroke-width="0.8" />
         <text x="${center.isoX}" y="${center.isoY - 7.5}" text-anchor="middle" fill="#ffffff" font-size="7.5" font-weight="bold" font-family="Arial, sans-serif">${safeName.slice(0, 13)}</text>
-        <!-- Coordinate sotto il nome -->
         <text x="${center.isoX}" y="${center.isoY + 16}" text-anchor="middle" fill="#cbd5e1" font-size="6.5" font-weight="bold" font-family="monospace">${p.coordX}:${p.coordY}</text>
       </g>
     `;
   }).join('');
 
-  // Ordinamento giocatori per il Foglio 2 (prima per Trappola, poi per Score Orso / Nome)
   const sortedForTable = [...validPlayers].sort((a, b) => {
     if (a.trap !== b.trap) return a.trap - b.trap;
     const scoreA = a.pwr * a.part;
@@ -170,11 +185,11 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
           padding-bottom: 8px;
           margin-bottom: 8px;
         }
-        .legend { display: flex; gap: 14px; font-size: 11px; font-weight: bold; }
+        .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; font-weight: bold; }
         .legend span { display: inline-flex; align-items: center; gap: 5px; }
         .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
         .svg-wrapper { flex: 1; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        
+
         .page-list {
           page-break-before: always;
           padding: 6px 4px;
@@ -194,7 +209,6 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
       </style>
     </head>
     <body>
-      <!-- FOGLIO 1: MAPPA HIVE CON NOMI SOPRA I CASTELLI -->
       <div class="page-map">
         <div class="map-header">
           <div>
@@ -206,6 +220,7 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
             <span><i class="dot" style="background:#064e3b; border:2px solid #34d399;"></i> Squadra Trappola 2</span>
             <span><i class="dot" style="background:#831843; border:2px solid #f472b6;"></i> Trappole Orso (3x3)</span>
             <span><i class="dot" style="background:#1e3a8a; border:2px solid #60a5fa;"></i> QG Alleanza (3x3)</span>
+            <span><i class="dot" style="background:#78350f; border:2px solid #f59e0b;"></i> Risorsa Bloccata (2x2)</span>
           </div>
         </div>
         <div class="svg-wrapper">
@@ -216,7 +231,6 @@ export function exportHiveToPdf({ players = [], structures = [], allianceCode = 
         </div>
       </div>
 
-      <!-- FOGLIO 2: ELENCO GIOCATORI E COORDINATE -->
       <div class="page-list">
         <div class="list-header">
           <div>

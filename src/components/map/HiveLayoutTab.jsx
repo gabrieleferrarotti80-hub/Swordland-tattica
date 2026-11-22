@@ -1,20 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { db } from '../../firebase'; 
+import { db } from '../../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { exportHiveToPdf } from '../../utils/hivePdfExport';
 
 const BACKUP_STORAGE_KEY = 'kingshot-hive-coords-backup';
 
-export const HiveLayoutTab = ({ 
-  hq, trap1, trap2, validPlayers, roster, setRoster, setPathfindingData, 
-  userRole, allianceCode 
+export const HiveLayoutTab = ({
+  hq, trap1, trap2, validPlayers, roster, setRoster, setPlayerOverrides,
+  setPathfindingData, userRole, allianceCode, allianceStructures = []
 }) => {
   const { t } = useTranslation();
   const [layoutResults, setLayoutResults] = useState(null);
   const [showShareUI, setShowShareUI] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [showBannersInShare, setShowBannersInShare] = useState(false);
+  const [keepExistingBanners, setKeepExistingBanners] = useState(true);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -22,7 +23,31 @@ export const HiveLayoutTab = ({
   const [confirmOverwrite, setConfirmOverwrite] = useState(false);
   const [hasBackup, setHasBackup] = useState(false);
 
-  // Controlla se esiste un backup salvato nel browser o nei metadati del roster
+  const isValidStructureCoords = (s) => (
+    s &&
+    s.x !== '' &&
+    s.y !== '' &&
+    s.x != null &&
+    s.y != null &&
+    !Number.isNaN(Number(s.x)) &&
+    !Number.isNaN(Number(s.y)) &&
+    !(Number(s.x) === 0 && Number(s.y) === 0)
+  );
+
+  // Tessere risorse bloccate (2x2, stessa dimensione dei castelli)
+  const lockedResources = useMemo(() => {
+    return (allianceStructures || []).filter(
+      s => isValidStructureCoords(s) && (s.type === 'resource' || s.code === 'RES')
+    );
+  }, [allianceStructures]);
+
+  // Stendardi esistenti nell'alleanza (1x1)
+  const existingBanners = useMemo(() => {
+    return (allianceStructures || []).filter(
+      s => isValidStructureCoords(s) && (s.type === 'banner' || s.code === 'BAN')
+    );
+  }, [allianceStructures]);
+
   useEffect(() => {
     const savedBackup = localStorage.getItem(BACKUP_STORAGE_KEY);
     const rosterHasBackup = (roster || []).some(p => p.backupX !== undefined || p.backupY !== undefined);
@@ -31,13 +56,13 @@ export const HiveLayoutTab = ({
 
   const getBearScore = (player) => {
     const power = Number(player.power) || 0;
-    const participation = Number(player.participation) || 2; 
+    const participation = Number(player.participation) || 2;
     return power * participation;
   };
 
- const handleGenerateLayout = () => {
+  const handleGenerateLayout = () => {
     const allPlayers = roster && roster.length > 0 ? roster : (validPlayers || []);
-    
+
     const sortByRingPriority = (a, b) => {
       const scoreDiff = getBearScore(b) - getBearScore(a);
       if (scoreDiff !== 0) return scoreDiff;
@@ -60,30 +85,50 @@ export const HiveLayoutTab = ({
       return true;
     };
 
-    // 1. COORDINATE ESISTENTI DI TRAPPOLA 1 E TRAPPOLA 2
+    // 0. Tessere risorse bloccate (2x2, stessa dimensione dei castelli)
+    lockedResources.forEach(res => {
+      const resX = Math.round(Number(res.x));
+      const resY = Math.round(Number(res.y));
+      generatedPlacements.push({
+        ...res,
+        isPlayer: false,
+        type: 'resource',
+        newX: resX,
+        newY: resY,
+        size: 2
+      });
+      obstacles.push({ x: resX, y: resY, w: 2, h: 2 });
+    });
+
+    // 1. Trappola 1 e Trappola 2
     const t1X = Math.round(Number(trap1?.x || 490));
     const t1Y = Math.round(Number(trap1?.y || 500));
     generatedPlacements.push({ ...trap1, isPlayer: false, type: 'beartrap', newX: t1X, newY: t1Y, size: 3 });
     obstacles.push({ x: t1X, y: t1Y, w: 3, h: 3 });
 
     const hasValidTrap2 = trap2 && trap2.x != null && trap2.y != null && !(Number(trap2.x) === 0 && Number(trap2.y) === 0);
-    // Usiamo distanza pari (+20) come fallback così le due trappole condividono la stessa griglia 2x2
     const t2X = hasValidTrap2 ? Math.round(Number(trap2.x)) : t1X + 20;
     const t2Y = hasValidTrap2 ? Math.round(Number(trap2.y)) : t1Y;
     generatedPlacements.push({ ...trap2, isPlayer: false, type: 'beartrap', newX: t2X, newY: t2Y, size: 3 });
     obstacles.push({ x: t2X, y: t2Y, w: 3, h: 3 });
 
-    // 2. QG ESISTENTE
+    // 2. QG esistente
     const hasValidHq = hq && hq.x != null && hq.y != null && !(Number(hq.x) === 0 && Number(hq.y) === 0);
     let finalHqX = hasValidHq ? Math.round(Number(hq.x)) : Math.round((t1X + t2X) / 2) - 1;
     let finalHqY = hasValidHq ? Math.round(Number(hq.y)) : Math.round((t1Y + t2Y) / 2) + 10;
 
     if (!canPlace(finalHqX, finalHqY, 3, 3)) {
-      let hqPlaced = false; let hqRadius = 1;
+      let hqPlaced = false;
+      let hqRadius = 1;
       while (!hqPlaced && hqRadius < 100) {
         for (let x = finalHqX - hqRadius; x <= finalHqX + hqRadius; x++) {
           for (let y = finalHqY - hqRadius; y <= finalHqY + hqRadius; y++) {
-            if (canPlace(x, y, 3, 3)) { finalHqX = x; finalHqY = y; hqPlaced = true; break; }
+            if (canPlace(x, y, 3, 3)) {
+              finalHqX = x;
+              finalHqY = y;
+              hqPlaced = true;
+              break;
+            }
           }
           if (hqPlaced) break;
         }
@@ -93,30 +138,50 @@ export const HiveLayoutTab = ({
     generatedPlacements.push({ ...hq, isPlayer: false, type: 'headquarters', newX: finalHqX, newY: finalHqY, size: 3 });
     obstacles.push({ x: finalHqX, y: finalHqY, w: 3, h: 3 });
 
-    // 3. STENDARDI (Coord. intere allineate alla griglia per evitare collisioni frazionarie .5 che bucano 4 caselle!)
-    const bStartX = t1X - 3;
-    const bStartY = t1Y - 3;
+    // 3. Stendardi: o mantiene quelli esistenti come ostacoli fissi 1x1, o genera la nuova griglia
     const bannerCandidates = [];
-
-    for (let i = -15; i <= 15; i++) {
-      for (let j = -15; j <= 15; j++) {
-        const bx = bStartX + i * 7;
-        const by = bStartY + j * 7;
-        if (canPlace(bx, by, 1, 1)) {
-          bannerCandidates.push({ x: bx, y: by, w: 1, h: 1 });
-          obstacles.push({ x: bx, y: by, w: 1, h: 1 });
+    if (keepExistingBanners) {
+      existingBanners.forEach((banner, idx) => {
+        const bx = Math.round(Number(banner.x));
+        const by = Math.round(Number(banner.y));
+        generatedPlacements.push({
+          ...banner,
+          id: banner.id || 'existing-banner-' + (idx + 1),
+          type: 'banner',
+          code: banner.code || 'BAN',
+          name: banner.name || t('suite.banner_name', 'Stendardo {{count}}', { count: idx + 1 }),
+          isPlayer: false,
+          newX: bx,
+          newY: by,
+          size: 1
+        });
+        obstacles.push({ x: bx, y: by, w: 1, h: 1 });
+      });
+    } else {
+      const bStartX = t1X - 3;
+      const bStartY = t1Y - 3;
+      for (let i = -15; i <= 15; i++) {
+        for (let j = -15; j <= 15; j++) {
+          const bx = bStartX + i * 7;
+          const by = bStartY + j * 7;
+          if (canPlace(bx, by, 1, 1)) {
+            bannerCandidates.push({ x: bx, y: by, w: 1, h: 1 });
+            obstacles.push({ x: bx, y: by, w: 1, h: 1 });
+          }
         }
       }
     }
 
-    // 4. GRIGLIA UNIFICATA A MATTONI 2x2 (Elimina i buchi da 1 casella)
+    // 4. Griglia unificata a mattoni 2x2
     const minX = Math.min(t1X, t2X) - 44;
     const maxX = Math.max(t1X, t2X) + 44;
     const minY = Math.min(t1Y, t2Y) - 44;
     const maxY = Math.max(t1Y, t2Y) + 44;
 
-    const t1CenterX = t1X + 1.5, t1CenterY = t1Y + 1.5;
-    const t2CenterX = t2X + 1.5, t2CenterY = t2Y + 1.5;
+    const t1CenterX = t1X + 1.5;
+    const t1CenterY = t1Y + 1.5;
+    const t2CenterX = t2X + 1.5;
+    const t2CenterY = t2Y + 1.5;
     const parityX = ((t1X % 2) + 2) % 2;
     const parityY = ((t1Y % 2) + 2) % 2;
 
@@ -129,7 +194,8 @@ export const HiveLayoutTab = ({
         const gridPenalty = isGridAligned ? 0 : 0.35;
 
         candidatePool.push({
-          x, y,
+          x,
+          y,
           d1: d1 + gridPenalty,
           d2: d2 + gridPenalty,
           dUnified: Math.min(d1, d2) + gridPenalty,
@@ -152,7 +218,6 @@ export const HiveLayoutTab = ({
       return best;
     };
 
-    // FASE A: Piazzamento simultaneo alternato T1 e T2
     const maxTeamLen = Math.max(team1.length, team2.length);
     for (let i = 0; i < maxTeamLen; i++) {
       if (i < team1.length) {
@@ -175,7 +240,6 @@ export const HiveLayoutTab = ({
       }
     }
 
-    // FASE B: Piazzamento Unificato dei non assegnati nella fascia esterna
     unassignedPlayers.forEach(p => {
       const s = pickBestSlot('dUnified');
       if (s) {
@@ -185,31 +249,49 @@ export const HiveLayoutTab = ({
       }
     });
 
-    // 5. FILTRO STENDARDI NECESSARI
-    let finalBannersCount = 0;
-    bannerCandidates.forEach(banner => {
-      const areaX = banner.x - 3; const areaY = banner.y - 3;
-      let isNeeded = false;
-      for (let struct of generatedPlacements) {
-        if (struct.newX < areaX + 7 && struct.newX + struct.size > areaX && struct.newY < areaY + 7 && struct.newY + struct.size > areaY) {
-          isNeeded = true; break;
+    // 5. Filtro stendardi necessari (solo se si rigenerano da zero)
+    let finalBannersCount = keepExistingBanners ? existingBanners.length : 0;
+    if (!keepExistingBanners) {
+      bannerCandidates.forEach(banner => {
+        const areaX = banner.x - 3;
+        const areaY = banner.y - 3;
+        let isNeeded = false;
+        for (let struct of generatedPlacements) {
+          if (struct.type === 'resource') continue;
+          if (struct.newX < areaX + 7 && struct.newX + struct.size > areaX && struct.newY < areaY + 7 && struct.newY + struct.size > areaY) {
+            isNeeded = true;
+            break;
+          }
         }
-      }
-      if (isNeeded) {
-        finalBannersCount++;
-        generatedPlacements.push({ id: `auto-banner-${finalBannersCount}`, type: 'banner', code: 'BAN', name: t('suite.banner_name', 'Stendardo {{count}}', { count: finalBannersCount }), isPlayer: false, newX: banner.x, newY: banner.y, size: 1 });
-      }
-    });
+        if (isNeeded) {
+          finalBannersCount++;
+          generatedPlacements.push({
+            id: 'auto-banner-' + finalBannersCount,
+            type: 'banner',
+            code: 'BAN',
+            name: t('suite.banner_name', 'Stendardo {{count}}', { count: finalBannersCount }),
+            isPlayer: false,
+            newX: banner.x,
+            newY: banner.y,
+            size: 1
+          });
+        }
+      });
+    }
 
-    setLayoutResults({ players: allPlayers.length, banners: finalBannersCount });
-    setCurrentPlacements(generatedPlacements); 
-    setShowShareUI(true); 
+    setLayoutResults({ players: allPlayers.length, banners: finalBannersCount, resources: lockedResources.length });
+    setCurrentPlacements(generatedPlacements);
+    setShowShareUI(true);
     setConfirmOverwrite(false);
-    
-    setPathfindingData({ mode: 'layout', placements: generatedPlacements, splitScreen: true, visualOffsets: { structX: -1, structY: -1, bannerX: -0.5, bannerY: -0.5 } });
+
+    setPathfindingData({
+      mode: 'layout',
+      placements: generatedPlacements,
+      splitScreen: true,
+      visualOffsets: { structX: -1, structY: -1, bannerX: -0.5, bannerY: -0.5 }
+    });
   };
 
-  // SALVA IL BACKUP E APPLICA LE NUOVE COORDINATE AL ROSTER
   const handleOverwriteRoster = () => {
     if (!confirmOverwrite) {
       setConfirmOverwrite(true);
@@ -217,33 +299,48 @@ export const HiveLayoutTab = ({
       return;
     }
     if (setRoster && currentPlacements) {
-      // 1. Crea snapshot di backup delle coordinate attuali
+      const effectiveCoordsMap = new Map((validPlayers || []).map(p => [p.id, { x: p.x, y: p.y }]));
       const backupSnapshot = {};
       (roster || []).forEach(p => {
-        backupSnapshot[p.id] = { x: p.x ?? '', y: p.y ?? '', assignedTrap: p.assignedTrap || 1 };
+        const eff = effectiveCoordsMap.get(p.id);
+        backupSnapshot[p.id] = {
+          x: eff && eff.x !== undefined ? eff.x : (p.x ?? ''),
+          y: eff && eff.y !== undefined ? eff.y : (p.y ?? ''),
+          assignedTrap: p.assignedTrap || 1
+        };
       });
       localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify({
         timestamp: new Date().toLocaleString('it-IT'),
         coords: backupSnapshot
       }));
 
-      // 2. Applica le nuove coordinate salvando anche backupX/backupY sul singolo player
       const playerUpdates = currentPlacements.filter(p => p.isPlayer);
       setRoster(prevRoster => prevRoster.map(player => {
         const update = playerUpdates.find(up => up.id === player.id);
         if (update) {
-          return { 
-            ...player, 
-            backupX: player.x ?? '',
-            backupY: player.y ?? '',
-            backupAssignedTrap: player.assignedTrap || 1,
-            x: update.newX, 
-            y: update.newY, 
-            assignedTrap: update.assignedTrap || player.assignedTrap 
+          const prevSaved = backupSnapshot[player.id] || {};
+          return {
+            ...player,
+            backupX: prevSaved.x ?? (player.x ?? ''),
+            backupY: prevSaved.y ?? (player.y ?? ''),
+            backupAssignedTrap: prevSaved.assignedTrap || player.assignedTrap || 1,
+            x: update.newX,
+            y: update.newY,
+            assignedTrap: update.assignedTrap || player.assignedTrap
           };
         }
         return player;
       }));
+
+      if (setPlayerOverrides) {
+        setPlayerOverrides(prev => {
+          const next = { ...(prev || {}) };
+          playerUpdates.forEach(up => {
+            next[up.id] = { x: up.newX, y: up.newY };
+          });
+          return next;
+        });
+      }
 
       setHasBackup(true);
       alert(t('suite.roster_updated', '✅ Coordinate applicate al Roster! Il posizionamento precedente è stato salvato nel Backup.'));
@@ -251,7 +348,6 @@ export const HiveLayoutTab = ({
     }
   };
 
-  // RIPRISTINA IL BACKUP DELLE COORDINATE PRECEDENTI
   const handleRestoreBackup = () => {
     if (!window.confirm("Vuoi ripristinare le coordinate precedenti dei giocatori salvate nel backup?")) return;
 
@@ -261,11 +357,16 @@ export const HiveLayoutTab = ({
       try { parsedCoords = JSON.parse(rawBackup).coords || {}; } catch (e) {}
     }
 
+    const restoredOverrides = {};
     setRoster(prevRoster => prevRoster.map(player => {
       const saved = parsedCoords[player.id];
       const restoredX = saved !== undefined ? saved.x : (player.backupX !== undefined ? player.backupX : player.x);
       const restoredY = saved !== undefined ? saved.y : (player.backupY !== undefined ? player.backupY : player.y);
       const restoredTrap = saved !== undefined ? saved.assignedTrap : (player.backupAssignedTrap || player.assignedTrap);
+
+      if (restoredX !== '' && restoredY !== '' && restoredX !== undefined && restoredY !== undefined) {
+        restoredOverrides[player.id] = { x: restoredX, y: restoredY };
+      }
 
       return {
         ...player,
@@ -274,6 +375,23 @@ export const HiveLayoutTab = ({
         assignedTrap: restoredTrap
       };
     }));
+
+    if (setPlayerOverrides) {
+      setPlayerOverrides(prev => {
+        const next = { ...(prev || {}) };
+        (roster || []).forEach(player => {
+          const saved = parsedCoords[player.id];
+          const restoredX = saved !== undefined ? saved.x : (player.backupX !== undefined ? player.backupX : player.x);
+          const restoredY = saved !== undefined ? saved.y : (player.backupY !== undefined ? player.backupY : player.y);
+          if (restoredX !== '' && restoredY !== '' && restoredX !== undefined && restoredY !== undefined) {
+            next[player.id] = { x: restoredX, y: restoredY };
+          } else {
+            delete next[player.id];
+          }
+        });
+        return next;
+      });
+    }
 
     alert("⏪ Posizionamento precedente ripristinato con successo!");
   };
@@ -284,7 +402,10 @@ export const HiveLayoutTab = ({
     setIsSaving(true);
     try {
       await setDoc(doc(db, 'allianceMapData', allianceCode), { savedHiveLayout: { stats: layoutResults, placements: currentPlacements } }, { merge: true });
-    } catch (error) { console.error(error); alert(t('suite.error_saving_layout', 'Errore durante il salvataggio del layout.')); }
+    } catch (error) {
+      console.error(error);
+      alert(t('suite.error_saving_layout', 'Errore durante il salvataggio del layout.'));
+    }
     setIsSaving(false);
   };
 
@@ -296,99 +417,150 @@ export const HiveLayoutTab = ({
       const snap = await getDoc(doc(db, 'allianceMapData', allianceCode));
       if (snap.exists() && snap.data().savedHiveLayout) {
         const { stats, placements } = snap.data().savedHiveLayout;
-        setLayoutResults(stats || null); setCurrentPlacements(placements || []);
+        setLayoutResults(stats || null);
+        setCurrentPlacements(placements || []);
         setPathfindingData({ mode: 'layout', placements: placements || [], splitScreen: true, visualOffsets: { structX: -1, structY: -1, bannerX: -0.5, bannerY: -0.5 } });
         setShowShareUI(true);
-      } else { alert(t('suite.no_saved_layout', 'Nessun layout salvato trovato per questa alleanza.')); }
-    } catch(e) { console.error(e); alert(t('suite.error_loading', 'Errore durante il caricamento.')); }
+      } else {
+        alert(t('suite.no_saved_layout', 'Nessun layout salvato trovato per questa alleanza.'));
+      }
+    } catch (e) {
+      console.error(e);
+      alert(t('suite.error_loading', 'Errore durante il caricamento.'));
+    }
     setIsLoading(false);
   };
 
   const handleCopyMessage = (text, id) => {
-    navigator.clipboard.writeText(text).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); });
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
   };
 
   const handleDownloadPdf = () => {
-    // Se è stato appena generato un layout ottimizzato esporta quello, altrimenti esporta le posizioni attuali del Roster
+    const safeCode = allianceCode || 'HIVE';
     if (currentPlacements && currentPlacements.length > 0) {
       const placedPlayers = currentPlacements.filter(p => p.isPlayer);
       const placedStructs = currentPlacements.filter(p => !p.isPlayer);
       exportHiveToPdf({
         players: placedPlayers,
         structures: placedStructs,
-        allianceCode: allianceCode || 'HIVE'
+        allianceCode: safeCode
       });
     } else {
       const allPlayers = roster && roster.length > 0 ? roster : (validPlayers || []);
+      const fallbackStructs = allianceStructures && allianceStructures.length > 0
+        ? allianceStructures
+        : [hq, trap1, trap2].filter(Boolean);
       exportHiveToPdf({
         players: allPlayers,
-        structures: [hq, trap1, trap2].filter(Boolean),
-        allianceCode: allianceCode || 'HIVE'
+        structures: fallbackStructs,
+        allianceCode: safeCode
       });
     }
   };
 
   const getRenderMessages = () => {
-    let placements = currentPlacements || [];
+    const placements = currentPlacements || [];
     if (placements.length === 0) return [];
 
     const chunkArray = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (v, i) => arr.slice(i * size, i * size + size));
     const msgs = [];
 
-    chunkArray(placements.filter(p => !p.isPlayer && p.type !== 'banner'), 10).forEach((chunk, i) => {
-        let text = `${t('suite.alliance_structures', '🏗️ STRUTTURE ALLEANZA')}\n`; 
-        chunk.forEach(p => text += `▪ ${p.name}: X:${p.newX} Y:${p.newY}\n`);
-        msgs.push({ id: `struct-${i}`, title: t('suite.structures_num', 'Strutture {{num}}', { num: i+1 }), text, category: 'strutture' });
+    chunkArray(placements.filter(p => !p.isPlayer && p.type !== 'banner' && p.type !== 'resource'), 10).forEach((chunk, i) => {
+      let text = t('suite.alliance_structures', '🏗️ STRUTTURE ALLEANZA') + '\n';
+      chunk.forEach(p => {
+        text += '▪ ' + p.name + ': X:' + p.newX + ' Y:' + p.newY + '\n';
+      });
+      msgs.push({ id: 'struct-' + i, title: t('suite.structures_num', 'Strutture {{num}}', { num: i + 1 }), text, category: 'strutture' });
     });
+
     chunkArray(placements.filter(p => p.isPlayer), 10).forEach((chunk, i) => {
-        let text = `${t('suite.hive_castles', '🏰 CASTELLI HIVE ({{num}})', { num: i+1 })}\n`; 
-        chunk.forEach(p => text += `▪ [Anello ${p.ring || '?'}] ${p.name} (${p.power || 0}M • Cost.${p.participation || 2}x): X:${p.newX} Y:${p.newY}\n`);
-        msgs.push({ id: `player-${i}`, title: t('suite.castles_num', 'Castelli {{num}}', { num: i+1 }), text, category: 'castelli' });
+      let text = t('suite.hive_castles', '🏰 CASTELLI HIVE ({{num}})', { num: i + 1 }) + '\n';
+      chunk.forEach(p => {
+        const ringLabel = p.ring || '?';
+        const pwr = p.power || 0;
+        const part = p.participation || 2;
+        text += '▪ [Anello ' + ringLabel + '] ' + p.name + ' (' + pwr + 'M • Cost.' + part + 'x): X:' + p.newX + ' Y:' + p.newY + '\n';
+      });
+      msgs.push({ id: 'player-' + i, title: t('suite.castles_num', 'Castelli {{num}}', { num: i + 1 }), text, category: 'castelli' });
     });
+
     chunkArray(placements.filter(p => p.type === 'banner'), 10).forEach((chunk, i) => {
-        let text = `${t('suite.hive_banners_title', '🚩 STENDARDI HIVE ({{num}})', { num: i+1 })}\n`; 
-        chunk.forEach(p => text += `▪ ${p.name}: X:${p.newX} Y:${p.newY}\n`);
-        msgs.push({ id: `banner-${i}`, title: t('suite.banners_num', 'Stendardi {{num}}', { num: i+1 }), text, category: 'stendardi' });
+      let text = t('suite.hive_banners_title', '🚩 STENDARDI HIVE ({{num}})', { num: i + 1 }) + '\n';
+      chunk.forEach(p => {
+        text += '▪ ' + p.name + ': X:' + p.newX + ' Y:' + p.newY + '\n';
+      });
+      msgs.push({ id: 'banner-' + i, title: t('suite.banners_num', 'Stendardi {{num}}', { num: i + 1 }), text, category: 'stendardi' });
     });
+
     return msgs;
   };
 
   const finalMessages = layoutResults ? getRenderMessages() : [];
+  const canEdit = !userRole || userRole === 'admin' || userRole === 'alliance';
 
   return (
     <div className="flex flex-col gap-4 animate-fade-in h-full">
-      {(!userRole || userRole === 'admin' || userRole === 'alliance') && (
+      {canEdit && (
         <div className="flex gap-2 bg-indigo-950/20 p-2 rounded-xl border border-indigo-900/50 shrink-0">
-          <button onClick={handleLoadLayoutFromCloud} disabled={isLoading} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 text-indigo-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-slate-700 transition-all flex items-center justify-center gap-1">{isLoading ? t('suite.loading', '⏳...') : t('suite.load_cloud', '📂 Carica Cloud')}</button>
-          <button onClick={handleSaveLayoutToCloud} disabled={isSaving || !currentPlacements} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:border-slate-700 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1 border border-indigo-500">{isSaving ? t('suite.loading', '⏳...') : t('suite.save_cloud', '💾 Salva Cloud')}</button>
+          <button onClick={handleLoadLayoutFromCloud} disabled={isLoading} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 text-indigo-300 text-[9px] font-black uppercase tracking-widest rounded-lg border border-slate-700 transition-all flex items-center justify-center gap-1">
+            {isLoading ? t('suite.loading', '⏳...') : t('suite.load_cloud', '📂 Carica Cloud')}
+          </button>
+          <button onClick={handleSaveLayoutToCloud} disabled={isSaving || !currentPlacements} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:border-slate-700 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1 border border-indigo-500">
+            {isSaving ? t('suite.loading', '⏳...') : t('suite.save_cloud', '💾 Salva Cloud')}
+          </button>
         </div>
       )}
 
       <div className="bg-amber-950/20 border border-amber-900/50 p-4 rounded-xl text-left">
-        <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2"><span className="text-xl">🧬</span> {t('suite.hive_generator', 'Generatore Alveare')}</h3>
+        <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+          <span className="text-xl">🧬</span> {t('suite.hive_generator', 'Generatore Alveare')}
+        </h3>
         <div className="text-[10px] text-slate-300 space-y-1">
           <p>📍 <b>Trappola 1 Esistente:</b> X:{trap1?.x ?? '?'} Y:{trap1?.y ?? '?'}</p>
           <p>📍 <b>Trappola 2 Esistente:</b> X:{trap2?.x ?? '?'} Y:{trap2?.y ?? '?'}</p>
-          <p className="text-amber-300/90 pt-1">I giocatori vengono disposti ad anelli attorno alle coordinate esistenti delle due trappole.</p>
+          <p>⛏️ <b>Risorse Bloccate (2x2):</b> <span className="text-amber-300 font-bold">{lockedResources.length}</span></p>
+          <p>🚩 <b>Stendardi Esistenti (1x1):</b> <span className="text-purple-300 font-bold">{existingBanners.length}</span></p>
+          <p className="text-amber-300/90 pt-1">I giocatori vengono disposti ad anelli attorno alle due trappole evitando QG, stendardi e tessere risorse bloccate.</p>
         </div>
       </div>
-      
-      <button onClick={handleGenerateLayout} className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(245,158,11,0.4)]">{t('suite.gen_final_hive', '▶ Calcola Anelli Ottimali')}</button>
-<button onClick={handleGenerateLayout} className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(245,158,11,0.4)]">
+
+      {/* Spunta per mantenere gli stendardi esistenti come ostacoli fissi */}
+      <label className="bg-slate-950/80 border border-purple-500/40 rounded-xl p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-purple-400/70 transition-colors">
+        <div className="flex flex-col text-left">
+          <span className="text-[11px] font-black text-purple-300 uppercase tracking-wider">
+            🚩 Mantieni stendardi esistenti ({existingBanners.length})
+          </span>
+          <span className="text-[9px] text-slate-400">
+            {keepExistingBanners
+              ? 'Usa gli stendardi attuali come ostacoli fissi 1x1 senza ricalcolarli.'
+              : 'Ricalcola da zero una nuova griglia di stendardi attorno alla Trappola 1.'}
+          </span>
+        </div>
+        <input
+          type="checkbox"
+          checked={keepExistingBanners}
+          onChange={(e) => setKeepExistingBanners(e.target.checked)}
+          className="w-4 h-4 accent-purple-500 shrink-0 cursor-pointer"
+        />
+      </label>
+
+      <button onClick={handleGenerateLayout} className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(245,158,11,0.4)]">
         {t('suite.gen_final_hive', '▶ Calcola Anelli Ottimali')}
       </button>
 
-      {/* PULSANTE ESPORTAZIONE PDF (Mappa con Nomi + Foglio 2 Coordinate) */}
-      <button 
-        onClick={handleDownloadPdf} 
+      <button
+        onClick={handleDownloadPdf}
         className="w-full py-2.5 bg-cyan-700 hover:bg-cyan-600 text-white border border-cyan-400/40 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
       >
         📄 Salva PDF (Mappa con Nomi + Elenco Coordinate)
       </button>
-      {/* PULSANTE DI RIPRISTINO BACKUP SEMPRE ACCESSIBILE SE ESISTE UN BACKUP */}
-      {hasBackup && (!userRole || userRole === 'admin' || userRole === 'alliance') && (
-        <button 
-          onClick={handleRestoreBackup} 
+
+      {hasBackup && canEdit && (
+        <button
+          onClick={handleRestoreBackup}
           className="w-full py-2.5 bg-slate-800 hover:bg-amber-900/50 text-amber-300 border border-amber-500/40 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2 shadow"
         >
           ⏪ Ripristina Backup Posizionamento
@@ -398,37 +570,63 @@ export const HiveLayoutTab = ({
       {layoutResults && (
         <div className="mt-2 flex flex-col gap-4 animate-fade-in border-t border-slate-800/80 pt-3">
           <div className="flex gap-2">
-            <div className="flex-1 bg-slate-950 border border-slate-800 p-2 rounded-lg text-center"><span className="block text-[8px] text-slate-500 uppercase font-bold">{t('suite.stuck_castles', 'Castelli Piazzati')}</span><span className="block text-base font-mono font-black text-blue-400">{layoutResults.players}</span></div>
-            <div className="flex-1 bg-slate-950 border border-slate-800 p-2 rounded-lg text-center"><span className="block text-[8px] text-slate-500 uppercase font-bold">{t('suite.final_banners', 'Stendardi Finali')}</span><span className="block text-base font-mono font-black text-purple-400">{layoutResults.banners}</span></div>
+            <div className="flex-1 bg-slate-950 border border-slate-800 p-2 rounded-lg text-center">
+              <span className="block text-[8px] text-slate-500 uppercase font-bold">{t('suite.stuck_castles', 'Castelli Piazzati')}</span>
+              <span className="block text-base font-mono font-black text-blue-400">{layoutResults.players}</span>
+            </div>
+            <div className="flex-1 bg-slate-950 border border-slate-800 p-2 rounded-lg text-center">
+              <span className="block text-[8px] text-slate-500 uppercase font-bold">{t('suite.final_banners', 'Stendardi Finali')}</span>
+              <span className="block text-base font-mono font-black text-purple-400">{layoutResults.banners}</span>
+            </div>
           </div>
-          
-          {(!userRole || userRole === 'admin' || userRole === 'alliance') && currentPlacements && (
+
+          {canEdit && currentPlacements && (
             <div className="bg-emerald-950/20 border border-emerald-700/50 p-3 rounded-xl flex flex-col gap-2 shadow-inner">
-                <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest text-center block">Salva Posizioni nel Roster (Con Backup Automatico)</span>
-                <button onClick={handleOverwriteRoster} className={`w-full py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${confirmOverwrite ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-[0.98]' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}>
-                  {confirmOverwrite ? '⚠️ CLICCA DI NUOVO PER CONFERMARE' : '📌 Applica Coordinate Ottimali ai Giocatori'}
-                </button>
+              <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest text-center block">Salva Posizioni nel Roster (Con Backup Automatico)</span>
+              <button
+                onClick={handleOverwriteRoster}
+                className={'w-full py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ' + (confirmOverwrite ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-[0.98]' : 'bg-emerald-600 hover:bg-emerald-500 text-white')}
+              >
+                {confirmOverwrite ? '⚠️ CLICCA DI NUOVO PER CONFERMARE' : '📌 Applica Coordinate Ottimali ai Giocatori'}
+              </button>
             </div>
           )}
 
-          <button onClick={() => setShowShareUI(!showShareUI)} className={`w-full py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all border ${showShareUI ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}>{showShareUI ? t('suite.hide_share', 'Nascondi Condivisione') : t('suite.share_layout', '📤 Condividi Layout')}</button>
+          <button
+            onClick={() => setShowShareUI(!showShareUI)}
+            className={'w-full py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all border ' + (showShareUI ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700')}
+          >
+            {showShareUI ? t('suite.hide_share', 'Nascondi Condivisione') : t('suite.share_layout', '📤 Condividi Layout')}
+          </button>
 
           {showShareUI && (
             <div className="flex flex-col gap-3 animate-fade-in mt-1">
               <div className="bg-indigo-950/30 border border-indigo-900/50 p-3 rounded-xl text-left flex justify-between items-center">
-                  <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{t('suite.show_banner_coords', 'Mostra coordinate stendardi')}</span>
-                  <button onClick={() => setShowBannersInShare(!showBannersInShare)} className={`w-10 h-5 rounded-full relative transition-colors ${showBannersInShare ? 'bg-indigo-600' : 'bg-slate-700'}`}><span className={`absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ${showBannersInShare ? 'translate-x-5' : ''}`}></span></button>
+                <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{t('suite.show_banner_coords', 'Mostra coordinate stendardi')}</span>
+                <button
+                  onClick={() => setShowBannersInShare(!showBannersInShare)}
+                  className={'w-10 h-5 rounded-full relative transition-colors ' + (showBannersInShare ? 'bg-indigo-600' : 'bg-slate-700')}
+                >
+                  <span className={'absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform ' + (showBannersInShare ? 'translate-x-5' : '')}></span>
+                </button>
               </div>
               <div className="space-y-3">
-                  {finalMessages.filter(msg => msg.category !== 'stendardi' || showBannersInShare).map((msg) => (
-                      <div key={msg.id} className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-                          <div className="bg-slate-900/50 p-2 px-3 flex justify-between items-center border-b border-slate-800">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-300">{msg.title}</span>
-                              <button onClick={() => handleCopyMessage(msg.text, msg.id)} className={`px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-colors ${copiedId === msg.id ? 'bg-emerald-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}>{copiedId === msg.id ? t('suite.copied', '✓ COPIATO') : t('suite.copy_chat', 'COPIA CHAT')}</button>
-                          </div>
-                          <div className="p-3"><pre className="text-[10px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed m-0">{msg.text}</pre></div>
-                      </div>
-                  ))}
+                {finalMessages.filter(msg => msg.category !== 'stendardi' || showBannersInShare).map((msg) => (
+                  <div key={msg.id} className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                    <div className="bg-slate-900/50 p-2 px-3 flex justify-between items-center border-b border-slate-800">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-300">{msg.title}</span>
+                      <button
+                        onClick={() => handleCopyMessage(msg.text, msg.id)}
+                        className={'px-3 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-colors ' + (copiedId === msg.id ? 'bg-emerald-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white')}
+                      >
+                        {copiedId === msg.id ? t('suite.copied', '✓ COPIATO') : t('suite.copy_chat', 'COPIA CHAT')}
+                      </button>
+                    </div>
+                    <div className="p-3">
+                      <pre className="text-[10px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed m-0">{msg.text}</pre>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

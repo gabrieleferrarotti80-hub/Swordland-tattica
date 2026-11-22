@@ -441,12 +441,13 @@ export default function MapPage({ roster, setRoster, userRole, allianceCode, all
 
       {!isSharedLink && (
         isPathfindingMode ? (
-          <AlliancePathfindingSidebar 
+         <AlliancePathfindingSidebar
             setPathfindingMode={(val) => { setIsPathfindingMode(val); if (!val) setActiveView('alliance'); }}
             allianceStructures={allianceStructures} fixedBuildings={fixedBuildings} validPlayers={validPlayers}
             roster={rosterArray} setPathfindingData={setPathfindingData} setActiveView={setActiveView}
             userRole={userRole} allianceCode={effectiveAllianceCode}
             setRoster={setRoster}
+            setPlayerOverrides={setPlayerOverrides}
           />
         ) : activeView === 'alliance' ? (
           <MapSidebarAlliance 

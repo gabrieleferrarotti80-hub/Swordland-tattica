@@ -3,17 +3,18 @@ import { useTranslation } from 'react-i18next';
 import { PathfindingTab } from './PathfindingTab';
 import { HiveLayoutTab } from './HiveLayoutTab';
 
-export const AlliancePathfindingSidebar = ({ 
+export const AlliancePathfindingSidebar = ({
   setPathfindingMode,
   allianceStructures,
   fixedBuildings,
   validPlayers,
-  roster, 
+  roster,
   setPathfindingData,
   setActiveView,
   userRole,
   allianceCode,
-  setRoster
+  setRoster,
+  setPlayerOverrides
 }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('layout'); 
@@ -54,13 +55,14 @@ console.log("🟨 [DEBUG 2 - Sidebar] allianceStructures ricevute dal padre:", a
             validPlayers={validPlayers} roster={roster} 
           />
         )}
-       {activeTab === 'layout' && (
-          <HiveLayoutTab 
-            hq={hq} trap1={trap1} trap2={trap2} 
-            roster={roster} setRoster={setRoster} validPlayers={validPlayers} 
-            setPathfindingData={setPathfindingData} 
-            userRole={userRole} allianceCode={allianceCode} 
-            allianceStructures={allianceStructures} // <--- AGGIUNGI QUESTA RIGA! 🚀
+      {activeTab === 'layout' && (
+          <HiveLayoutTab
+            hq={hq} trap1={trap1} trap2={trap2}
+            roster={roster} setRoster={setRoster} setPlayerOverrides={setPlayerOverrides}
+            validPlayers={validPlayers}
+            setPathfindingData={setPathfindingData}
+            userRole={userRole} allianceCode={allianceCode}
+            allianceStructures={allianceStructures}
           />
         )}
       </div>
