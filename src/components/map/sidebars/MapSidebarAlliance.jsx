@@ -32,13 +32,16 @@ function MapSidebarAlliance({
   onOpenHelp, handleSaveToCloud, isLoadingCloud,
   isMapUnlocked, setIsMapUnlocked,
   setActiveView, setPathfindingMode,
-  allianceCode
+  allianceCode,
+  highlightedEntity, onHighlightEntity
 }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const [isBannersOpen, setIsBannersOpen] = useState(false);
+  const [isResourcesOpen, setIsResourcesOpen] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
@@ -60,22 +63,62 @@ function MapSidebarAlliance({
     return (p.name?.toLowerCase().includes(term) || p.tag?.toLowerCase().includes(term) || p.originalTag?.toLowerCase().includes(term));
   });
 
+  // Divisione strutture: Core (HQ + Trappole) sempre visibili, Stendardi e Risorse richiudibili
+  const allStructures = allianceStructures || [];
+  const coreStructures = allStructures.filter(s => s.type !== 'banner' && s.type !== 'resource');
+  const bannerStructures = allStructures.filter(s => s.type === 'banner');
+  const resourceStructures = allStructures.filter(s => s.type === 'resource');
+
   const getDefaultSpawnCoords = () => {
-    const refStruct = (allianceStructures || []).find(
+    const refStruct = allStructures.find(
       s => (s.type === 'headquarters' || s.type === 'beartrap') && s.x !== '' && s.y !== '' && !isNaN(Number(s.x)) && !isNaN(Number(s.y))
     );
     return refStruct ? { x: Number(refStruct.x), y: Number(refStruct.y) } : { x: 600, y: 600 };
   };
 
+  const handleAddBanner = () => {
+    if (isReadOnly || !setAllianceStructures) return;
+    const spawn = getDefaultSpawnCoords();
+    const nextNum = bannerStructures.length + 1;
+    const newBanner = {
+      id: 'banner-' + Date.now(),
+      code: 'BAN',
+      name: 'Stendardo #' + nextNum,
+      type: 'banner',
+      size: 1,
+      x: spawn.x,
+      y: spawn.y
+    };
+    setAllianceStructures(prev => [newBanner, ...(prev || [])]);
+    setIsBannersOpen(true);
+  };
+
+  const handleAddResource = () => {
+    if (isReadOnly || !setAllianceStructures) return;
+    const spawn = getDefaultSpawnCoords();
+    const nextNum = resourceStructures.length + 1;
+    const newResource = {
+      id: 'resource-' + Date.now(),
+      code: 'RES',
+      name: 'Risorsa #' + nextNum,
+      type: 'resource',
+      size: 2,
+      x: spawn.x,
+      y: spawn.y
+    };
+    setAllianceStructures(prev => [newResource, ...(prev || [])]);
+    setIsResourcesOpen(true);
+  };
+
   const handleCopyTerritoryLink = async () => {
-    if (!allianceCode) return alert("⚠️ Codice alleanza non trovato.");
+    if (!allianceCode) return alert('⚠️ Codice alleanza non trovato.');
     const shareUrl = window.location.origin + '/map?shared=1&alliance=' + encodeURIComponent(allianceCode) + '&view=alliance';
     try {
       await navigator.clipboard.writeText(shareUrl);
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2500);
     } catch (_) {
-      window.prompt("Copia questo link condivisibile per i giocatori:", shareUrl);
+      window.prompt('Copia questo link condivisibile per i giocatori:', shareUrl);
     }
   };
 
@@ -114,9 +157,74 @@ function MapSidebarAlliance({
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     exportHiveToPdf({
       players: effectivePlayers,
-      structures: allianceStructures || [],
+      structures: allStructures,
       allianceCode: allianceCode || 'HIVE'
     });
+  };
+
+  const renderStructureCard = (struct) => {
+    const isHQ = struct.type === 'headquarters';
+    const isBanner = struct.type === 'banner';
+    const isResource = struct.type === 'resource';
+    const isRemovable = isBanner || isResource;
+    const icon = isHQ ? '🏰' : isBanner ? '🚩' : isResource ? '⛏️' : '🐻';
+    const borderColor = isBanner ? 'border-purple-500' : isResource ? 'border-amber-500' : 'border-indigo-500';
+    const bgColor = isBanner ? 'bg-purple-900/10' : isResource ? 'bg-amber-900/15' : 'bg-indigo-900/20';
+    const labelColor = isBanner ? 'text-purple-400' : isResource ? 'text-amber-400' : 'text-indigo-400';
+    const isHighlighted = highlightedEntity?.type === 'structure' && String(highlightedEntity?.id) === String(struct.id);
+
+    const cardStyle = isHighlighted
+      ? 'bg-yellow-500/20 border-yellow-400 ring-2 ring-yellow-400/70 '
+      : bgColor + ' ' + (isReadOnly ? borderColor + '/20 opacity-80 ' : borderColor + '/40 hover:' + borderColor + ' ');
+
+    return (
+      <div
+        key={struct.id}
+        draggable={!isReadOnly}
+        onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'structure:' + struct.id); }}
+        onClick={() => onHighlightEntity && onHighlightEntity({ type: 'structure', id: struct.id, x: struct.x, y: struct.y, structureType: struct.type })}
+        className={cardStyle + 'border p-2.5 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm cursor-pointer'}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-xl shrink-0 drop-shadow-md">{icon}</span>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-slate-200 text-xs truncate group-hover:text-indigo-300 transition-colors">{struct.name}</div>
+            <div className="text-[9px] text-slate-500">[{struct.code}] {isResource ? '• 2x2' : isBanner ? '• 1x1' : '• 3x3'}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col items-center">
+            <span className={'text-[8px] font-bold uppercase ' + labelColor}>{t('alliance_sidebar.coord_x', 'X')}</span>
+            <CoordInput
+              disabled={isReadOnly}
+              initialValue={struct.x}
+              placeholder="-"
+              onSave={(val) => handleStructureCoordSave(struct, 'x', val)}
+              className={'w-12 bg-slate-900 border ' + (isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : isResource ? 'border-amber-900/50 focus:border-amber-400 text-amber-300' : 'border-indigo-900/50 focus:border-cyan-400 text-cyan-300') + ' text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50'}
+            />
+          </div>
+          <div className="flex flex-col items-center">
+            <span className={'text-[8px] font-bold uppercase ' + labelColor}>{t('alliance_sidebar.coord_y', 'Y')}</span>
+            <CoordInput
+              disabled={isReadOnly}
+              initialValue={struct.y}
+              placeholder="-"
+              onSave={(val) => handleStructureCoordSave(struct, 'y', val)}
+              className={'w-12 bg-slate-900 border ' + (isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : isResource ? 'border-amber-900/50 focus:border-amber-400 text-amber-300' : 'border-indigo-900/50 focus:border-amber-400 text-amber-300') + ' text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50'}
+            />
+          </div>
+          {isRemovable && !isReadOnly && setAllianceStructures && (
+            <button
+              onClick={() => setAllianceStructures(prev => prev.filter(s => s.id !== struct.id))}
+              className="w-5 h-5 flex items-center justify-center bg-rose-950/50 text-rose-400 hover:bg-rose-900 rounded border border-rose-900/50 transition-colors ml-1"
+              title={isResource ? 'Rimuovi Risorsa' : 'Rimuovi Stendardo'}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -137,7 +245,7 @@ function MapSidebarAlliance({
 
       {showHelp && (
         <div className="bg-indigo-950/30 border border-indigo-500/50 rounded-xl p-3 text-xs text-indigo-100 shadow-inner leading-relaxed animate-fade-in shrink-0">
-          <strong>{t('map_sidebar.hive_guide_title', '💡 Guida Alveare:')}</strong> Clicca su "Disegna" per tracciare il territorio principale. Usa "+ Stendardo" per gli stendardi (1x1) e "+ Risorsa" per segnare le tessere risorse bloccate (2x2, stessa dimensione dei castelli).
+          <strong>{t('map_sidebar.hive_guide_title', '💡 Guida Alveare:')}</strong> Clicca su un giocatore o su una struttura per illuminarli e centrarli sulla mappa. Usa i tasti fissi in basso per aggiungere Stendardi (1x1) e Risorse bloccate (2x2).
         </div>
       )}
 
@@ -179,14 +287,15 @@ function MapSidebarAlliance({
         <input type="text" placeholder={t('sidebar.search_member', 'Cerca membro...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-950 border border-slate-700 text-white text-xs pl-7 pr-3 py-2 rounded focus:outline-none focus:border-indigo-500 transition-colors" />
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-3">
 
-        <div className={`p-3 rounded-xl border flex flex-col gap-2 transition-colors ${hiveGridMeta?.isDrawing ? 'bg-emerald-950/40 border-emerald-500' : 'bg-slate-950 border-emerald-900/50'}`}>
+        {/* Territorio Principale */}
+        <div className={'p-3 rounded-xl border flex flex-col gap-2 transition-colors ' + (hiveGridMeta?.isDrawing ? 'bg-emerald-950/40 border-emerald-500' : 'bg-slate-950 border-emerald-900/50')}>
           <div className="flex justify-between items-center">
-            <span className={`text-[10px] font-black uppercase tracking-widest ${hiveGridMeta?.isDrawing ? 'text-emerald-300' : 'text-emerald-400'}`}>{t('sidebar.main_territory', 'Territorio Principale')}</span>
+            <span className={'text-[10px] font-black uppercase tracking-widest ' + (hiveGridMeta?.isDrawing ? 'text-emerald-300' : 'text-emerald-400')}>{t('sidebar.main_territory', 'Territorio Principale')}</span>
             <div className="flex gap-1">
               {!isReadOnly && (
-                <button onClick={() => setHiveGridMeta({ ...hiveGridMeta, isDrawing: !hiveGridMeta?.isDrawing })} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ${hiveGridMeta?.isDrawing ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.6)]' : 'bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300'}`}>
+                <button onClick={() => setHiveGridMeta({ ...hiveGridMeta, isDrawing: !hiveGridMeta?.isDrawing })} className={'px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ' + (hiveGridMeta?.isDrawing ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.6)]' : 'bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300')}>
                   {hiveGridMeta?.isDrawing ? '⏹️ ' + t('sidebar.close', 'Chiudi') : '✏️ ' + t('sidebar.draw', 'Disegna')}
                 </button>
               )}
@@ -230,54 +339,28 @@ function MapSidebarAlliance({
           )}
         </div>
 
-        <div className="px-4 py-2 border-b border-slate-800/80 shrink-0">
+        {/* Blocca / Sblocca Mappa */}
+        <div className="px-2 py-1 border-b border-slate-800/80 shrink-0">
           <button
             onClick={() => setIsMapUnlocked(!isMapUnlocked)}
-            className={`w-full py-2 px-4 rounded-xl font-black tracking-wider text-xs uppercase transition-all shadow-lg border flex items-center justify-center gap-2 ${
-              isMapUnlocked ? 'bg-rose-500/10 text-rose-400 border-rose-500/50 hover:bg-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/20'
-            }`}
+            className={'w-full py-2 px-4 rounded-xl font-black tracking-wider text-xs uppercase transition-all shadow-lg border flex items-center justify-center gap-2 ' + (isMapUnlocked ? 'bg-rose-500/10 text-rose-400 border-rose-500/50 hover:bg-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/20')}
           >
-            {isMapUnlocked ? "🔴 " + t('sidebar.map_unlocked', 'Mappa Sbloccata') : "🟢 " + t('sidebar.map_locked', 'Mappa Bloccata')}
+            {isMapUnlocked ? '🔴 ' + t('sidebar.map_unlocked', 'Mappa Sbloccata') : '🟢 ' + t('sidebar.map_locked', 'Mappa Bloccata')}
           </button>
         </div>
 
-        <div className="flex flex-col gap-2 mt-2">
+        {/* Strutture Principali (HQ + Trappole) sempre visibili */}
+        <div className="flex flex-col gap-2">
           <div className="flex flex-col p-3 bg-slate-950 border border-indigo-900/50 rounded-xl gap-2">
-            <div className="flex justify-between items-center gap-1 flex-wrap">
-              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{t('sidebar.alliance_structures', 'Strutture & Ostacoli')}</span>
-              <button onClick={() => setHiveGridMeta({ ...hiveGridMeta, showBanners: hiveGridMeta?.showBanners === false ? true : false })} className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ${hiveGridMeta?.showBanners !== false ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+            <div className="flex justify-between items-center gap-1">
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{t('sidebar.alliance_structures', 'Strutture Alleanza')}</span>
+              <button onClick={() => setHiveGridMeta({ ...hiveGridMeta, showBanners: hiveGridMeta?.showBanners === false ? true : false })} className={'px-2 py-1 rounded text-[9px] font-bold uppercase transition-colors flex items-center gap-1 ' + (hiveGridMeta?.showBanners !== false ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400')}>
                 {hiveGridMeta?.showBanners !== false ? '👁️ ' + t('sidebar.areas_6x6', 'Aree 6x6') : '🙈 ' + t('sidebar.areas_6x6', 'Aree 6x6')}
               </button>
             </div>
 
-            {!isReadOnly && setAllianceStructures && (
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  onClick={() => {
-                    const spawn = getDefaultSpawnCoords();
-                    const newBanner = { id: 'banner-' + Date.now(), code: 'BAN', name: 'Stendardo', type: 'banner', size: 1, x: spawn.x, y: spawn.y };
-                    setAllianceStructures([...(allianceStructures || []), newBanner]);
-                  }}
-                  className="bg-purple-900/50 hover:bg-purple-800 text-purple-300 border border-purple-500/40 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-colors"
-                >
-                  + 🚩 {t('sidebar.banner', 'Stendardo (1x1)')}
-                </button>
-                <button
-                  onClick={() => {
-                    const spawn = getDefaultSpawnCoords();
-                    const resCount = (allianceStructures || []).filter(s => s.type === 'resource').length + 1;
-                    const newResource = { id: 'resource-' + Date.now(), code: 'RES', name: 'Risorsa #' + resCount, type: 'resource', size: 2, x: spawn.x, y: spawn.y };
-                    setAllianceStructures([...(allianceStructures || []), newResource]);
-                  }}
-                  className="bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 border border-amber-500/40 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-colors"
-                >
-                  + ⛏️ {t('sidebar.resource_obstacle', 'Risorsa (2x2)')}
-                </button>
-              </div>
-            )}
-
             {!isReadOnly && (
-              <div className="flex items-center gap-3 pt-2 border-t border-slate-800 mt-1">
+              <div className="flex items-center gap-3 pt-2 border-t border-slate-800">
                 <span className="text-[8px] font-bold uppercase text-purple-400 whitespace-nowrap">{t('sidebar.tint', 'Tinta')}</span>
                 <input
                   type="range" min="0" max="360"
@@ -291,59 +374,61 @@ function MapSidebarAlliance({
             )}
           </div>
 
-          {allianceStructures && allianceStructures.length > 0 && (
-            allianceStructures.map(struct => {
-              const isHQ = struct.type === 'headquarters';
-              const isBanner = struct.type === 'banner';
-              const isResource = struct.type === 'resource';
-              const isRemovable = isBanner || isResource;
-              const icon = isHQ ? '🏰' : isBanner ? '🚩' : isResource ? '⛏️' : '🐻';
-              const borderColor = isBanner ? 'border-purple-500' : isResource ? 'border-amber-500' : 'border-indigo-500';
-              const bgColor = isBanner ? 'bg-purple-900/10' : isResource ? 'bg-amber-900/15' : 'bg-indigo-900/20';
-              const labelColor = isBanner ? 'text-purple-400' : isResource ? 'text-amber-400' : 'text-indigo-400';
+          {coreStructures.map(renderStructureCard)}
+        </div>
 
-              return (
-                <div
-                  key={struct.id}
-                  draggable={!isReadOnly}
-                  onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'structure:' + struct.id); }}
-                  className={bgColor + ' border p-2.5 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm ' + (isReadOnly ? borderColor + '/20 opacity-80' : borderColor + '/40 hover:' + borderColor + ' cursor-grab active:cursor-grabbing')}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="text-xl shrink-0 drop-shadow-md">{icon}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-slate-200 text-xs truncate group-hover:text-indigo-300 transition-colors">{struct.name}</div>
-                      <div className="text-[9px] text-slate-500">[{struct.code}] {isResource ? '• 2x2' : isBanner ? '• 1x1' : '• 3x3'}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-col items-center">
-                      <span className={'text-[8px] font-bold uppercase ' + labelColor}>{t('alliance_sidebar.coord_x', 'X')}</span>
-                      <CoordInput disabled={isReadOnly} initialValue={struct.x} placeholder="-" onSave={(val) => handleStructureCoordSave(struct, 'x', val)} className={'w-12 bg-slate-900 border ' + (isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : isResource ? 'border-amber-900/50 focus:border-amber-400 text-amber-300' : 'border-indigo-900/50 focus:border-cyan-400 text-cyan-300') + ' text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50'} />
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className={'text-[8px] font-bold uppercase ' + labelColor}>{t('alliance_sidebar.coord_y', 'Y')}</span>
-                      <CoordInput disabled={isReadOnly} initialValue={struct.y} placeholder="-" onSave={(val) => handleStructureCoordSave(struct, 'y', val)} className={'w-12 bg-slate-900 border ' + (isBanner ? 'border-purple-900/50 focus:border-purple-400 text-purple-300' : isResource ? 'border-amber-900/50 focus:border-amber-400 text-amber-300' : 'border-indigo-900/50 focus:border-amber-400 text-amber-300') + ' text-center text-xs rounded p-0.5 font-mono outline-none disabled:opacity-50'} />
-                    </div>
-                    {isRemovable && !isReadOnly && setAllianceStructures && (
-                      <button
-                        onClick={() => setAllianceStructures(prev => prev.filter(s => s.id !== struct.id))}
-                        className="w-5 h-5 flex items-center justify-center bg-rose-950/50 text-rose-400 hover:bg-rose-900 rounded border border-rose-900/50 transition-colors ml-1"
-                        title={isResource ? 'Rimuovi Risorsa' : 'Rimuovi Stendardo'}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+        {/* Blocco richiudibile: Stendardi (1x1) */}
+        <div className="flex flex-col">
+          <div
+            className={'flex justify-between items-center cursor-pointer p-2 rounded-lg transition-colors border ' + (isBannersOpen ? 'bg-purple-950/40 border-purple-500/50' : 'bg-slate-900 hover:bg-slate-800 border-slate-800')}
+            onClick={() => setIsBannersOpen(!isBannersOpen)}
+          >
+            <span className="text-[10px] font-black text-purple-300 uppercase tracking-widest">🚩 {t('sidebar.banners_section', 'Stendardi (1x1)')}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-purple-300 bg-slate-950 px-2 py-0.5 rounded border border-purple-900/50">{bannerStructures.length}</span>
+              <span className="text-slate-400 text-xs transition-transform duration-200" style={{ transform: isBannersOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+            </div>
+          </div>
+
+          {isBannersOpen && (
+            <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-800 animate-fade-in">
+              {bannerStructures.length === 0 ? (
+                <div className="text-center text-xs text-slate-500 italic py-2">Nessuno stendardo inserito</div>
+              ) : (
+                bannerStructures.map(renderStructureCard)
+              )}
+            </div>
           )}
         </div>
 
-        <div className="flex flex-col mt-2">
+        {/* Blocco richiudibile: Risorse Bloccate (2x2) */}
+        <div className="flex flex-col">
           <div
-            className={`flex justify-between items-center cursor-pointer p-2 rounded-lg transition-colors border ${isRosterOpen ? 'bg-slate-800 border-slate-700' : 'bg-slate-900 hover:bg-slate-800 border-slate-800'}`}
+            className={'flex justify-between items-center cursor-pointer p-2 rounded-lg transition-colors border ' + (isResourcesOpen ? 'bg-amber-950/40 border-amber-500/50' : 'bg-slate-900 hover:bg-slate-800 border-slate-800')}
+            onClick={() => setIsResourcesOpen(!isResourcesOpen)}
+          >
+            <span className="text-[10px] font-black text-amber-300 uppercase tracking-widest">⛏️ {t('sidebar.resources_section', 'Risorse Bloccate (2x2)')}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-amber-900/50">{resourceStructures.length}</span>
+              <span className="text-slate-400 text-xs transition-transform duration-200" style={{ transform: isResourcesOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+            </div>
+          </div>
+
+          {isResourcesOpen && (
+            <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-800 animate-fade-in">
+              {resourceStructures.length === 0 ? (
+                <div className="text-center text-xs text-slate-500 italic py-2">Nessuna risorsa bloccata inserita</div>
+              ) : (
+                resourceStructures.map(renderStructureCard)
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Blocco richiudibile: Roster Giocatori */}
+        <div className="flex flex-col">
+          <div
+            className={'flex justify-between items-center cursor-pointer p-2 rounded-lg transition-colors border ' + (isRosterOpen ? 'bg-slate-800 border-slate-700' : 'bg-slate-900 hover:bg-slate-800 border-slate-800')}
             onClick={() => setIsRosterOpen(!isRosterOpen)}
           >
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('map.alliance_roster', 'Roster Giocatori')}</span>
@@ -363,9 +448,20 @@ function MapSidebarAlliance({
                   const currentX = override ? override.x : (player.x ?? '');
                   const currentY = override ? override.y : (player.y ?? '');
                   const hasCoords = currentX !== '' && currentY !== '';
+                  const isHighlighted = highlightedEntity?.type === 'player' && String(highlightedEntity?.id) === String(player.id);
+
+                  const playerCardStyle = isHighlighted
+                    ? 'bg-yellow-500/20 border-yellow-400 ring-2 ring-yellow-400/70 '
+                    : 'bg-slate-950/80 ' + (isReadOnly ? 'border-slate-800 opacity-80 ' : 'border-slate-800 hover:border-slate-600 ');
 
                   return (
-                    <div key={player.id} draggable={!isReadOnly} onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'player:' + player.id); }} className={`bg-slate-950/80 border p-2 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm ${isReadOnly ? 'border-slate-800 opacity-80' : 'border-slate-800 hover:border-slate-600 cursor-grab active:cursor-grabbing'}`}>
+                    <div
+                      key={player.id}
+                      draggable={!isReadOnly}
+                      onDragStart={(e) => { e.dataTransfer.setData('text/plain', 'player:' + player.id); }}
+                      onClick={() => onHighlightEntity && onHighlightEntity({ type: 'player', id: player.id, x: currentX, y: currentY })}
+                      className={playerCardStyle + 'border p-2 rounded-xl flex items-center justify-between gap-2 transition-all group shadow-sm cursor-pointer'}
+                    >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="bg-indigo-950 border border-indigo-500/40 text-indigo-300 font-bold text-[10px] px-1.5 py-0.5 rounded shrink-0">{player.tag || player.role || 'R1'}</span>
                         <div className="min-w-0 flex-1">
@@ -392,8 +488,26 @@ function MapSidebarAlliance({
         </div>
       </div>
 
+      {/* Footer fisso: Tasti rapidi Aggiungi Stendardo / Risorsa + Salva in Cloud */}
       {!isReadOnly && (
-        <div className="pt-4 border-t border-slate-800 shrink-0 mt-auto flex flex-col gap-2">
+        <div className="pt-3 border-t border-slate-800 shrink-0 mt-auto flex flex-col gap-2">
+          {setAllianceStructures && (
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={handleAddBanner}
+                className="bg-purple-900/40 hover:bg-purple-800/70 text-purple-200 border border-purple-500/50 px-2 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+              >
+                + 🚩 {t('sidebar.banner', 'Stendardo (1x1)')}
+              </button>
+              <button
+                onClick={handleAddResource}
+                className="bg-amber-900/40 hover:bg-amber-800/70 text-amber-200 border border-amber-500/50 px-2 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+              >
+                + ⛏️ {t('sidebar.resource_obstacle', 'Risorsa (2x2)')}
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => {
               if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -411,7 +525,7 @@ function MapSidebarAlliance({
         isOpen={isChatModalOpen}
         onClose={() => setIsChatModalOpen(false)}
         players={effectivePlayers}
-        structures={allianceStructures || []}
+        structures={allStructures}
         allianceCode={allianceCode || 'HIVE'}
       />
     </aside>
@@ -427,5 +541,6 @@ export default memo(MapSidebarAlliance, (prev, next) => {
          prev.isMapUnlocked === next.isMapUnlocked &&
          prev.isLoadingCloud === next.isLoadingCloud &&
          prev.isReadOnly === next.isReadOnly &&
-         prev.allianceCode === next.allianceCode;
+         prev.allianceCode === next.allianceCode &&
+         prev.highlightedEntity === next.highlightedEntity;
 });

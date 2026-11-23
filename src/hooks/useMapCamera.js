@@ -455,10 +455,38 @@ export function useMapCamera({
 
   const handleDragOver = (e) => { e.preventDefault(); };
 
+  const focusOnCoords = useCallback((x, y, options = {}) => {
+    if (!mainRef.current) return;
+    if (x === '' || y === '' || x == null || y == null || Number.isNaN(Number(x)) || Number.isNaN(Number(y))) return;
+
+    const rect = mainRef.current.getBoundingClientRect();
+    let effX = Number(x);
+    let effY = Number(y);
+    if (options.is3x3) {
+      effX += 0.5;
+      effY += 0.5;
+    }
+
+    const targetX = 600 + (effX - effY) * TILE_SF;
+    const targetY = 1150 - (effX + effY) * TILE_SF;
+
+    const curScale = cameraRef.current.scale || 1;
+    const minScale = activeView === 'alliance' ? 18 : curScale;
+    const targetScale = Math.max(curScale, minScale);
+
+    const rawPos = {
+      x: (rect.width / 2) - (targetX * targetScale),
+      y: (rect.height / 2) - (targetY * targetScale)
+    };
+
+    setScale(targetScale);
+    setPosition(getClampedPosition(rawPos, targetScale));
+  }, [activeView, TILE_SF, mainRef, getClampedPosition]);
+
   return {
     scale, position, viewportSize, isDragging, draggedPlayerId, setDraggedPlayerId,
     handleWheel, handleMouseDown, handleMouseMove, handleMouseUp,
     handleTouchStart, handleTouchMove, handleTouchEnd,
-    handleResetView, handleDrop, handleDragOver
+    handleResetView, focusOnCoords, handleDrop, handleDragOver
   };
 }
